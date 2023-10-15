@@ -1,0 +1,10 @@
+Package: actepir
+Title: ACT Health Epidemiology Stuff
+Version: 0.0.5.9000
+Authors@R:
+    person("Warren", "Holroyd", , "warren.holroyd@act.gov.au", role = c("aut", "cre"),
+            comment = c(ORCID = "YOUR-ORCID_ID"))
+Description: A local package containing various functions and elements for use in the ACTGOV environment.
+License: `use_mit_license()`
+Encoding: UTF-8
+RoxygenNote: 7.2.3

@@ -1,0 +1,4 @@
+name: Epi Quick Report (HTML)
+description: >
+  Template to create HTML document using standard report headings.  Intended primarily for internal use.
+create_dir: false
