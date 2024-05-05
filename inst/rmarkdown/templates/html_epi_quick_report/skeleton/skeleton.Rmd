@@ -2,9 +2,9 @@
 title: "Your Document Title"
 subtitle: "Your Document Subtitle"
 author:
-  - name: "Your Name"
+  - name: "`paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl=TRUE))`"
     affiliation: "Your Role, Epidemiology - ACT Health Directorate"
-    email: "Your email"
+    email: "`paste0(gsub(' ','.',Sys.info()['user']),'@act.gov.au')`"
 date: "`r Sys.Date()`"
 output: 
   html_document: 
@@ -162,6 +162,8 @@ dd <- con.dict %>%
   collect()
 
 ```
+
+All service data is been sourced from SQL Server 121, where the Epidemiology Section’s data is stored. All data is accessed over an ODBC connection, with access limited by membership of the HIB_PH_EPIDEMIOLOGY ActiveDirectory security group.
 
 ### Inclusion Criteria / Participants
 
