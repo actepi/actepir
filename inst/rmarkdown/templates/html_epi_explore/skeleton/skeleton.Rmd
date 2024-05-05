@@ -2,10 +2,9 @@
 title: "Your Document Title"
 subtitle: "Your Document Subtitle"
 author:
-  - name: "`paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl=TRUE))`"
+  - name: "`r paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl=TRUE))`"
     affiliation: "Your Role, Epidemiology - ACT Health Directorate"
-    email: "`paste0(gsub(' ','.',Sys.info()['user']),'@act.gov.au')`"
-date: "`r Sys.Date()`"
+    email: "`r paste0(gsub(' ','.',Sys.info()['user']),'@act.gov.au')`"
 output: 
   html_document: 
     toc: yes
@@ -114,7 +113,7 @@ dt <- con.data %>%
 dd <- con.dict %>%
   filter(
      Dataset == tb
-    ,VarName %in% !!names(df.dt)    # only bring in labels for the columns loaded
+    ,VarName %in% !!names(dt)    # only bring in labels for the columns loaded
     ) %>%
   collect()
 
