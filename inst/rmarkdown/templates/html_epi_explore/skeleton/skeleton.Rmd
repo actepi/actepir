@@ -11,7 +11,7 @@ output:
     toc: yes
     toc_float: true
     toc_depth: 3
-    code_folding: show
+    code_folding: hide
     code_download: true
 ---
 
@@ -60,12 +60,35 @@ A short, purposeful statement of what the report is intending to address.
 
 ## Process
 
-```{r lib_conn, message=FALSE, warning=FALSE}
+```{r packages, message=FALSE, warning=FALSE}
 
-library(DBI)
-library(odbc)
-library(dplyr)
-library(dbplyr)
+# Ensures the package "pacman" is installed
+if (!require("pacman")) {
+     install.packages("pacman") }
+
+# load (and force-install if missing) required CRAN packages via pacman
+pacman::p_load(
+   DBI
+  ,odbc
+  ,dplyr
+  ,dbplyr
+  ,tidyverse
+  ,forcats
+  ,janitor
+  ,kableExtra
+  ,DT
+  ,ggplot2
+  )
+
+# load (and force-install if missing) required github packages via pacman
+pacman::p_load_gh(
+  char   = "RLesur/klippy",
+  update = FALSE
+  )
+
+```
+
+```{r conn, message=FALSE, warning=FALSE}
 
 # Establish a connection to the EpiServer
 con <- DBI::dbConnect(
@@ -80,7 +103,7 @@ db = "Analysis"      # leave alone
 tb = "TABLENAME"     # change to your required dataset
 
 # Alias the remote tables
-con.data   <- tbl(con, in_catalog(db,"dbo",tb))
+con.data <- tbl(con, in_catalog(db,"dbo",tb))
 con.dict <- tbl(con, in_catalog(db,"ref","DataLabels"))
 
 # load data
@@ -99,3 +122,9 @@ dd <- con.dict %>%
 
 
 ## References
+
+-   [Link 1 Name](https://www.google.com)\
+    <font size="2">*Link 1 description*</font>
+
+-   [Link 2 Name](https://www.google.com/)\
+    <font size="2">*Link 2 description*</font>
