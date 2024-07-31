@@ -3,8 +3,6 @@
 #' 
 #' Useful for quickly nullifying Sys.setenv() proxy variables.
 #' 
-#' @param
-#' 
 #' @keywords proxy
 #' 
 #' @export
