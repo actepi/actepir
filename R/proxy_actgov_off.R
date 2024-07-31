@@ -1,4 +1,3 @@
-#'------------------------------------------------------------------------------
 #' Switch off ACTGOV proxy
 #' 
 #' Useful for quickly nullifying Sys.setenv() proxy variables.
@@ -9,7 +8,6 @@
 #' 
 #' @examples 
 #' proxy_actgov_off()
-#'------------------------------------------------------------------------------
 
 proxy_actgov_off <- function() {
 

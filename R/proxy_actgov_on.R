@@ -1,9 +1,8 @@
-#'------------------------------------------------------------------------------
 #' Switch on ACTGOV proxy
 #' 
 #' Useful for quickly setting Sys.setenv() proxy variables to the ACTGOV proxy server.
 #' 
-#' @param proxyaddress The proxy address.  If left null, a known default will be applied.
+#' @param proxyaddress The proxy address.  Argument should be supplied as character.  If left null, a known default will be applied.
 #' 
 #' @keywords proxy
 #' 
@@ -11,7 +10,6 @@
 #' 
 #' @examples 
 #' proxy_actgov_on()
-#'------------------------------------------------------------------------------
 
 proxy_actgov_on <- function(proxyaddress = NULL) {
   

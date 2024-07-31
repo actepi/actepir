@@ -1,16 +1,15 @@
-#'------------------------------------------------------------------------------
 #' Automatic factor conversion
 #' 
 #' This function will allow the user to convert a column to a factor and automatically set levels based on a supplied data dictionary. 
 #' 
 #' The dictionary must conform to the DataLabels structure used on EpiServer.
 #' 
-#' @param dfdata DATAFRAME. The dataframe containing the column(s) requiring factor conversion
-#' @param dflabels DATAFRAME. The dataframe containing the data dictionary/labels
-#' @param vars STRING VECTOR. A vector containing the column names that should be factor converted
-#' @param order TRUE/FALSE. Should the resulting factor levels be ordered?
-#' @param suffix STRING. Suffix to the resulting factor column name to distinguish it from the original. Not supplying will overwrite the original column.
-#' @param nolabel STRING. The name of the level which unmatched levels are assigned to.
+#' @param dfdata The dataframe containing the column(s) requiring factor conversion.
+#' @param dflabels The dataframe containing the data dictionary/labels.
+#' @param vars A vector containing the column names that should be factor converted. Argument should be supplied as character.
+#' @param order Should the resulting factor levels be ordered?  Argument should be supplied as TRUE/FALSE.
+#' @param suffix The suffix to the resulting factor column name to distinguish it from the original. Argument should be supplied as character. Not supplying will overwrite the original column.
+#' @param nolabel The name of the level which unmatched levels are assigned to.  Argument should be supplied as character.
 #' 
 #' @keywords autofactor
 #' 
@@ -26,7 +25,6 @@
 #'     suffix = "_X",
 #'     nolabel = "UL"
 #'     )
-#'------------------------------------------------------------------------------
 
 autofactor <- function(dfdata = parent.frame(), dflabels, vars, order=NULL, suffix=NULL, nolabel=NULL) {
   
