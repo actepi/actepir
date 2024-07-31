@@ -3,6 +3,8 @@
 #' 
 #' Useful for quickly nullifying Sys.setenv() proxy variables.
 #' 
+#' @param
+#' 
 #' @keywords proxy
 #' 
 #' @export
@@ -11,7 +13,7 @@
 #' proxy_actgov_off()
 #'------------------------------------------------------------------------------
 
-proxy_actgov_on <- function() {
+proxy_actgov_off <- function() {
 
   Sys.setenv(http_proxy       = "")
   Sys.setenv(http_proxy_user  = "")

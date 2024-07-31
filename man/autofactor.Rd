@@ -2,7 +2,8 @@
 % Please edit documentation in R/autofactor.R
 \name{autofactor}
 \alias{autofactor}
-\title{Automatic factor conversion}
+\title{------------------------------------------------------------------------------
+Automatic factor conversion}
 \usage{
 autofactor(
   dfdata = parent.frame(),
@@ -27,7 +28,9 @@ autofactor(
 \item{nolabel}{STRING. The name of the level which unmatched levels are assigned to.}
 }
 \description{
-This function will allow the user to convert a column to a factor and automatically set levels based on a supplied data dictionary. 
+This function will allow the user to convert a column to a factor and automatically set levels based on a supplied data dictionary.
+}
+\details{
 The dictionary must conform to the DataLabels structure used on EpiServer.
 }
 \examples{
@@ -40,5 +43,6 @@ mydata <- mydata \%>\%
     suffix = "_X",
     nolabel = "UL"
     )
+------------------------------------------------------------------------------
 }
 \keyword{autofactor}
