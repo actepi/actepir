@@ -8,3 +8,6 @@ Description: A local package containing various functions and elements for use i
 License: `use_mit_license()`
 Encoding: UTF-8
 RoxygenNote: 7.2.3
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
