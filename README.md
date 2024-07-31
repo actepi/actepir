@@ -16,7 +16,7 @@ remotes::install_github("actepi/actepir")
 
 ## Package Versioning
 
-Following installation of this package, type "packageVersion('actepir')"" in the R console to show the package version. If it is suffixed with a 9000 number then you are using an unapproved development version.
+Following installation of this package, type "packageVersion('actepir')"" in the R console to show the package version. If it is suffixed with a 9000 number then you are using a development version.
 
 Released versions of this package will have version numbers consisting of three parts:
 
