@@ -22,6 +22,8 @@
 #' @import purrr
 #' @import magrittr
 #' 
+#' @importFrom magrittr %>%
+#' 
 #' @export
 #' 
 #' @examples 

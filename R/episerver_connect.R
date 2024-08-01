@@ -16,6 +16,8 @@
 #' @import dbplyr
 #' @import magrittr
 #' 
+#' @importFrom magrittr %>%
+#' 
 #' @export
 #' 
 #' @examples 
