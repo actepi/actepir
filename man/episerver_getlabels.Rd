@@ -12,7 +12,7 @@ episerver_getlabels(
 )
 }
 \arguments{
-\item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character.  Mandatory.}
+\item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.  Mandatory.}
 
 \item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.}
 

@@ -4,12 +4,17 @@
 #' 
 #' Almost all non-administrative users will not need to use the lbl_* arguments.
 #' 
-#' @param dataset The name of the dataset that labels are associated with. Argument should be supplied as character.  Mandatory.
+#' @param dataset The name of the dataset that labels are associated with. Argument should be supplied as character or object.  Mandatory.
 #' @param lbl_table The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.
 #' @param lbl_schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `ref`.
 #' @param lbl_db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
 #' 
 #' @keywords episerver
+#' 
+#' @import DBI
+#' @import odbc
+#' @import dplyr
+#' @import dbplyr
 #' 
 #' @export
 #' 
@@ -88,12 +93,12 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
   }
   
   # load labels from inherited dbplyr/lazy_load object 
-  labs = tbl(conn, in_catalog(lbl_db,lbl_schema,lbl_table))  %>%
-    filter(
+  labs = dplyr::tbl(conn, dbplyr::in_catalog(lbl_db,lbl_schema,lbl_table))  %>%
+    dplyr::filter(
       Dataset == collection &
         tolower(LabelType) %in% c("opt","var")
     ) %>% 
-    collect() 
+    dplyr::collect() 
   
   return(labs)
   

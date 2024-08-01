@@ -10,6 +10,11 @@
 #' 
 #' @keywords episerver
 #' 
+#' @import DBI
+#' @import odbc
+#' @import dplyr
+#' @import dbplyr
+#' 
 #' @export
 #' 
 #' @examples 
@@ -36,6 +41,6 @@ episerver_connect <- function(table, schema="dbo", db="Analysis") {
     driver = episerver_serverdetails("driver"), 
     server = episerver_serverdetails("server"), 
     port = episerver_serverdetails("port")
-  ) %>% 
+    ) %>% 
     dplyr::tbl(dbplyr::in_catalog(db,schema,table))
 }
