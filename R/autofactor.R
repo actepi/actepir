@@ -25,7 +25,7 @@
 #'     suffix = "_X",
 #'     nolabel = "UL"
 #'     )
-
+#'     
 autofactor <- function(dfdata = parent.frame(), dflabels, vars, order=NULL, suffix=NULL, nolabel=NULL) {
   
   stopifnot(is.data.frame(dflabels))

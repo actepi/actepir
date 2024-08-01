@@ -14,5 +14,6 @@ This function  allows the user quickly locate details about the EpiServer, such 
 }
 \examples{
 episerver_serverdetails("port")
+
 }
 \keyword{episerver}

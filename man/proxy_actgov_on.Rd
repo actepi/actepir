@@ -14,5 +14,6 @@ Useful for quickly setting Sys.setenv() proxy variables to the ACTGOV proxy serv
 }
 \examples{
 proxy_actgov_on()
+
 }
 \keyword{proxy}

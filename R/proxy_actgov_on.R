@@ -10,7 +10,7 @@
 #' 
 #' @examples 
 #' proxy_actgov_on()
-
+#' 
 proxy_actgov_on <- function(proxyaddress = NULL) {
   
   if(is.null(proxyaddress)){

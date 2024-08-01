@@ -10,7 +10,7 @@
 #' 
 #' @examples 
 #' episerver_serverdetails("port")
-
+#' 
 episerver_serverdetails <- function(feature) {
   
   # helper function to encapsulate argument validity logic

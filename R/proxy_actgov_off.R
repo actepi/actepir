@@ -8,7 +8,7 @@
 #' 
 #' @examples 
 #' proxy_actgov_off()
-
+#' 
 proxy_actgov_off <- function() {
 
   Sys.setenv(http_proxy       = "")

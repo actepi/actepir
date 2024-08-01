@@ -11,5 +11,6 @@ Useful for quickly nullifying Sys.setenv() proxy variables.
 }
 \examples{
 proxy_actgov_off()
+
 }
 \keyword{proxy}
