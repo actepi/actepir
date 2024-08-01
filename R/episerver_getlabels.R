@@ -11,12 +11,13 @@
 #' 
 #' @keywords episerver
 #' 
-#' @import DBI
-#' @import odbc
-#' @import dplyr
-#' @import dbplyr
-#' @import magrittr
-#' 
+#' @importFrom DBI dbConnect
+#' @importFrom odbc odbc
+#' @importFrom dplyr case_when
+#' @importFrom dplyr filter
+#' @importFrom dplyr tbl
+#' @importFrom dplyr collect
+#' @importFrom dbplyr in_catalog
 #' @importFrom magrittr %>%
 #' 
 #' @export

@@ -11,7 +11,7 @@
 #' 
 #' @keywords episerver
 #' 
-#' @import dplyr
+#' @importFrom dplyr collect
 #' 
 #' @export
 #' 

@@ -10,12 +10,10 @@
 #' 
 #' @keywords episerver
 #' 
-#' @import DBI
-#' @import odbc
-#' @import dplyr
-#' @import dbplyr
-#' @import magrittr
-#' 
+#' @importFrom DBI dbConnect
+#' @importFrom odbc odbc
+#' @importFrom dplyr tbl
+#' @importFrom dbplyr in_catalog
 #' @importFrom magrittr %>%
 #' 
 #' @export

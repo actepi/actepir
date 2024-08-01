@@ -18,6 +18,5 @@ Imports:
     DBI,
     odbc,
     magrittr,
-    purrr,
     haven
 Config/testthat/edition: 3

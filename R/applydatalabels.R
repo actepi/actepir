@@ -16,12 +16,15 @@
 #' 
 #' @keywords labels
 #' 
-#' @import haven
-#' @import tidyr
-#' @import dplyr
-#' @import purrr
-#' @import magrittr
-#' 
+#' @importFrom DBI dbConnect
+#' @importFrom odbc odbc
+#' @importFrom dplyr group_by
+#' @importFrom dplyr ungroup
+#' @importFrom dplyr mutate
+#' @importFrom dplyr filter
+#' @importFrom dplyr group_by
+#' @importFrom dplyr summarize
+#' @importFrom haven labelled
 #' @importFrom magrittr %>%
 #' 
 #' @export
@@ -54,13 +57,13 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
     
     # roll up into lists
     dplyr::group_by(varname) %>%
-    dplyr::summarize(
+    dplyr::reframe(
       variable_label = labelname[labeltype == "var"],
       labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.numeric(datacode[labeltype == "opt"])))
     )
   
   # apply labels to data
-  for (i in seq_along(label_info$varname)) {
+  for (i in base::seq_along(label_info$varname)) {
     var <- label_info$varname[i]
     
     if (!var %in% names(data)) {
@@ -78,7 +81,7 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
       data[[var]] <- haven::labelled(data[[var]], setNames(names(lbls), lbls))
     }
     
-    attr(data[[var]], "label") <- var_label
+    base::attr(data[[var]], "label") <- var_label
   }
   return(data)
   
