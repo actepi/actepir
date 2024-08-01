@@ -2,8 +2,7 @@
 % Please edit documentation in R/autofactor.R
 \name{autofactor}
 \alias{autofactor}
-\title{------------------------------------------------------------------------------
-Automatic factor conversion}
+\title{Automatic factor conversion}
 \usage{
 autofactor(
   dfdata = parent.frame(),
@@ -15,17 +14,17 @@ autofactor(
 )
 }
 \arguments{
-\item{dfdata}{DATAFRAME. The dataframe containing the column(s) requiring factor conversion}
+\item{dfdata}{The dataframe containing the column(s) requiring factor conversion.}
 
-\item{dflabels}{DATAFRAME. The dataframe containing the data dictionary/labels}
+\item{dflabels}{The dataframe containing the data dictionary/labels.}
 
-\item{vars}{STRING VECTOR. A vector containing the column names that should be factor converted}
+\item{vars}{A vector containing the column names that should be factor converted. Argument should be supplied as character.}
 
-\item{order}{TRUE/FALSE. Should the resulting factor levels be ordered?}
+\item{order}{Should the resulting factor levels be ordered?  Argument should be supplied as TRUE/FALSE.}
 
-\item{suffix}{STRING. Suffix to the resulting factor column name to distinguish it from the original. Not supplying will overwrite the original column.}
+\item{suffix}{The suffix to the resulting factor column name to distinguish it from the original. Argument should be supplied as character. Not supplying will overwrite the original column.}
 
-\item{nolabel}{STRING. The name of the level which unmatched levels are assigned to.}
+\item{nolabel}{The name of the level which unmatched levels are assigned to.  Argument should be supplied as character.}
 }
 \description{
 This function will allow the user to convert a column to a factor and automatically set levels based on a supplied data dictionary.
@@ -43,6 +42,5 @@ mydata <- mydata \%>\%
     suffix = "_X",
     nolabel = "UL"
     )
-------------------------------------------------------------------------------
 }
 \keyword{autofactor}

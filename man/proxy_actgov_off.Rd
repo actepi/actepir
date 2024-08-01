@@ -2,8 +2,7 @@
 % Please edit documentation in R/proxy_actgov_off.R
 \name{proxy_actgov_off}
 \alias{proxy_actgov_off}
-\title{------------------------------------------------------------------------------
-Switch off ACTGOV proxy}
+\title{Switch off ACTGOV proxy}
 \usage{
 proxy_actgov_off()
 }
@@ -12,6 +11,5 @@ Useful for quickly nullifying Sys.setenv() proxy variables.
 }
 \examples{
 proxy_actgov_off()
-------------------------------------------------------------------------------
 }
 \keyword{proxy}

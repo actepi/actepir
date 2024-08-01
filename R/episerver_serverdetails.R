@@ -1,4 +1,3 @@
-# ------------------------------------------------------------------------------
 #' Get EpiServer details
 #' 
 #' This function  allows the user quickly locate details about the EpiServer, such as address and port.
@@ -11,7 +10,6 @@
 #' 
 #' @examples 
 #' episerver_serverdetails("port")
-# ------------------------------------------------------------------------------
 
 episerver_serverdetails <- function(feature) {
   

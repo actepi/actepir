@@ -2,19 +2,17 @@
 % Please edit documentation in R/proxy_actgov_on.R
 \name{proxy_actgov_on}
 \alias{proxy_actgov_on}
-\title{------------------------------------------------------------------------------
-Switch on ACTGOV proxy}
+\title{Switch on ACTGOV proxy}
 \usage{
 proxy_actgov_on(proxyaddress = NULL)
 }
 \arguments{
-\item{proxyaddress}{The proxy address.  If left null, a known default will be applied.}
+\item{proxyaddress}{The proxy address.  Argument should be supplied as character.  If left null, a known default will be applied.}
 }
 \description{
 Useful for quickly setting Sys.setenv() proxy variables to the ACTGOV proxy server.
 }
 \examples{
 proxy_actgov_on()
-------------------------------------------------------------------------------
 }
 \keyword{proxy}
