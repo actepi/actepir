@@ -1,13 +1,13 @@
-#' Download labels from EpiServer for a given dataset
+#' Collect in dbplyr pipe with labels
 #' 
-#' This function will allow the user to download the labels file for a given dataset.  The function will always search EpiServer and cannot be used for other servers of file locations.
+#' This function is a wraparound function which combines the `episerver_getlabels` and `dplyr::collect` functions and feeds them to the `applydatalabels` function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
 #' 
-#' Almost all non-administrative users will not need to use the lbl_* arguments.
+#' Almost all non-administrative users will not need to use the lbl_* arguments.  In most cases, when accessing the "Analysis" database, you will not need to supply the "dataset" argument.
 #' 
 #' @param dataset The name of the dataset that labels are associated with. Argument should be supplied as character or object.
-#' @param lbl_table The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.
-#' @param lbl_schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `ref`.
-#' @param lbl_db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
+#' @param lbl_table The name of the table where the labels exist. Argument should be supplied as character.
+#' @param lbl_schema The name of the schema to be connected to. Argument should be supplied as character.
+#' @param lbl_db The name of the database to be connected to. Argument should be supplied as character.
 #' 
 #' @keywords episerver
 #' 
