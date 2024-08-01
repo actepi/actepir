@@ -20,6 +20,7 @@
 #' @import tidyr
 #' @import dplyr
 #' @import purrr
+#' @import magrittr
 #' 
 #' @export
 #' 

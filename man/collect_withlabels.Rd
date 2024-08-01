@@ -2,24 +2,24 @@
 % Please edit documentation in R/collect_withlabels.R
 \name{collect_withlabels}
 \alias{collect_withlabels}
-\title{Download labels from EpiServer for a given dataset}
+\title{Collect in dbplyr pipe with labels}
 \usage{
 collect_withlabels(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL)
 }
 \arguments{
 \item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.}
+\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `ref`.}
+\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.}
+\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character.}
 }
 \description{
-This function will allow the user to download the labels file for a given dataset.  The function will always search EpiServer and cannot be used for other servers of file locations.
+This function is a wraparound function which combines the `episerver_getlabels` and `dplyr::collect` functions and feeds them to the `applydatalabels` function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
 }
 \details{
-Almost all non-administrative users will not need to use the lbl_* arguments.
+Almost all non-administrative users will not need to use the lbl_* arguments.  In most cases, when accessing the "Analysis" database, you will not need to supply the "dataset" argument.
 }
 \examples{
 # One-step process: apply labels as part of collect() 

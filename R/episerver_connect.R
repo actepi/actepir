@@ -14,6 +14,7 @@
 #' @import odbc
 #' @import dplyr
 #' @import dbplyr
+#' @import magrittr
 #' 
 #' @export
 #' 
