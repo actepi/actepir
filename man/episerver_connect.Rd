@@ -21,10 +21,10 @@ Note that this function is hard-coded to reference the EpiServer and cannot be u
 }
 \examples{
 # Connect to APC table in default `Analysis` database
-episerver_connect("APC")
+conn = episerver_connect("APC")
 
 # Connect to `TestTable` table in non-default `AnalysisArchive` database
-episerver_connect("TestTable", db="AnalysisArchive")
+conn = episerver_connect("TestTable", db="AnalysisArchive")
  
 }
 \keyword{episerver}
