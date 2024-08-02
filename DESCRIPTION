@@ -15,6 +15,7 @@ Suggests:
 Imports:
     dplyr,
     dbplyr,
+    purrr,
     DBI,
     odbc,
     magrittr,

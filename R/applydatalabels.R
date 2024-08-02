@@ -23,15 +23,18 @@
 #' @importFrom dplyr mutate
 #' @importFrom dplyr filter
 #' @importFrom dplyr group_by
-#' @importFrom dplyr summarize
+#' @importFrom dplyr summarise
+#' @importFrom dplyr reframe
+#' @importFrom purrr modify_if
 #' @importFrom haven labelled
 #' @importFrom magrittr %>%
 #' 
 #' @export
 #' 
 #' @examples 
-#' # Two-step process: download labels first and save to 
-#' # object, then apply labels as last step in downloading data
+#' # Two-step process: download labels first 
+#' # and save to object, then apply labels as 
+#' # last step in downloading data
 #' lab = episerver_getlabels("APC")
 #' dat = episerver_connect("APC") %>% 
 #'   collect() %>% 
@@ -62,26 +65,49 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
       labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.numeric(datacode[labeltype == "opt"])))
     )
   
+  # nullify zero-length character list (for vars with no value labels)
+  label_info = label_info %>%
+    mutate(
+      labels = purrr::modify_if(labels, ~ length(.) == 0, ~ NA_character_),
+      zeroflag = if_else(is.na(labels),1,0)
+    )
+  
   # apply labels to data
   for (i in base::seq_along(label_info$varname)) {
+    
+    # isolate variable name for iteration
     var <- label_info$varname[i]
     
+    # ensure variable name exists in dataset
     if (!var %in% names(data)) {
-      next  # Skip if the variable does not exist in the dataset
+      next  # Skip variable if not exist in dataset
     }
     
+    # grab variable label and value labels
     var_label <- label_info$variable_label[i]
     lbls <- label_info$labels[[i]]
     
-    if (is.numeric(data[[var]])) {
-      lbls <- as.numeric(names(lbls))
-      names(lbls) <- label_info$labels[[i]]
-      data[[var]] <- haven::labelled(data[[var]], lbls)
-    } else if (is.character(data[[var]])) {
-      data[[var]] <- haven::labelled(data[[var]], setNames(names(lbls), lbls))
+    # check value label is not flagged as zero-length
+    if (label_info$zeroflag[[i]] != 1) {
+      
+      # apply value labels, based on column data type
+      if (is.numeric(data[[var]])) {
+        
+        lbls <- as.numeric(names(lbls))
+        names(lbls) <- label_info$labels[[i]]
+        data[[var]] <- haven::labelled(data[[var]], lbls)
+        
+      } else if (is.character(data[[var]])) {
+        
+        data[[var]] <- haven::labelled(data[[var]], setNames(names(lbls), lbls))
+        
+      }
+      
     }
     
+    # apply variable label
     base::attr(data[[var]], "label") <- var_label
+    
   }
   return(data)
   

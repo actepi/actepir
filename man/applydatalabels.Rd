@@ -25,8 +25,9 @@ It assumes that the labelset is formatted according to those stored on EpiServer
 All columns should be character.  VarNames must be in the same case as the column names in the data they are to be applied to.
 }
 \examples{
-# Two-step process: download labels first and save to 
-# object, then apply labels as last step in downloading data
+# Two-step process: download labels first 
+# and save to object, then apply labels as 
+# last step in downloading data
 lab = episerver_getlabels("APC")
 dat = episerver_connect("APC") \%>\% 
   collect() \%>\% 
