@@ -47,13 +47,35 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
     stop("Function requires argument 'dataset' to be supplied")
   }
   
+  
+  # Recursive function to find the 'x' with class 'dbplyr_table_path'
+  find_dbplyr_table_path <- function(query_structure) {
+    # Check if the current structure is a list and has an element named 'x'
+    if (is.list(query_structure) && "x" %in% names(query_structure)) {
+      # Access the 'x' element
+      x_element <- query_structure$x
+      
+      # Check if the class of 'x' is 'dbplyr_table_path'
+      if ("dbplyr_table_path" %in% class(x_element)) {
+        return(x_element)
+      }
+      
+      # If 'x' is a list, continue searching recursively
+      return(find_dbplyr_table_path(x_element))
+    }
+    
+    # Return NULL if no match is found
+    return(NULL)
+  }
+  
+  
   # Check if the dataset is a lazy query
   if (inherits(dataset, "tbl_sql")) {
     
     # Extract the table info from the lazy query
-    table_info <- as.character(dataset$lazy_query$x)
+    table_info <- find_dbplyr_table_path(dataset$lazy_query)
     
-    # Remove leading and trailing double quotes and split by "."
+    # Remove any leading and trailing double quotes and split by "."
     table_parts <- strsplit(gsub("\"", "", table_info), "\\.")[[1]]
     
     # Extract the database, schema, and table names
