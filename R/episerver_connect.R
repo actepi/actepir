@@ -1,6 +1,6 @@
 #' Establish a connection to EpiServer
 #' 
-#' This function will allow the user to quickly establish an ODBC connection to the EpiServer, using `DBI` and `odbc` standards.  This is generally the first step in creating a table alias for a `dbplyr` piped query.
+#' This function will allow the user to establish an ODBC connection to the EpiServer, using `DBI` and `odbc` standards.  This is generally the first step in creating a table alias for a `dbplyr` piped query.
 #' 
 #' Note that this function is hard-coded to reference the EpiServer and cannot be used to establish a connection to a different server.
 #' 
