@@ -4,27 +4,17 @@
 \alias{episerver_connect}
 \title{Establish a connection to EpiServer}
 \usage{
-episerver_connect(table, schema = "dbo", db = "Analysis")
-}
-\arguments{
-\item{table}{The name of the table to be connected to. Argument should be supplied as character.}
-
-\item{schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will defaulto to `dbo`.}
-
-\item{db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will defaulto to `Analysis`.}
+episerver_connect()
 }
 \description{
-This function will allow the user to quickly establish an ODBC connection to a names table on the EpiServer, using `DBI` and `odbc` standards.  This is generally the first step in creating a table alias for a `dbplyr` query.
+This function will allow the user to quickly establish an ODBC connection to a names table on the EpiServer, using `DBI` and `odbc` standards.  This is generally the first step in creating a table alias for a `dbplyr` piped query.
 }
 \details{
-Note that this function is hard-coded to reference the EpiServer and cannot be used to contact a different server.  It will default to the `Analysis.dbo` namespace unless arguments are supplied.
+Note that this function is hard-coded to reference the EpiServer and cannot be used to establish a connection to a different server.
 }
 \examples{
-# Connect to APC table in default `Analysis` database
-conn = episerver_connect("APC")
-
-# Connect to `TestTable` table in non-default `AnalysisArchive` database
-conn = episerver_connect("TestTable", db="AnalysisArchive")
+# Connect to EpiServer
+conn = episerver_connect()
  
 }
 \keyword{episerver}
