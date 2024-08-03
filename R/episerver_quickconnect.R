@@ -1,4 +1,4 @@
-#' Establish a quick connection to EpiServer
+#' Establish a quick connection to EpiServer table
 #' 
 #' This function allows the user to quickly establish an ODBC connection to the EpiServer (using `DBI` and `odbc` standards) and then alias a specific table (with a `dbplyr` lazy query).  
 #' 
