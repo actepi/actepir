@@ -2,7 +2,7 @@
 % Please edit documentation in R/episerver_quickconnect.R
 \name{episerver_quickconnect}
 \alias{episerver_quickconnect}
-\title{Establish a quick connection to EpiServer}
+\title{Establish a quick connection to EpiServer table}
 \usage{
 episerver_quickconnect(table, schema = "dbo", db = "Analysis")
 }
@@ -14,9 +14,11 @@ episerver_quickconnect(table, schema = "dbo", db = "Analysis")
 \item{db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will defaulto to `Analysis`.}
 }
 \description{
-This function allows the user to quickly establish an ODBC connection to a names table on the EpiServer (using `DBI` and `odbc` standards) and then alias a specific table (with a `dbplyr` lazy query).  Both steps are integrated into a single wraparound function.
+This function allows the user to quickly establish an ODBC connection to the EpiServer (using `DBI` and `odbc` standards) and then alias a specific table (with a `dbplyr` lazy query).
 }
 \details{
+In essence, this function combines `actepir::episerver_connect` with `dplyr::tbl(dbplyr::in_catalog())`.  Both steps are integrated into a single wraparound function for convenience.
+
 Note that this function is hard-coded to reference the EpiServer and cannot be used to contact a different server.  It will default to the `Analysis.dbo` namespace unless `schema` and `db` arguments are also supplied.
 }
 \examples{
