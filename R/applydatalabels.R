@@ -25,6 +25,8 @@
 #' @importFrom dplyr group_by
 #' @importFrom dplyr summarise
 #' @importFrom dplyr reframe
+#' @importFrom dplyr row_number
+#' @importFrom dplyr if_else
 #' @importFrom purrr modify_if
 #' @importFrom haven labelled
 #' @importFrom magrittr %>%
@@ -50,7 +52,7 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
     
     # remove duplicate entries
     dplyr::group_by(varname,labeltype,datacode) %>% 
-    dplyr::mutate(rank=row_number()) %>% 
+    dplyr::mutate(rank=dplyr::row_number()) %>% 
     dplyr::filter(rank == 1) %>% 
     dplyr::ungroup() %>% 
     
@@ -69,7 +71,7 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
   label_info = label_info %>%
     mutate(
       labels = purrr::modify_if(labels, ~ length(.) == 0, ~ NA_character_),
-      zeroflag = if_else(is.na(labels),1,0)
+      zeroflag = dplyr::if_else(is.na(labels),1,0)
     )
   
   # apply labels to data
