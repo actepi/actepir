@@ -9,15 +9,16 @@ License: `use_mit_license()`
 Encoding: UTF-8
 RoxygenNote: 7.3.2
 Suggests: 
-    testthat (>= 3.0.0),
-    labelled,
-    sjlabelled
+    testthat (>= 3.0.0)
 Imports:
     dplyr,
     dbplyr,
+    stringr,
     purrr,
     DBI,
     odbc,
     magrittr,
-    haven
+    haven,
+    labelled,
+    sjlabelled
 Config/testthat/edition: 3
