@@ -12,7 +12,7 @@ create_dictionary(x, vars = NULL)
 \item{vars}{The column in the dataframe that you wish to limit the extraction to. Argument should be supplied as an object.}
 }
 \description{
-This function allow the users to extract variable and vlue labels into a flattened dataframe structure.
+This function allow the users to extract variable and value labels into a flattened dataframe structure.
 }
 \details{
 It assumes that the labels conform to the haven_labelled class and uses the `sjlabelled::get_label` and `sjlabelled::get_labels` functions.  This is a convenience wraparound function.

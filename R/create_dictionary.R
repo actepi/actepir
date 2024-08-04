@@ -1,6 +1,6 @@
 #' Create a data dictionary
 #' 
-#' This function allow the users to extract variable and vlue labels into a flattened dataframe structure.
+#' This function allow the users to extract variable and value labels into a flattened dataframe structure.
 #' 
 #' It assumes that the labels conform to the haven_labelled class and uses the `sjlabelled::get_label` and `sjlabelled::get_labels` functions.  This is a convenience wraparound function.
 #' 
