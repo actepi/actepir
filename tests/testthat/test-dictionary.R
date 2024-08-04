@@ -31,15 +31,26 @@ df <- data.frame(
   )
 
 
-test_that("data dictionary creation", {
+test_that("full data dictionary creation", {
   
   expect_error(create_dictionary(df), regexp = NA)
-  
   result = create_dictionary(df)
   
   expect_s3_class(result, "data.frame")
   expect_true(all(c("variable", "variable_label", "value_label", "value") %in% colnames(result)))
   expect_equal(nrow(result), 11)
   expect_equal(ncol(result), 4)
+  
+})
 
+test_that("partial data dictionary creation", {
+  
+  expect_error(create_dictionary(df,c("gender","status")), regexp = NA)
+  result = create_dictionary(df,c("gender","status"))
+  
+  expect_s3_class(result, "data.frame")
+  expect_true(all(c("variable", "variable_label", "value_label", "value") %in% colnames(result)))
+  expect_equal(nrow(result), 4)
+  expect_equal(ncol(result), 4)
+  
 })
