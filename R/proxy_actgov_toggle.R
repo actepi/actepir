@@ -12,7 +12,7 @@
 #' @examples 
 #' proxy_actgov_toggle("on")
 #' 
-proxy_actgov_on <- function(toggle, proxyaddress = NULL) {
+proxy_actgov_toggle <- function(toggle, proxyaddress = NULL) {
   
   toggle = tolower(toggle)
   
