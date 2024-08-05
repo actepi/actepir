@@ -7,6 +7,7 @@ Authors@R:
 Description: A local package containing various functions and elements for use in the ACTGOV environment.
 License: `use_mit_license()`
 Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Suggests: 
     testthat (>= 3.0.0)
@@ -20,5 +21,6 @@ Imports:
     magrittr,
     haven,
     labelled,
-    sjlabelled
+    sjlabelled,
+    ggplot2
 Config/testthat/edition: 3
