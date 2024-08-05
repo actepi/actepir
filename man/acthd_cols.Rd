@@ -2,7 +2,7 @@
 % Please edit documentation in R/acthd_cols.R
 \name{acthd_cols}
 \alias{acthd_cols}
-\title{Function to extract acthd colors as hex codes}
+\title{Function to extract ACTHD colors as hex codes}
 \usage{
 acthd_cols(...)
 }
@@ -10,5 +10,5 @@ acthd_cols(...)
 \item{...}{Character names of acthd_colors}
 }
 \description{
-Function to extract acthd colors as hex codes
+Function to extract ACTHD colors as hex codes
 }

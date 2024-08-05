@@ -2,7 +2,7 @@
 % Please edit documentation in R/acthd_pal.R
 \name{acthd_pal}
 \alias{acthd_pal}
-\title{Return function to interpolate a acthd color palette}
+\title{Return function to interpolate ACTHD color palette}
 \usage{
 acthd_pal(palette = "blue_turq", reverse = FALSE, ...)
 }
@@ -14,5 +14,5 @@ acthd_pal(palette = "blue_turq", reverse = FALSE, ...)
 \item{...}{Additional arguments to pass to colorRampPalette()}
 }
 \description{
-Return function to interpolate a acthd color palette
+Return function to interpolate ACTHD color palette
 }
