@@ -16,7 +16,7 @@ collect_withlabels(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL)
 \item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character.}
 }
 \description{
-This function is a wraparound function which combines the `episerver_getlabels` and `dplyr::collect` functions and feeds them to the `applydatalabels` function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
+This function is a wraparound function which combines the \code{episerver_getlabels} and \code{dplyr::collect} functions and feeds them to the \code{applydatalabels} function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
 }
 \details{
 Almost all non-administrative users will not need to use the lbl_* arguments.  In most cases, when accessing the "Analysis" database, you will not need to supply the "dataset" argument.

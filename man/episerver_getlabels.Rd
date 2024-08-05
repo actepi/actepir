@@ -14,11 +14,11 @@ episerver_getlabels(
 \arguments{
 \item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.  Mandatory.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.}
+\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to \code{DataLabels}.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `ref`.}
+\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to \code{ref}.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.}
+\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to \code{Analysis}.}
 }
 \description{
 This function will allow the user to download the labels file for a given dataset.  The function will always search EpiServer and cannot be used for other servers of file locations.

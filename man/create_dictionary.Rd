@@ -15,7 +15,7 @@ create_dictionary(x, vars = NULL)
 This function allow the users to extract variable and value labels into a flattened dataframe structure.
 }
 \details{
-It assumes that the labels conform to the haven_labelled class and uses the `sjlabelled::get_label` and `sjlabelled::get_labels` functions.  This is a convenience wraparound function.
+It assumes that the labels conform to the haven_labelled class and uses the \code{sjlabelled::get_label} and \code{sjlabelled::get_labels} functions.  This is a convenience wraparound function.
 }
 \examples{
 # Get flattened dictionary from already-labelled dataset
