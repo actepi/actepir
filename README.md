@@ -29,7 +29,7 @@ Following installation of this package, type `packageVersion("actepir")` in the 
 
 Released versions of this package will have version numbers consisting of three parts:
 
-major.minor.patch
+`major.minor.patch`
 
 In-development versions of this package will have a fourth component, the development version number, which will increment from 9000.
 
