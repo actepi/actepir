@@ -6,5 +6,4 @@
 .xlsx
 .xls
 .csv
-dev_test.Rmd
-dev_build.Rmd
+dev/
