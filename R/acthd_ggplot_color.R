@@ -54,8 +54,7 @@
 #' # Color by numeric variable with web-compliant purples palette
 #' ggplot(iris, aes(Sepal.Width, Sepal.Length, color = Sepal.Length)) +
 #'   geom_point(size = 4, alpha = .6) +
-#'   theme_minimal() +
-#'   scale_color_acthd(
+#'   acthd_ggplot_color(
 #'     palette = "web_purples", 
 #'     discrete = FALSE
 #'     )
@@ -63,13 +62,12 @@
 #' # Fill by discrete variable with different palette + remove legend (guide)
 #' ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
 #'   geom_bar() +
-#'   scale_fill_acthd(
+#'   acthd_ggplot_color(
 #'     palette = "spectral", 
 #'     guide = "none"
-#'     ) +
-#'   theme_minimal()
+#'     )
 #'      
-acthd_scale_color <- function(palette = "blue_turq", discrete = TRUE, reverse = FALSE, ...) {
+acthd_ggplot_color <- function(palette = "blue_turq", discrete = TRUE, reverse = FALSE, ...) {
   pal <- acthd_pal(palette = palette, reverse = reverse)
   
   if (discrete) {

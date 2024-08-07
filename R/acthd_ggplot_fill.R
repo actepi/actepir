@@ -54,13 +54,12 @@
 #  # Fill by discrete variable with different palette + remove legend (guide)
 #' ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
 #'   geom_bar() +
-#'   scale_fill_acthd(
+#'   acthd_ggplot_fill(
 #'     palette = "spectral", 
 #'     guide = "none"
-#'     ) +
-#'   theme_minimal()
+#'     )
 #'
-acthd_scale_fill <- function(palette = "blue_turq", discrete = TRUE, reverse = FALSE, ...) {
+acthd_ggplot_fill <- function(palette = "blue_turq", discrete = TRUE, reverse = FALSE, ...) {
   pal <- acthd_pal(palette = palette, reverse = reverse)
   
   if (discrete) {
