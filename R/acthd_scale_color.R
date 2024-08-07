@@ -7,9 +7,9 @@
 #' ## Valid palette names
 #' 
 #' **Official ACTHD palettes:** 
-#' -  `blue-white`
-#' -  `blue-turq`
-#' -  `blue-darkgrey`
+#' -  `blue_white`
+#' -  `blue_turq`
+#' -  `blue_darkgrey`
 #' 
 #' **Official ACTGOV gradients:** 
 #' -  `darkgreys`

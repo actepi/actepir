@@ -24,9 +24,9 @@ Palettes are derived from a standard set of colours, sourced from the \href{http
 
 \strong{Official ACTHD palettes:}
 \itemize{
-\item \code{blue-white}
-\item \code{blue-turq}
-\item \code{blue-darkgrey}
+\item \code{blue_white}
+\item \code{blue_turq}
+\item \code{blue_darkgrey}
 }
 
 \strong{Official ACTGOV gradients:}

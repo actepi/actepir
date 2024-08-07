@@ -15,13 +15,8 @@ acthd_list_palettes(detail = "names", objtype = "list")
 This function will allow the user to get palette details.
 }
 \examples{
-# Two-step process: download labels first 
-# and save to object, then apply labels as 
-# last step in downloading data
-lab = episerver_getlabels("APC")
-dat = episerver_connect("APC") \%>\% 
-  collect() \%>\% 
-  applydatalabels(lab)
+# get a simple list of palette names
+acthd_list_palettes()
 
 }
 \keyword{palettes}
