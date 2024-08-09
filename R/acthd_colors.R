@@ -1,6 +1,7 @@
 #' Function to store/return ACTHD colors
 #'
-acthd_colors <- function() {
+#' @export
+.acthd_colors <- function() {
   
   colors <- c(
     `bgs blue`     = "#002677", 

@@ -6,9 +6,10 @@
 #'
 #' @importFrom grDevices colorRampPalette
 #' 
-acthd_pal <- function(palette = "blue_turq", reverse = FALSE, ...) {
+#' @export
+.acthd_pal <- function(palette = "blue_turq", reverse = FALSE, ...) {
   
-  acthd_palettes <- acthd_palettes()
+  acthd_palettes <- .acthd_palettes()
   
   pal <- acthd_palettes[[palette]]
   

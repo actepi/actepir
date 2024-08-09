@@ -60,7 +60,7 @@
 #'     )
 #'
 acthd_ggplot_fill <- function(palette = "blue_turq", discrete = TRUE, reverse = FALSE, ...) {
-  pal <- acthd_pal(palette = palette, reverse = reverse)
+  pal <- .acthd_pal(palette = palette, reverse = reverse)
   
   if (discrete) {
     ggplot2::discrete_scale("fill", paste0("acthd_", palette), palette = pal, ...)

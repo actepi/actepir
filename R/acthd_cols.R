@@ -2,9 +2,10 @@
 #'
 #' @param ... Character names of acthd_colors 
 #'
-acthd_cols <- function(...) {
+#' @export
+.acthd_cols <- function(...) {
   
-  acthd_colors <- acthd_colors()
+  acthd_colors <- .acthd_colors()
   
   cols <- c(...)
   
