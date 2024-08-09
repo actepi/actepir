@@ -22,5 +22,6 @@ Imports:
     haven,
     labelled,
     sjlabelled,
-    ggplot2
+    ggplot2,
+    gt
 Config/testthat/edition: 3
