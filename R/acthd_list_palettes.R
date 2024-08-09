@@ -15,7 +15,6 @@
 #' @importFrom dplyr select
 #' @importFrom dplyr relocate
 #' @importFrom dplyr row_number
-#' @importFrom dplyr case_match
 #' @importFrom stringr str_split_i
 #' @importFrom magrittr %>%
 #' 
@@ -69,11 +68,11 @@ acthd_list_palettes <- function(detail = "names", objtype = "list") {
         ) |>
       dplyr::ungroup()
     
-    result = dplyr::case_match(
-      detail,
-      "all" ~ result,
-      "names" ~ result$palette_name
-      )
+    if (detail == "all") {
+      result = result
+    } else if (detail == "names") {
+      result = result$palette_name
+    }
     
     }
   
