@@ -22,6 +22,7 @@
     `web_purple_lightgrey` = .acthd_cols("web purple", "web lightgrey"),
     `web_purple_darkgrey`  = .acthd_cols("web purple", "web darkgrey"),
     `web_greys`            = .acthd_cols("web darkgrey", "web lightgrey"),
+    `web_blues`            = .acthd_cols("bgs blue", "web lightblue"),
     
     # Unofficial (necessary for some visualisation/mapping)
     `lightgreys`       = .acthd_cols("bgs midgrey", "web lightgrey"),    

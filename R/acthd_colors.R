@@ -20,6 +20,7 @@
     
     `web purple`      = "#472d8c",  # sourced from website 05/08/2024
     `web lightpurple` = "#f4f2fa",
+    `web lightblue`   = "#d9e5ff",
     `web lightgrey`   = "#e6e5e5",
     `web darkgrey`    = "#4b4b4b"
     )
