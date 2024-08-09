@@ -17,6 +17,7 @@
 #' @importFrom dplyr row_number
 #' @importFrom dplyr case_match
 #' @importFrom stringr str_split_i
+#' @importFrom magrittr %>%
 #' 
 #' @export
 #' 
@@ -41,7 +42,7 @@ acthd_list_palettes <- function(detail = "names", objtype = "list") {
   }
   
   #import palettes
-  palette = acthd_palettes()
+  palette = .acthd_palettes()
   
   # define result
   if (objtype == "list") {
@@ -51,8 +52,8 @@ acthd_list_palettes <- function(detail = "names", objtype = "list") {
     
     } else if (objtype == "df") {
     
-    result = palette |>
-      base::unlist() |>
+    result = palette |> 
+      base::unlist() %>% 
       base::as.data.frame() |>
       tibble::rownames_to_column("rn") |>
       dplyr::rename(hex_code=".") |>
