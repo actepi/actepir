@@ -27,11 +27,16 @@ This function allows the user to apply pre-defined colour palettes to a ggplot c
 Palettes are derived from a standard set of colours, sourced from the \href{https://actgovernment.sharepoint.com/sites/intranet-ACTHealth/SitePages/Branding,\%20Templates\%20and\%20resources.aspx}{ACT Health Directorate Brand & Graphics Standards Manual} (May 2024) or derived from the \href{https://github.com/ACTGov-Design-System/ACT-Website-Design-System}{ACT Website Design System}.
 \subsection{Valid palette names}{
 
-\strong{Official ACTHD palettes:}
+\strong{Official ACTHD primary colour gradients:}
 \itemize{
 \item \code{blue_white}
 \item \code{blue_turq}
 \item \code{blue_darkgrey}
+}
+
+\strong{Official ACTHD secondary colours:}
+\itemize{
+\item \code{spectral}
 }
 
 \strong{Official ACTGOV gradients:}
@@ -49,13 +54,13 @@ Palettes are derived from a standard set of colours, sourced from the \href{http
 \item \code{web_purple_lightgrey}
 \item \code{web_purple_darkgrey}
 \item \code{web_greys}
+\item \code{web_blues}
 }
 
 \strong{Unofficial (necessary for some visualisation/mapping):}
 \itemize{
 \item \code{lightgreys}
 \item \code{fullgreys}
-\item \code{spectral}
 \item \code{red_yellow_green}
 \item \code{red_yellow_aqua}
 \item \code{blue_lightgrey}

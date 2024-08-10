@@ -6,10 +6,13 @@
 #' 
 #' ## Valid palette names
 #' 
-#' **Official ACTHD palettes:** 
+#' **Official ACTHD primary colour gradients:** 
 #' -  `blue_white`
 #' -  `blue_turq`
 #' -  `blue_darkgrey`
+#' 
+#' **Official ACTHD secondary colours:** 
+#' -  `spectral`
 #' 
 #' **Official ACTGOV gradients:** 
 #' -  `darkgreys`
@@ -23,11 +26,11 @@
 #' -  `web_purple_lightgrey`
 #' -  `web_purple_darkgrey`
 #' -  `web_greys`
+#' -  `web_blues`
 #' 
 #' **Unofficial (necessary for some visualisation/mapping):** 
 #' -  `lightgreys`
 #' -  `fullgreys`
-#' -  `spectral`
 #' -  `red_yellow_green`
 #' -  `red_yellow_aqua`
 #' -  `blue_lightgrey`
