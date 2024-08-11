@@ -158,11 +158,12 @@ acthd_gt_theme <- function(x, palette = "web_blues", single = FALSE, reverse = F
       columns = 2:last_col()
       ) |>
     
-    # Add vertical padding to the header and horizontal padding to the entire table
+    # Set global table definitions: vertical padding to the header and horizontal padding
     tab_options(
       column_labels.padding = px(12),
-      data_row.padding = px(8)
+      data_row.padding = px(8),
+      table.font.size = px(12)
     ) |> 
-    opt_horizontal_padding(scale = 2.5)
+    opt_horizontal_padding(scale = 2.0)
   
 }
