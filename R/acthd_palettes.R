@@ -23,7 +23,9 @@
     # Semi-official (implied from web standards)
     `web_purples`          = .acthd_cols("web purple", "web lightpurple"),
     `web_purple_lightgrey` = .acthd_cols("web purple", "web lightgrey"),
+    `web_purple_midgrey`   = .acthd_cols("web purple", "bgs midgrey"),
     `web_purple_darkgrey`  = .acthd_cols("web purple", "web darkgrey"),
+    
     `web_greys`            = .acthd_cols("web darkgrey", "web lightgrey"),
     `web_blues`            = .acthd_cols("bgs blue", "web lightblue"),
     
