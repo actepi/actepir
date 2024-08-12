@@ -9,3 +9,4 @@
 \description{
 Function to store/return ACTHD colors
 }
+\keyword{internal}

@@ -16,3 +16,4 @@
 \description{
 Return function to interpolate ACTHD color palette
 }
+\keyword{internal}

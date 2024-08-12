@@ -12,3 +12,4 @@
 \description{
 Function to extract ACTHD colors as hex codes
 }
+\keyword{internal}
