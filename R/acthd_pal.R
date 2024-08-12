@@ -6,6 +6,8 @@
 #'
 #' @importFrom grDevices colorRampPalette
 #' 
+#' @keywords internal
+#' 
 #' @export
 .acthd_pal <- function(palette = "blue_turq", reverse = FALSE, ...) {
   

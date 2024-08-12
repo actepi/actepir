@@ -2,6 +2,8 @@
 #'
 #' @param ... Character names of acthd_colors 
 #'
+#' @keywords internal
+#' 
 #' @export
 .acthd_cols <- function(...) {
   

@@ -1,5 +1,7 @@
 #' Function to store/return ACTHD colors
 #'
+#' @keywords internal
+#' 
 #' @export
 .acthd_colors <- function() {
   
