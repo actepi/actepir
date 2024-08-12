@@ -4,7 +4,7 @@
 #'
 #' @param flip Boolean to indicate if the ggplot object has had `coord_flip()` applied to it.
 #'
-#' @keywords gpplot2
+#' @keywords gpplot2 internal
 #'
 #' @import ggplot2
 #' 

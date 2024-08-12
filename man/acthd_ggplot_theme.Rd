@@ -27,3 +27,4 @@ ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
  
 }
 \keyword{gpplot2}
+\keyword{internal}
