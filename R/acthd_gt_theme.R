@@ -1,46 +1,8 @@
 #' Color theme for gt tables using ACT Health Directorate palettes
 #' 
-#' This function allows the user to apply pre-defined theme to a `gt` object.
-#'
-#' @details
-#' Palettes are intentionally designed from dark to light (meaning the darker colour will fill the table header), with the exception of `spectral`.  This function takes the minimum and maximum colours in a palette and reduces them to two values.  Applying the `reverse` argument may not lead to desirable results as tables can look odd with light headers and dark row lines.
+#' This function allows the user to apply pre-defined theme to a `gt` object.  Palettes are intentionally designed from dark to light (meaning the darker colour will fill the table header), with the exception of `spectral`.  This function takes the minimum and maximum colours in a palette and reduces them to two values.  Applying the `reverse` argument may not lead to desirable results as tables can look odd with light headers and dark row lines.  Applying the `single` argument will reduce the palette to a single colour.  The upper end of the palette (generally darker) is used by default.  Applying the `reverse` argument will use the lighter end of the palette. Text is automatically inverted when `reverse` is applied.
 #' 
-#' Applying the `single` argument will reduce the palette to a single colour.  The upper end of the palette (generally darker) is used by default.  Applying the `reverse` argument will use the lighter end of the palette.
-#' 
-#' Text is automatically inverted when `reverse` is applied.
-#' 
-#' ## Valid palette names
-#' 
-#' **Official ACTHD primary colour gradients:** 
-#' -  `blue_white`
-#' -  `blue_turq`
-#' -  `blue_darkgrey`
-#' 
-#' **Official ACTHD secondary colours:** 
-#' -  `spectral`
-#' 
-#' **Official ACTGOV gradients:** 
-#' -  `darkgreys`
-#' -  `navy_pink`
-#' -  `red_orange`
-#' -  `green_yellow`
-#' -  `pink_red`
-#' 
-#' **Semi-official (implied from web standards):** 
-#' -  `web_purples`
-#' -  `web_purple_lightgrey`
-#' -  `web_purple_darkgrey`
-#' -  `web_greys`
-#' -  `web_blues`
-#' 
-#' **Unofficial (necessary for some visualisation/mapping):** 
-#' -  `lightgreys`
-#' -  `fullgreys`
-#' -  `red_yellow_green`
-#' -  `red_yellow_aqua`
-#' -  `blue_lightgrey`
-#' -  `turq_lightgrey`
-#' -  `turq_white`
+#' @inherit .acthd_palettes details
 #' 
 #' @param x The `gt` object to be themed
 #' @param palette Character name of ACT palette. See 'details' for valid palette names.
@@ -54,7 +16,6 @@
 #' @importFrom dplyr mutate
 #' @importFrom dplyr filter
 #' @importFrom dplyr case_match
-
 #' 
 #' @export
 #' 

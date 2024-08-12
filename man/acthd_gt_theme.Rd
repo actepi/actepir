@@ -16,14 +16,10 @@ acthd_gt_theme(x, palette = "web_blues", single = FALSE, reverse = FALSE)
 \item{reverse}{Boolean indicating whether the palette should be reversed.}
 }
 \description{
-This function allows the user to apply pre-defined theme to a \code{gt} object.
+This function allows the user to apply pre-defined theme to a \code{gt} object.  Palettes are intentionally designed from dark to light (meaning the darker colour will fill the table header), with the exception of \code{spectral}.  This function takes the minimum and maximum colours in a palette and reduces them to two values.  Applying the \code{reverse} argument may not lead to desirable results as tables can look odd with light headers and dark row lines.  Applying the \code{single} argument will reduce the palette to a single colour.  The upper end of the palette (generally darker) is used by default.  Applying the \code{reverse} argument will use the lighter end of the palette. Text is automatically inverted when \code{reverse} is applied.
 }
 \details{
-Palettes are intentionally designed from dark to light (meaning the darker colour will fill the table header), with the exception of \code{spectral}.  This function takes the minimum and maximum colours in a palette and reduces them to two values.  Applying the \code{reverse} argument may not lead to desirable results as tables can look odd with light headers and dark row lines.
-
-Applying the \code{single} argument will reduce the palette to a single colour.  The upper end of the palette (generally darker) is used by default.  Applying the \code{reverse} argument will use the lighter end of the palette.
-
-Text is automatically inverted when \code{reverse} is applied.
+Palettes are derived from a standard set of colours, sourced from the \href{https://actgovernment.sharepoint.com/sites/intranet-ACTHealth/SitePages/Branding,\%20Templates\%20and\%20resources.aspx}{ACT Health Directorate Brand & Graphics Standards Manual} (May 2024) or derived from the \href{https://github.com/ACTGov-Design-System/ACT-Website-Design-System}{ACT Website Design System}.
 \subsection{Valid palette names}{
 
 \strong{Official ACTHD primary colour gradients:}
@@ -51,6 +47,7 @@ Text is automatically inverted when \code{reverse} is applied.
 \itemize{
 \item \code{web_purples}
 \item \code{web_purple_lightgrey}
+\item \code{web_purple_midgrey}
 \item \code{web_purple_darkgrey}
 \item \code{web_greys}
 \item \code{web_blues}
@@ -66,6 +63,10 @@ Text is automatically inverted when \code{reverse} is applied.
 \item \code{turq_lightgrey}
 \item \code{turq_white}
 }
+
+Users should stick to the official colours where possible, using the unofficial colours only when the underlying data necessitates it.
+
+Approach taken from \href{https://drsimonj.svbtle.com/creating-corporate-colour-palettes-for-ggplot2}{Dr Simon Jackson}.
 }
 }
 \examples{
