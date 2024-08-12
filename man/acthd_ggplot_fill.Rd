@@ -47,6 +47,7 @@ Palettes are derived from a standard set of colours, sourced from the \href{http
 \itemize{
 \item \code{web_purples}
 \item \code{web_purple_lightgrey}
+\item \code{web_purple_midgrey}
 \item \code{web_purple_darkgrey}
 \item \code{web_greys}
 \item \code{web_blues}
