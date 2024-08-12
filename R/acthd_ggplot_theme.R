@@ -8,8 +8,6 @@
 #'
 #' @import ggplot2
 #' 
-#' @export
-#' 
 #' @examples 
 #' # Normal theme application
 #' ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
