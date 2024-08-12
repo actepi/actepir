@@ -1,7 +1,8 @@
-#' INTERNAL FUNCTIONS
+#' Internal & non-exported functions
 #' 
+#' @keywords internal
 #' 
-#' Get EpiServer details
+#' @details
 #' This function  allows the user quickly locate details about the EpiServer, such as address and port.
 #' The feature/detail to be returned. Can be one of: "driver", "server", "port", "default_db" or "default_schema". Argument should be supplied as character.
 #' episerver_serverdetails("port")
