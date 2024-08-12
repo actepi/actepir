@@ -23,7 +23,7 @@ acthd_ggplot_autotheme <- function(x) {
     ),
     
     # Legend
-    legend.position = "right", 
+    legend.position = "bottom", 
     legend.title=element_blank(),
     
     # Plot and borders
@@ -84,7 +84,24 @@ acthd_ggplot_autotheme <- function(x) {
   }
   
   if (any(plot %in% c("GeomArea"))) {
-    result = result + geom_area(alpha = 0.1, linewidth=0.5)
+    result = result + geom_area(alpha = 0.3, linewidth=0.5)
+  }
+
+  if (any(plot %in% c("GeomTile"))) {
+    
+    result = result + theme(
+      # remove all grids
+      panel.grid.major.x  = element_blank(),
+      panel.grid.minor.x  = element_blank(),
+      axis.ticks.x        = element_blank(),
+      panel.grid.major.y  = element_blank(),
+      panel.grid.minor.y  = element_blank(),
+      axis.ticks.y        = element_blank()
+      ) +
+      
+      # set standard tile style
+      geom_tile(color = "#FFF")
+    
   }
   
   # if (any(plot %in% c("GeomBar","GeomCol","GeomHistogram","GeomLine"))) {
