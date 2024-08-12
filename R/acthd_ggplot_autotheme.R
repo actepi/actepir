@@ -1,8 +1,32 @@
-#' Function to auto format ggplot object
+#' Auto format ggplot object
 #' 
+#' This function allows the user to apply pre-defined theme to a ggplot object.
+#'
+#' @param x `gt()` object to have theme applied to it.
+#'
+#' @keywords gpplot2 acthd
+#'
 #' @import ggplot2
 #' 
 #' @export
+#' 
+#' @examples 
+#' # Two-step application
+#' output = mpg |> 
+#'   ggplot(aes(x = manufacturer, y=hwy)) +
+#'   geom_col()
+#' 
+#' output |> 
+#'   acthd_ggplot_autotheme()
+#'   
+#' # Single-step application
+#' # Two-step application
+#' { output = mpg |> 
+#'     ggplot(aes(x = manufacturer, y=hwy)) +
+#'     geom_col()
+#' } |> 
+#'   acthd_ggplot_autotheme()
+#'  
 acthd_ggplot_autotheme <- function(x) {
   
   plot = base::sapply(x$layers, function(layer) class(layer$geom)[1]) 

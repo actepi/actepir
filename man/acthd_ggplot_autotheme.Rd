@@ -2,10 +2,33 @@
 % Please edit documentation in R/acthd_ggplot_autotheme.R
 \name{acthd_ggplot_autotheme}
 \alias{acthd_ggplot_autotheme}
-\title{Function to auto format ggplot object}
+\title{Auto format ggplot object}
 \usage{
 acthd_ggplot_autotheme(x)
 }
-\description{
-Function to auto format ggplot object
+\arguments{
+\item{x}{\code{gt()} object to have theme applied to it.}
 }
+\description{
+This function allows the user to apply pre-defined theme to a ggplot object.
+}
+\examples{
+# Two-step application
+output = mpg |> 
+  ggplot(aes(x = manufacturer, y=hwy)) +
+  geom_col()
+
+output |> 
+  acthd_ggplot_autotheme()
+  
+# Single-step application
+# Two-step application
+{ output = mpg |> 
+    ggplot(aes(x = manufacturer, y=hwy)) +
+    geom_col()
+} |> 
+  acthd_ggplot_autotheme()
+ 
+}
+\keyword{acthd}
+\keyword{gpplot2}
