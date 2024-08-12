@@ -9,3 +9,55 @@
 \description{
 Function to store/return ACTHD palettes
 }
+\details{
+Palettes are derived from a standard set of colours, sourced from the \href{https://actgovernment.sharepoint.com/sites/intranet-ACTHealth/SitePages/Branding,\%20Templates\%20and\%20resources.aspx}{ACT Health Directorate Brand & Graphics Standards Manual} (May 2024) or derived from the \href{https://github.com/ACTGov-Design-System/ACT-Website-Design-System}{ACT Website Design System}.
+\subsection{Valid palette names}{
+
+\strong{Official ACTHD primary colour gradients:}
+\itemize{
+\item \code{blue_white}
+\item \code{blue_turq}
+\item \code{blue_darkgrey}
+}
+
+\strong{Official ACTHD secondary colours:}
+\itemize{
+\item \code{spectral}
+}
+
+\strong{Official ACTGOV gradients:}
+\itemize{
+\item \code{darkgreys}
+\item \code{navy_pink}
+\item \code{red_orange}
+\item \code{green_yellow}
+\item \code{pink_red}
+}
+
+\strong{Semi-official (implied from web standards):}
+\itemize{
+\item \code{web_purples}
+\item \code{web_purple_lightgrey}
+\item \code{web_purple_midgrey}
+\item \code{web_purple_darkgrey}
+\item \code{web_greys}
+\item \code{web_blues}
+}
+
+\strong{Unofficial (necessary for some visualisation/mapping):}
+\itemize{
+\item \code{lightgreys}
+\item \code{fullgreys}
+\item \code{red_yellow_green}
+\item \code{red_yellow_aqua}
+\item \code{blue_lightgrey}
+\item \code{turq_lightgrey}
+\item \code{turq_white}
+}
+
+Users should stick to the official colours where possible, using the unofficial colours only when the underlying data necessitates it.
+
+Approach taken from \href{https://drsimonj.svbtle.com/creating-corporate-colour-palettes-for-ggplot2}{Dr Simon Jackson}.
+}
+}
+\keyword{internal}
