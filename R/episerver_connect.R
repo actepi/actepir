@@ -8,6 +8,7 @@
 #' 
 #' @importFrom DBI dbConnect
 #' @importFrom odbc odbc
+#' @import rstudioapi
 #' 
 #' @export
 #' 
@@ -17,13 +18,26 @@
 #'  
 episerver_connect <- function() {
   
-  #establish connection to episerver
-  conn = DBI::dbConnect(
-    odbc::odbc(), 
-    driver = episerver_serverdetails("driver"), 
-    server = episerver_serverdetails("server"), 
-    port = episerver_serverdetails("port")
+  # Define params
+  drv = episerver_serverdetails("driver")
+  srv = episerver_serverdetails("server")
+  prt = episerver_serverdetails("port")
+  
+  # Establish connection to Episerver
+  conn = DBI::dbConnect(odbc::odbc(), 
+                        driver = drv, 
+                        server = srv, 
+                        port   = prt
+                        )
+
+  # Use rstudioapi to register the connection in the Connections pane
+  if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
+    rstudioapi::sendToConsole(
+      paste0(
+        "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,")"
+        )
     )
+    }
   
   return(conn)
   
