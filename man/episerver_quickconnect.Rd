@@ -9,9 +9,9 @@ episerver_quickconnect(table, schema = "dbo", db = "Analysis")
 \arguments{
 \item{table}{The name of the table to be connected to. Argument should be supplied as character.}
 
-\item{schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will defaulto to \code{dbo}.}
+\item{schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to \code{dbo}.}
 
-\item{db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will defaulto to \code{Analysis}.}
+\item{db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to \code{Analysis}.}
 }
 \description{
 This function allows the user to quickly establish an ODBC connection to the EpiServer (using \code{DBI} and \code{odbc} standards) and then alias a specific table (with a \code{dbplyr} lazy query).

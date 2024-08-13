@@ -7,8 +7,8 @@
 #' Note that this function is hard-coded to reference the EpiServer and cannot be used to contact a different server.  It will default to the `Analysis.dbo` namespace unless `schema` and `db` arguments are also supplied.
 #' 
 #' @param table The name of the table to be connected to. Argument should be supplied as character.
-#' @param schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will defaulto to `dbo`.
-#' @param db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will defaulto to `Analysis`.
+#' @param schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `dbo`.
+#' @param db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
 #' 
 #' @keywords episerver
 #' 
