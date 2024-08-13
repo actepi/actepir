@@ -4,9 +4,11 @@
 \alias{episerver_lazytable}
 \title{Alias an EpiServer table as a \code{dbplyr} lazy table}
 \usage{
-episerver_lazytable(table, schema = "dbo", db = "Analysis")
+episerver_lazytable(con, table, schema = "dbo", db = "Analysis")
 }
 \arguments{
+\item{con}{The connection object which has defined the server connection.}
+
 \item{table}{The name of the table to be aliased. Argument should be supplied as character.}
 
 \item{schema}{The name of the schema to be aliased. Argument should be supplied as character. If not supplied, will default to \code{dbo}.}
