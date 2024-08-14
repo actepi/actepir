@@ -1,6 +1,6 @@
 Package: actepir
 Title: ACT Health Epidemiology R Functions & Materials
-Version: 0.0.7.9000
+Version: 0.0.8.9000
 Authors@R:
     person("Warren", "Holroyd", , "warren.holroyd@act.gov.au", role = c("aut", "cre"),
             comment = c(ORCID = "YOUR-ORCID_ID"))
