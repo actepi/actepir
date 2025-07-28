@@ -35,7 +35,7 @@ episerver_connect <- function() {
   if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
     rstudioapi::sendToConsole(
       paste0(
-        "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,")"
+        "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",Trusted_Connection = 'Yes')"
         )
     )
     }
