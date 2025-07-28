@@ -15,7 +15,7 @@ episerver_serverdetails <- function(feature) {
   }
   
   feature_list = list(
-    driver         = "SQL Server",
+    driver         = "ODBC Driver 17 for SQL Server",
     server         = "PRDSQL121vs.act.gov.au",
     port           = 1433,
     default_db     = "Analysis",
