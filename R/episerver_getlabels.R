@@ -50,8 +50,10 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
   
   # Recursive function to find the 'x' with class 'dbplyr_table_path'
   find_dbplyr_table_path <- function(query_structure) {
+    
     # Check if the current structure is a list and has an element named 'x'
     if (is.list(query_structure) && "x" %in% names(query_structure)) {
+      
       # Access the 'x' element
       x_element <- query_structure$x
       

@@ -36,7 +36,7 @@ collect_withlabels <- function(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_ta
   return(
     applydatalabels(
       data   = dplyr::collect(dataset),
-      labels = episerver_getlabels(dataset, lbl_db, lbl_schema, lbl_table)
+      labels = episerver_getlabels(dataset, lbl_table, lbl_schema, lbl_db)
     )
   ) 
   
