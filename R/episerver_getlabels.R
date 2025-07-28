@@ -110,7 +110,8 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
       odbc::odbc(), 
       driver = episerver_serverdetails("driver"), 
       server = episerver_serverdetails("server"), 
-      port = episerver_serverdetails("port")
+      port = episerver_serverdetails("port"),
+      Trusted_Connection = "Yes"
     )
     collection = dataset
     

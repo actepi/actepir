@@ -27,7 +27,8 @@ episerver_connect <- function() {
   conn = DBI::dbConnect(odbc::odbc(), 
                         driver = drv, 
                         server = srv, 
-                        port   = prt
+                        port   = prt,
+                        Trusted_Connection = "Yes"
                         )
 
   # Use rstudioapi to register the connection in the Connections pane
