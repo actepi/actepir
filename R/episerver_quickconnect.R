@@ -1,18 +1,55 @@
-#' Establish a quick connection to EpiServer table
+#' Establish a Quick Connection to EpiServer Table
 #' 
-#' This function allows the user to quickly establish an ODBC connection to the EpiServer (using `DBI` and `odbc` standards) and then alias a specific table (with a `dbplyr` lazy query).  
+#' @description
+#' This function provides a convenient wrapper to establish an ODBC connection to the 
+#' EpiServer database and create a lazy query reference to a specific table. It combines 
+#' the functionality of \code{\link{episerver_connect}} with \code{dplyr::tbl(dbplyr::in_catalog())} 
+#' in a single function call, eliminating the need for multiple steps when accessing 
+#' database tables.
 #' 
-#' In essence, this function combines `actepir::episerver_connect` with `dplyr::tbl(dbplyr::in_catalog())`.  Both steps are integrated into a single wraparound function for convenience.
+#' The function returns a \code{dbplyr} lazy query object that can be used with 
+#' standard \code{dplyr} verbs for data manipulation without immediately executing 
+#' queries against the database.
 #' 
-#' Note that this function is hard-coded to reference the EpiServer and cannot be used to contact a different server.  It will default to the `Analysis.dbo` namespace unless `schema` and `db` arguments are also supplied.
+#' @param table Character string. The name of the database table to connect to. 
+#'   This parameter is required and cannot be empty or \code{NULL}.
+#' @param schema Character string. The database schema name. Defaults to \code{"dbo"} 
+#'   if not specified.
+#' @param db Character string. The database name. Defaults to \code{"Analysis"} 
+#'   if not specified.
+#' @param driver Character string or \code{NULL}. ODBC driver to use for the connection. 
+#'   If \code{NULL} (default), the function will use automatic driver selection.
+#' @param register Logical. Whether to register the database connection in RStudio's 
+#'   Connections pane. Defaults to \code{TRUE}.
 #' 
-#' @param table The name of the table to be connected to. Argument should be supplied as character.
-#' @param schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `dbo`.
-#' @param db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
-#' @param driver Your choice of driver if you wish to override automatic selection
-#' @param register Whether to register the connection with `rstudioapi` in the connections window.
+#' @return A \code{tbl_dbi} object representing a lazy query to the specified database 
+#'   table. This object can be used with \code{dplyr} verbs for data manipulation.
 #' 
-#' @keywords episerver
+#' @details
+#' This function is specifically designed for connecting to EpiServer databases and 
+#' cannot be used with other database servers. The connection uses ODBC standards 
+#' via the \code{DBI} and \code{odbc} packages.
+#' 
+#' The default namespace is \code{Analysis.dbo}, but this can be customized using 
+#' the \code{db} and \code{schema} parameters. The function performs basic validation 
+#' on the required \code{table} parameter and will throw an error if it's missing, 
+#' empty, or \code{NULL}.
+#' 
+#' @note
+#' \itemize{
+#'   \item This function requires an active network connection to the EpiServer
+#'   \item Appropriate database permissions are required to access the specified table
+#'   \item The returned object is a lazy query - no data is retrieved until explicitly collected
+#'   \item Use \code{dplyr::collect()} to execute the query and retrieve data into memory
+#' }
+#' 
+#' @seealso 
+#' \code{\link{episerver_connect}} for establishing database connections,
+#' \code{\link[dplyr]{tbl}} for creating table references,
+#' \code{\link[dbplyr]{in_catalog}} for specifying database catalogs,
+#' \code{\link[dplyr]{collect}} for executing lazy queries
+#' 
+#' @keywords database episerver connection
 #' 
 #' @importFrom DBI dbConnect
 #' @importFrom odbc odbc
@@ -23,11 +60,38 @@
 #' @export
 #' 
 #' @examples 
-#' # Connect to APC table in default `Analysis` database
-#' apc_tbl = episerver_quickconnect("APC")
+#' \dontrun{
+#' # Basic usage: Connect to APC table in default Analysis.dbo namespace
+#' apc_tbl <- episerver_quickconnect("APC")
 #' 
-#' # Connect to `TestTable` table in non-default `AnalysisArchive` database
-#' test_tbl = episerver_quickconnect("TestTable", db="AnalysisArchive")
+#' # Use with dplyr operations (still lazy, not collected yet)
+#' filtered_data <- apc_tbl %>%
+#'   filter(date >= "2023-01-01") %>%
+#'   select(id, date, value)
+#' 
+#' # Execute query and collect results
+#' results <- filtered_data %>% collect()
+#' 
+#' # Connect to table in different database
+#' archive_tbl <- episerver_quickconnect(
+#'   table = "TestTable", 
+#'   db = "AnalysisArchive"
+#'   )
+#' 
+#' # Specify custom driver (if needed)
+#' special_tbl <- episerver_quickconnect(
+#'   table = "ED",
+#'   driver = "ODBC Driver 13 for SQL Server"
+#'   )
+#' 
+#' # Don't register connection in RStudio (for programmatic use)
+#' automated_tbl <- episerver_quickconnect(
+#'   table = "ED",
+#'   register = FALSE
+#'   )
+#' }
+#' 
+#' @author Warren Holroyd
 #'
 episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, register = TRUE) {
   
