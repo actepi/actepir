@@ -16,12 +16,16 @@
 #' # Connect to EpiServer
 #' conn = episerver_connect()
 #'  
-episerver_connect <- function() {
+episerver_connect <- function(driver = NULL, register = TRUE) {
   
   # Define params
-  drv = episerver_serverdetails("driver")
   srv = episerver_serverdetails("server")
   prt = episerver_serverdetails("port")
+  drv = if(is.null(driver)){
+          episerver_serverdetails("driver") 
+        } else {
+          driver 
+        }
   
   # Establish connection to Episerver
   conn = DBI::dbConnect(odbc::odbc(), 
@@ -32,13 +36,15 @@ episerver_connect <- function() {
                         )
 
   # Use rstudioapi to register the connection in the Connections pane
-  if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
-    rstudioapi::sendToConsole(
-      paste0(
-        "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",Trusted_Connection = 'Yes')"
-        )
-    )
+  if (register) {
+    if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
+      rstudioapi::sendToConsole(
+        paste0(
+          "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",Trusted_Connection = 'Yes')"
+          )
+      )
     }
+  }
   
   return(conn)
   

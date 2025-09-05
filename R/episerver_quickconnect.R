@@ -9,6 +9,8 @@
 #' @param table The name of the table to be connected to. Argument should be supplied as character.
 #' @param schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `dbo`.
 #' @param db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
+#' @param driver Your choice of driver if you wish to override automatic selection
+#' @param register Whether to register the connection with `rstudioapi` in the connections window.
 #' 
 #' @keywords episerver
 #' 
@@ -27,7 +29,7 @@
 #' # Connect to `TestTable` table in non-default `AnalysisArchive` database
 #' test_tbl = episerver_quickconnect("TestTable", db="AnalysisArchive")
 #'
-episerver_quickconnect <- function(table, schema="dbo", db="Analysis") {
+episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, register = TRUE) {
   
   # helper function to encapsulate argument validity logic
   is_invalid <- function(arg) {
@@ -40,7 +42,7 @@ episerver_quickconnect <- function(table, schema="dbo", db="Analysis") {
   }
   
   # establish connection and pass to lazy query
-  conn = episerver_connect() %>% 
+  conn = episerver_connect(driver=driver, register=register) %>% 
     dplyr::tbl(dbplyr::in_catalog(db,schema,table))
   
 }

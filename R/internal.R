@@ -9,13 +9,31 @@
 #' 
 episerver_serverdetails <- function(feature) {
   
-  # helper function to encapsulate argument validity logic
+  # Helper function to encapsulate argument validity logic
   is_invalid <- function(arg) {
     missing(arg) || is.null(arg) || (is.atomic(arg) && length(arg) == 1 && is.na(arg))
   }
+
+  # Dynamically select best driver
+  drivers <- unique(odbc::odbcListDrivers()$name)
+  odbc_drivers <- grep("ODBC Driver.*SQL Server", drivers, value = TRUE)
+  snac_driver <- "SQL Server Native Client 11.0"
+  sql_server_driver <- "SQL Server"
   
+  selected_driver <- if (length(odbc_drivers) > 0) {
+    versions <- as.numeric(gsub("[^0-9.]", "", odbc_drivers))
+    odbc_drivers[which.max(versions)]
+  } else if (snac_driver %in% drivers) {
+    snac_driver
+  } else if (sql_server_driver %in% drivers) {
+    sql_server_driver
+  } else {
+    NA
+  }
+  
+  # Construct feature list
   feature_list = list(
-    driver         = "ODBC Driver 17 for SQL Server",
+    driver         = selected_driver,
     server         = "PRDSQL121vs.act.gov.au",
     port           = 1433,
     default_db     = "Analysis",
