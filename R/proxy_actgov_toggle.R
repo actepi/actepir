@@ -25,19 +25,27 @@ proxy_actgov_toggle <- function(toggle, proxyaddress = NULL) {
     proxyaddress = "http://proxy.on.act.gov.au:9090"
   } 
   
+  proxy_vars <- c("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
+  user_vars <- c("http_proxy_user", "https_proxy_user")
+  
   if (toggle == "off") {
 
-    Sys.setenv(http_proxy       = "")
-    Sys.setenv(http_proxy_user  = "")
-    Sys.setenv(https_proxy      = "")
-    Sys.setenv(https_proxy_user = "")
+    for(i in 1:length(proxy_vars)) {
+      do.call(Sys.setenv, list("") |> `names<-`(proxy_vars[i]))
+    }
+    for(i in 1:length(user_vars)) {
+      do.call(Sys.setenv, list("") |> `names<-`(user_vars[i]))
+    }
     
   } else if (toggle == "on") {
-   
-    Sys.setenv(http_proxy       = proxyaddress)
-    Sys.setenv(http_proxy_user  = proxyaddress)
-    Sys.setenv(https_proxy      = proxyaddress)
-    Sys.setenv(https_proxy_user = proxyaddress)
+    
+    # Set proxy variables programmatically
+    for(i in 1:length(proxy_vars)) {
+      do.call(Sys.setenv, list(proxyaddress) |> `names<-`(proxy_vars[i]))
+    }
+    for(i in 1:length(user_vars)) {
+      do.call(Sys.setenv, list(":") |> `names<-`(user_vars[i]))
+    }
     
   }
   
