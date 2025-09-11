@@ -17,8 +17,13 @@
 #'   if not specified.
 #' @param db Character string. The database name. Defaults to \code{"Analysis"} 
 #'   if not specified.
-#' @param driver Character string or \code{NULL}. ODBC driver to use for the connection. 
-#'   If \code{NULL} (default), the function will use automatic driver selection.
+#' @param driver Character string or \code{NULL}. ODBC driver to use for the connection.
+#'   If \code{NULL} (default), the function will automatically select the appropriate 
+#'   driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
+#'   to identify which drivers you have access to.
+#' @param max_attempts Integer to specify the number of attempts which will be made
+#'   to connect to the server. Defaults to \code{episerver_connect} default.  Workaround 
+#'   for concurrency bug in RStudio.
 #' 
 #' @return A \code{tbl_dbi} object representing a lazy query to the specified database 
 #'   table. This object can be used with \code{dplyr} verbs for data manipulation.

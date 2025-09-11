@@ -23,7 +23,13 @@ if not specified.}
 if not specified.}
 
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
-If \code{NULL} (default), the function will use automatic driver selection.}
+If \code{NULL} (default), the function will automatically select the appropriate
+driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
+to identify which drivers you have access to.}
+
+\item{max_attempts}{Integer to specify the number of attempts which will be made
+to connect to the server. Defaults to \code{episerver_connect} default.  Workaround
+for concurrency bug in RStudio.}
 }
 \value{
 A \code{tbl_dbi} object representing a lazy query to the specified database

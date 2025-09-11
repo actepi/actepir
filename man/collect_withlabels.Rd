@@ -14,13 +14,26 @@ collect_withlabels(
 )
 }
 \arguments{
-\item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.}
+\item{dataset}{The name of the dataset that labels are associated with. Argument
+should be supplied as character or object.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character.}
+\item{lbl_db}{The name of the database to be connected to. Argument should be
+supplied as character.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character.}
+\item{lbl_schema}{The name of the schema to be connected to. Argument should be
+supplied as character.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character.}
+\item{lbl_table}{The name of the table where the labels exist. Argument should
+be supplied as character.}
+
+\item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
+If \code{NULL} (default), the function will automatically select the appropriate
+driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
+to identify which drivers you have access to.}
+
+\item{max_attempts}{Integer to specify the number of attempts which will be made
+to connect to the server. Defaults to \code{episerver_connect} default.  Workaround
+for concurrency bug in RStudio.}
 }
 \description{
 This function is a wraparound function which combines the \code{episerver_getlabels} and \code{dplyr::collect} functions and feeds them to the \code{applydatalabels} function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.

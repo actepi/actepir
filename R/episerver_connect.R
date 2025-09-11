@@ -11,7 +11,10 @@
 #'   If \code{NULL} (default), the function will automatically select the appropriate 
 #'   driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
 #'   to identify which drivers you have access to.
-#' 
+#' @param max_attempts Integer to specify the number of attempts which will be made
+#'   to connect to the server. Defaults to 10.  Workaround for concurrency bug in
+#'   rstudio.
+#'   
 #' @return A \code{DBIConnection} object representing the database connection to 
 #'   EpiServer. This connection object can be used with DBI functions or passed to 
 #'   \code{dplyr::tbl()} for creating table references.

@@ -4,11 +4,21 @@
 #' 
 #' Almost all non-administrative users will not need to use the lbl_* arguments.
 #' 
-#' @param dataset The name of the dataset that labels are associated with. Argument should be supplied as character or object.  Mandatory.
-#' @param lbl_table The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to `DataLabels`.
-#' @param lbl_schema The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to `ref`.
-#' @param lbl_db The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to `Analysis`.
-#' 
+#' @param dataset The name of the dataset that labels are associated with. Argument 
+#'   should be supplied as character or object.  Mandatory.
+#' @param lbl_table The name of the table where the labels exist. Argument should be 
+#'   supplied as character. If not supplied, will default to `DataLabels`.
+#' @param lbl_schema The name of the schema to be connected to. Argument should be 
+#'   supplied as character. If not supplied, will default to `ref`.
+#' @param lbl_db The name of the database to be connected to. Argument should be 
+#'   supplied as character. If not supplied, will default to `Analysis`.
+#' @param driver Character string or \code{NULL}. ODBC driver to use for the connection.
+#'   If \code{NULL} (default), the function will automatically select the appropriate 
+#'   driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
+#'   to identify which drivers you have access to.
+#' @param max_attempts Integer to specify the number of attempts which will be made
+#'   to connect to the server. Defaults to \code{episerver_connect} default.  Workaround 
+#'   for concurrency bug in RStudio.
 #' @keywords episerver
 #' 
 #' @importFrom DBI dbConnect

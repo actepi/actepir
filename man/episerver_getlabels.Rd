@@ -14,13 +14,26 @@ episerver_getlabels(
 )
 }
 \arguments{
-\item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.  Mandatory.}
+\item{dataset}{The name of the dataset that labels are associated with. Argument
+should be supplied as character or object.  Mandatory.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should be supplied as character. If not supplied, will default to \code{DataLabels}.}
+\item{lbl_table}{The name of the table where the labels exist. Argument should be
+supplied as character. If not supplied, will default to \code{DataLabels}.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be supplied as character. If not supplied, will default to \code{ref}.}
+\item{lbl_schema}{The name of the schema to be connected to. Argument should be
+supplied as character. If not supplied, will default to \code{ref}.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be supplied as character. If not supplied, will default to \code{Analysis}.}
+\item{lbl_db}{The name of the database to be connected to. Argument should be
+supplied as character. If not supplied, will default to \code{Analysis}.}
+
+\item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
+If \code{NULL} (default), the function will automatically select the appropriate
+driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
+to identify which drivers you have access to.}
+
+\item{max_attempts}{Integer to specify the number of attempts which will be made
+to connect to the server. Defaults to \code{episerver_connect} default.  Workaround
+for concurrency bug in RStudio.}
 }
 \description{
 This function will allow the user to download the labels file for a given dataset.  The function will always search EpiServer and cannot be used for other servers of file locations.
