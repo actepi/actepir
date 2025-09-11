@@ -4,7 +4,14 @@
 \alias{collect_withlabels}
 \title{Collect in dbplyr pipe with labels}
 \usage{
-collect_withlabels(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL)
+collect_withlabels(
+  dataset,
+  lbl_db = NULL,
+  lbl_schema = NULL,
+  lbl_table = NULL,
+  driver = NULL,
+  max_attempts = NULL
+)
 }
 \arguments{
 \item{dataset}{The name of the dataset that labels are associated with. Argument should be supplied as character or object.}

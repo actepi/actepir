@@ -8,7 +8,9 @@ episerver_getlabels(
   dataset,
   lbl_table = NULL,
   lbl_schema = NULL,
-  lbl_db = NULL
+  lbl_db = NULL,
+  driver = NULL,
+  max_attempts = NULL
 )
 }
 \arguments{

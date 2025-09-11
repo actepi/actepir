@@ -4,7 +4,13 @@
 \alias{episerver_quickconnect}
 \title{Establish a Quick Connection to EpiServer Table}
 \usage{
-episerver_quickconnect(table, schema = "dbo", db = "Analysis", driver = NULL)
+episerver_quickconnect(
+  table,
+  schema = "dbo",
+  db = "Analysis",
+  driver = NULL,
+  max_attempts = NULL
+)
 }
 \arguments{
 \item{table}{Character string. The name of the database table to connect to.

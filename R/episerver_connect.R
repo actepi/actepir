@@ -102,7 +102,19 @@
 #' 
 #' @author Warren Holroyd
 #'
-episerver_connect <- function(driver = NULL) {
+episerver_connect <- function(driver = NULL, max_attempts = 10) {
+  
+  if(!is.integer(max_attempts)){
+    max_attempts = 10
+  }
+  
+  # Close any existing connections with the same signature first
+  tryCatch({
+    existing_cons <- dbListConnections(odbc::odbc())
+    if(length(existing_cons) > 0) {
+      lapply(existing_cons, dbDisconnect)
+    }
+  }, error = function(e) invisible(NULL))
   
   # Define params
   srv = episerver_serverdetails("server")
@@ -113,24 +125,35 @@ episerver_connect <- function(driver = NULL) {
     driver 
   }
   
-  # Establish connection to Episerver
-  conn = DBI::dbConnect(odbc::odbc(), 
-                        driver = drv, 
-                        server = srv, 
-                        port   = prt,
-                        Trusted_Connection = "Yes"
-  )
-  # Use rstudioapi to register the connection in the Connections pane
-  # if (register) {
-  #   if (requirenamespace("rstudioapi", quietly = true) && rstudioapi::isavailable()) {
-  #     rstudioapi::sendtoconsole(
-  #       paste0(
-  #         "conn <- dbi::dbconnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",trusted_connection = 'yes')"
-  #       )
-  #     )
-  #   }
-  # }
-  
-  return(conn)
-  
+  # Establish connection with retry logic and suppressed output
+  for(attempt in 1:max_attempts) {
+    
+    # Suppress all the ODBC driver noise
+    result <- tryCatch({
+      capture.output({
+        conn <- suppressMessages(suppressWarnings({
+          DBI::dbConnect(odbc::odbc(), 
+                         driver = drv, 
+                         server = srv, 
+                         port   = prt,
+                         Trusted_Connection = "Yes"
+          )
+        }))
+      }, type = "message")
+      
+      return(conn)
+      
+    }, error = function(e) {
+      if(attempt == max_attempts) {
+        stop("Failed to connect after ", max_attempts, " attempts. Last error: ", e$message)
+      }
+      Sys.sleep(0.5)  # Brief pause before retry
+      return(NULL)  # Signal to continue loop
+    })
+    
+    # If we got a valid connection, return it
+    if(!is.null(result)) {
+      return(result)
+    }
+  }
 }

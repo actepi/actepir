@@ -4,7 +4,7 @@
 \alias{episerver_connect}
 \title{Establish a Connection to EpiServer Database}
 \usage{
-episerver_connect(driver = NULL)
+episerver_connect(driver = NULL, max_attempts = 10)
 }
 \arguments{
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.

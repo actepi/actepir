@@ -91,12 +91,7 @@
 #' 
 #' @author Warren Holroyd
 #'
-episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL) {
-  
-  # helper function to encapsulate argument validity logic
-  is_invalid <- function(arg) {
-    missing(arg) || is.null(arg) || (is.atomic(arg) && length(arg) == 1 && is.na(arg))
-  }
+episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, max_attempts = NULL) {
   
   # check required arguments present
   if (is_invalid(table) | table == "") {
@@ -104,7 +99,7 @@ episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = 
   }
   
   # establish connection and pass to lazy query
-  conn = episerver_connect(driver=driver) %>% 
+  conn = episerver_connect(driver=driver,max_attempts=max_attempts) %>% 
     dplyr::tbl(dbplyr::in_catalog(db,schema,table))
   
   return(conn)

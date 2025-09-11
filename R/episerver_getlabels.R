@@ -35,18 +35,12 @@
 #'   )
 #'  
 
-episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lbl_db = NULL) {
-  
-  # helper function to encapsulate argument validity logic
-  is_invalid <- function(arg) {
-    missing(arg) || is.null(arg) || (is.atomic(arg) && length(arg) == 1 && is.na(arg))
-  }
+episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lbl_db = NULL, driver = NULL, max_attempts = NULL) {
   
   # check required arguments present
   if (is_invalid(dataset)) {
     stop("Function requires argument 'dataset' to be supplied")
   }
-  
   
   # Recursive function to find the 'x' with class 'dbplyr_table_path'
   find_dbplyr_table_path <- function(query_structure) {
@@ -106,13 +100,8 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
             !is_invalid(lbl_schema) & 
             !is_invalid(lbl_table)) {
     
-    conn = DBI::dbConnect(
-      odbc::odbc(), 
-      driver = episerver_serverdetails("driver"), 
-      server = episerver_serverdetails("server"), 
-      port = episerver_serverdetails("port"),
-      Trusted_Connection = "Yes"
-    )
+    conn = episerver_connect(driver=driver,max_attempts=max_attempts)
+    
     collection = dataset
     
   } else {
