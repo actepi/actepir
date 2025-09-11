@@ -11,10 +11,6 @@
 #'   If \code{NULL} (default), the function will automatically select the appropriate 
 #'   driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
 #'   to identify which drivers you have access to.
-#' @param register Logical. Whether to register the database connection in RStudio's 
-#'   Connections pane for interactive use. When \code{TRUE} (default), the connection 
-#'   will appear in the RStudio Connections tab, allowing for GUI-based database 
-#'   exploration. Set to \code{FALSE} for programmatic or automated workflows.
 #' 
 #' @return A \code{DBIConnection} object representing the database connection to 
 #'   EpiServer. This connection object can be used with DBI functions or passed to 
@@ -106,7 +102,7 @@
 #' 
 #' @author Warren Holroyd
 #'
-episerver_connect <- function(driver = NULL, register = TRUE) {
+episerver_connect <- function(driver = NULL) {
   
   # Define params
   srv = episerver_serverdetails("server")
@@ -125,15 +121,15 @@ episerver_connect <- function(driver = NULL, register = TRUE) {
                         Trusted_Connection = "Yes"
   )
   # Use rstudioapi to register the connection in the Connections pane
-  if (register) {
-    if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
-      rstudioapi::sendToConsole(
-        paste0(
-          "conn <- DBI::dbConnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",Trusted_Connection = 'Yes')"
-        )
-      )
-    }
-  }
+  # if (register) {
+  #   if (requirenamespace("rstudioapi", quietly = true) && rstudioapi::isavailable()) {
+  #     rstudioapi::sendtoconsole(
+  #       paste0(
+  #         "conn <- dbi::dbconnect(odbc::odbc(), driver = '",drv,"', server = '",srv,"', port = ",prt,",trusted_connection = 'yes')"
+  #       )
+  #     )
+  #   }
+  # }
   
   return(conn)
   

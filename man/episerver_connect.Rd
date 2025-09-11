@@ -4,18 +4,13 @@
 \alias{episerver_connect}
 \title{Establish a Connection to EpiServer Database}
 \usage{
-episerver_connect(driver = NULL, register = TRUE)
+episerver_connect(driver = NULL)
 }
 \arguments{
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
 If \code{NULL} (default), the function will automatically select the appropriate
 driver using \code{episerver_serverdetails("driver")}. See \code{\link[odbc]{odbcListDrivers}}
 to identify which drivers you have access to.}
-
-\item{register}{Logical. Whether to register the database connection in RStudio's
-Connections pane for interactive use. When \code{TRUE} (default), the connection
-will appear in the RStudio Connections tab, allowing for GUI-based database
-exploration. Set to \code{FALSE} for programmatic or automated workflows.}
 }
 \value{
 A \code{DBIConnection} object representing the database connection to

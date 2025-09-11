@@ -19,8 +19,6 @@
 #'   if not specified.
 #' @param driver Character string or \code{NULL}. ODBC driver to use for the connection. 
 #'   If \code{NULL} (default), the function will use automatic driver selection.
-#' @param register Logical. Whether to register the database connection in RStudio's 
-#'   Connections pane. Defaults to \code{TRUE}.
 #' 
 #' @return A \code{tbl_dbi} object representing a lazy query to the specified database 
 #'   table. This object can be used with \code{dplyr} verbs for data manipulation.
@@ -93,7 +91,7 @@
 #' 
 #' @author Warren Holroyd
 #'
-episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, register = TRUE) {
+episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL) {
   
   # helper function to encapsulate argument validity logic
   is_invalid <- function(arg) {
@@ -106,7 +104,8 @@ episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = 
   }
   
   # establish connection and pass to lazy query
-  conn = episerver_connect(driver=driver, register=register) %>% 
+  conn = episerver_connect(driver=driver) %>% 
     dplyr::tbl(dbplyr::in_catalog(db,schema,table))
   
+  return(conn)
 }

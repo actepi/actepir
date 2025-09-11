@@ -4,13 +4,7 @@
 \alias{episerver_quickconnect}
 \title{Establish a Quick Connection to EpiServer Table}
 \usage{
-episerver_quickconnect(
-  table,
-  schema = "dbo",
-  db = "Analysis",
-  driver = NULL,
-  register = TRUE
-)
+episerver_quickconnect(table, schema = "dbo", db = "Analysis", driver = NULL)
 }
 \arguments{
 \item{table}{Character string. The name of the database table to connect to.
@@ -24,9 +18,6 @@ if not specified.}
 
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
 If \code{NULL} (default), the function will use automatic driver selection.}
-
-\item{register}{Logical. Whether to register the database connection in RStudio's
-Connections pane. Defaults to \code{TRUE}.}
 }
 \value{
 A \code{tbl_dbi} object representing a lazy query to the specified database

@@ -1,6 +1,6 @@
 Package: actepir
 Title: ACT Health Epidemiology R Functions & Materials
-Version: 0.0.12
+Version: 0.0.13
 Authors@R:
     person("Warren", "Holroyd", , "warren.holroyd@act.gov.au", role = c("aut", "cre"),
             comment = c(ORCID = "YOUR-ORCID_ID"))
@@ -8,7 +8,7 @@ Description: A local package containing various functions and elements for use i
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Suggests: 
     testthat (>= 3.0.0)
 Imports:
