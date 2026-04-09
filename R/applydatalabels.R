@@ -64,7 +64,7 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
     dplyr::group_by(varname) %>%
     dplyr::reframe(
       variable_label = labelname[labeltype == "var"],
-      labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.numeric(datacode[labeltype == "opt"])))
+      labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.character(datacode[labeltype == "opt"])))
     )
   
   # nullify zero-length character list (for vars with no value labels)
