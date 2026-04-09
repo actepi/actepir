@@ -144,6 +144,9 @@ episerver_connect <- function(driver = NULL, max_attempts = 10) {
         }))
       }, type = "message")
       
+      # Give ODBC driver time to initialize
+      Sys.sleep(0.1)
+      
       return(conn)
       
     }, error = function(e) {
