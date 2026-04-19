@@ -158,5 +158,7 @@ episerver_connect <- function(driver = NULL, max_attempts = 10) {
     if(!is.null(result)) {
       return(result)
     }
+    
   }
+  
 }
