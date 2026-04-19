@@ -103,9 +103,11 @@ episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = 
     stop("Function requires argument 'table' to be supplied")
   }
   
-  # establish connection and pass to lazy query
-  conn = episerver_connect(driver=driver,max_attempts=max_attempts) %>% 
-    dplyr::tbl(dbplyr::in_catalog(db,schema,table))
+  # create connection
+  conn_obj <- episerver_connect(driver=driver, max_attempts=max_attempts)
   
-  return(conn)
+  # create lazy table
+  lazy_tbl <- dplyr::tbl(conn_obj, dbplyr::in_catalog(db,schema,table))
+  
+  return(lazy_tbl)
 }
