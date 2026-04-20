@@ -1,0 +1,4 @@
+Name: Browse EpiServer
+Description: Interactively browse databases, schemas, tables and columns on the EpiServer.
+Binding: episerver_browse
+Interactive: true
