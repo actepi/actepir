@@ -82,7 +82,8 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
     table_info <- find_dbplyr_table_path(dataset$lazy_query)
     
     # Remove any leading and trailing double quotes and split by "."
-    table_parts <- strsplit(gsub("\"", "", table_info), "\\.")[[1]]
+    #table_parts <- strsplit(gsub("\"", "", table_info), "\\.")[[1]]
+    table_parts <- strsplit(gsub('[]["`]', "", table_info), "\\.")[[1]]
     
     # Extract the database, schema, and table names
     if (length(table_parts) == 3) {
