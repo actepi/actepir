@@ -3,7 +3,7 @@ Title: ACT Health Epidemiology R Functions & Materials
 Version: 0.0.16
 Authors@R:
     person("Warren", "Holroyd", , "warren.holroyd@act.gov.au", role = c("aut", "cre"),
-            comment = c(ORCID = "YOUR-ORCID_ID"))
+            comment = c(ORCID = "0009-0000-2335-6155"))
 Description: A local package containing various functions and elements for use in the ACTGOV environment.
 License: GPL-3
 Encoding: UTF-8
