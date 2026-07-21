@@ -4,12 +4,22 @@ subtitle: "Subtitle"
 description: "One line on what this analysis addresses."
 author:
   - name: "`r paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl = TRUE))`"
-    affiliations:
-      - name: "ACT Health & Community Services Directorate, Epidemiology"
     email: "`r paste0(gsub(' ', '.', Sys.info()['user']), '@act.gov.au')`"
+    # The stock HTML title block renders each affiliation's `name` and nothing
+    # else, so the hierarchy is expressed as stacked entries rather than as
+    # department/group keys. See INSTALL.md section 9 before changing this.
+    affiliations:
+      - name: ACT Government
+      - name: Health & Community Services Directorate
+      - name: Epidemiology Section
+    # Optional - see https://quarto.org/docs/journals/authors.html
+    # roles: [investigation, formal analysis, writing]   # free text or CRediT terms
+    # corresponding: true
+    # degrees: [BSc, MPH]
+    # orcid: 0000-0000-0000-0000
 date: "{{DATE}}"
 date-modified: "`r Sys.Date()`"
-format: acthd-html
+format: acthcsd-html
 # BEGIN:bib
 bibliography: references.yaml
 # END:bib
@@ -69,14 +79,20 @@ pacman::p_load(
 
 pacman::p_load_gh("actepi/actepir")
 
-# Non-default packages in use, for the dependency statement below
-packs_loaded <- as.data.frame(do.call(rbind, sessionInfo()$otherPkgs))
-packageslist <- as.data.frame(installed.packages()[, c(1, 3)]) |>
-  dplyr::filter(Package %in% rownames(packs_loaded)) |>
-  dplyr::mutate(pl = paste0(Package, " (", Version, ")")) |>
-  dplyr::pull(pl)
+# Attached non-base packages, for the dependency statement below.
+#
+# sessionInfo()$otherPkgs is a list of package descriptions carrying different
+# numbers of fields depending on the package, so do.call(rbind, ...) recycles
+# and warns. Reading the two fields we actually want avoids both the warning
+# and a slow installed.packages() scan of the whole library tree.
+pkgs <- utils::sessionInfo()$otherPkgs
+packageslist <- if (length(pkgs)) {
+  sort(vapply(pkgs, function(p) paste0(p$Package, " (", p$Version, ")"), character(1)))
+} else {
+  character(0)
+}
 
-rm(packs_loaded)
+rm(pkgs)
 ```
 
 <!-- BEGIN:bib -->
@@ -124,36 +140,48 @@ invisible(gc())   # retain to clear sporadic Type 29 ODBC error
 
 <!-- END:conn -->
 <!-- BEGIN:sel -->
-### Data selection
+### Data
+
+Aliasing the remote table in its own chunk means the object exists in the
+session as soon as the chunk runs, so RStudio can offer column names as
+predictive text while the selection below is being written.
+
+```{r}
+#| label: lazy_alias
+
+con121_tbl <- dplyr::tbl(con121, dbplyr::in_catalog("Analysis", "dbo", "ACTGHSMYX"))
+```
 
 ```{r}
 #| label: selection
 
-db <- "Analysis"    # leave alone
-tb <- "TABLENAME"   # change to your required dataset
-
-dt <- dplyr::tbl(con121, dbplyr::in_catalog(db, "dbo", tb)) |>
-  # dplyr::filter() and dplyr::select() go here - the query stays lazy
-  # until it reaches collect_withlabels()
+dt <- con121_tbl |>
+  # filter() and select() narrow the query before it runs - everything stays
+  # lazy until collect_withlabels() is reached
+  # filter(SVYYEAR >= 2020) |>
+  select(SVYYEAR, MY_SEX, AGE) |>
   collect_withlabels()
 ```
 
 <!-- END:sel -->
 <!-- BEGIN:sql -->
-### Data selection (SQL)
+### Data (SQL)
 
 An alternative to the dbplyr route. Results are written to `dt_sql` rather than
 `dt`, so both approaches can sit in the document while you decide which suits
 the job.
 
+Note the `--|` option prefix: chunk options follow the comment syntax of the
+chunk's own engine, so SQL uses `--|` where R uses `#|`.
+
 ```{sql}
-#| label: selection-sql
-#| connection: con121
-#| output.var: dt_sql
+--| label: selection-sql
+--| connection: con121
+--| output.var: dt_sql
 
 SELECT TOP 100
-       *
-FROM   Analysis.dbo.TABLENAME
+       SVYYEAR, MY_SEX, AGE
+FROM   Analysis.dbo.ACTGHSMYX
 ```
 
 <!-- END:sql -->
