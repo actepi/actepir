@@ -1,0 +1,21 @@
+---
+# CSL-YAML bibliography. Cite in the document with [@id], e.g. [@mohammed2008].
+#
+# The `id` is yours to choose — authoryear is the convention used here.
+# Delete the example below once you have real entries.
+
+references:
+
+- id: mohammed2008
+  type: article-journal
+  author:
+    - { family: Mohammed, given: M. A. }
+    - { family: Worthington, given: P. }
+    - { family: Woodall, given: W. H. }
+  title: "Plotting basic control charts: tutorial notes for healthcare practitioners"
+  container-title: Quality & Safety in Health Care
+  volume: '17'
+  issue: '2'
+  page: '137-145'
+  issued: { date-parts: [[2008]] }
+  DOI: 10.1136/qshc.2004.012047

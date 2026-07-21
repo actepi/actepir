@@ -1,0 +1,127 @@
+/* ==========================================================================
+   ACT Health Directorate — Epidemiology
+   Quarto HTML styling for the `acthd` format extension.
+
+   This stylesheet deliberately carries NO external image dependencies, so it
+   behaves identically whether the extension arrived via actepir, `quarto add`
+   or `quarto use template` — those three install to different paths, which is
+   what breaks relative url() references inside extension CSS.
+   ========================================================================== */
+
+
+/* --------------------------------------------------------------------------
+   Palette
+   Mirrors actepir::.acthd_colors(). Keep the two in step so HTML chrome,
+   ggplot2 themes and gt tables don't drift apart.
+   -------------------------------------------------------------------------- */
+:root {
+  --acthd-blue:     #002677;
+  --acthd-turq:     #78D5E1;
+  --acthd-aqua:     #00828c;
+  --acthd-yellow:   #dfcb21;
+  --acthd-orange:   #f26c23;
+  --acthd-red:      #ce1e25;
+  --acthd-green:    #9fc13a;
+  --acthd-purple:   #aa4298;
+  --acthd-darkgrey: #333740;
+  --acthd-midgrey:  #929487;
+  --acthd-code:     #009caf;
+}
+
+
+/* --------------------------------------------------------------------------
+   Title banner
+
+   The corporate logo is NOT set as a background image here. Anchoring it to
+   the banner puts it in the same box as the title, subtitle and description,
+   which collide at narrow widths and with long titles.
+
+   If you want it back, see INSTALL.md — encode the PNG as a base64 data URI
+   rather than referencing logos/*.png, and give it its own grid cell instead
+   of a background-position.
+   -------------------------------------------------------------------------- */
+.quarto-title-banner {
+  margin-bottom: 1em;
+  color: #fdfeff;
+  border-bottom: 7px solid var(--acthd-turq);
+}
+
+.quarto-title-block .quarto-title-banner {
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+
+/* --------------------------------------------------------------------------
+   Code blocks
+
+   Language markers are drawn in CSS rather than as opacity-30 logo PNGs.
+   They also sit bottom-right rather than top-right, which keeps them clear
+   of Quarto's copy-to-clipboard button.
+   -------------------------------------------------------------------------- */
+pre.sourceCode {
+  font-size: 12px;
+  position: relative;
+}
+
+pre.sourceCode.r,
+pre.sourceCode.sql {
+  border-style: solid none;
+  border-width: 1px;
+}
+
+pre.sourceCode.r   { border-color: var(--acthd-turq); }
+pre.sourceCode.sql { border-color: var(--acthd-orange); }
+
+pre.sourceCode.r::after,
+pre.sourceCode.sql::after {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+
+pre.sourceCode.r::after   { content: "R";   color: var(--acthd-aqua); }
+pre.sourceCode.sql::after { content: "SQL"; color: var(--acthd-orange); }
+
+
+/* --------------------------------------------------------------------------
+   Headings and inline code
+   -------------------------------------------------------------------------- */
+h2.anchored {
+  color: var(--acthd-blue);
+  border-bottom: 2px solid var(--acthd-turq);
+}
+
+code {
+  color: var(--acthd-code);
+}
+
+
+/* --------------------------------------------------------------------------
+   Widgets
+   -------------------------------------------------------------------------- */
+
+/* downloadthis buttons */
+.btn-default {
+  float: right;
+  margin: 5px 5px 15px 0px;
+}
+
+/* DataTables */
+.dataTables_wrapper {
+  padding: 25px 0px 25px 0px;
+}
+
+
+/* --------------------------------------------------------------------------
+   Accessibility floor
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}

@@ -1,0 +1,27 @@
+# Metadata for the RStudio New Project wizard.
+# Binding must name an EXPORTED function in actepir.
+# Reference: https://rstudio.github.io/rstudio-extensions/rstudio_project_templates.html
+
+Binding: use_epi_analysis
+Title: ACT Health Epidemiology Analysis (Quarto)
+Subtitle: Branded Quarto analysis using the acthd format extension
+Caption: Create a new Quarto analysis
+OpenFiles: *.qmd
+
+Parameter: conn
+Widget: CheckboxInput
+Label: Include EpiServer data chunk
+Default: On
+Position: left
+
+Parameter: bib
+Widget: CheckboxInput
+Label: Include bibliography stub
+Default: On
+Position: right
+
+Parameter: dirs
+Widget: CheckboxInput
+Label: Create data/ and output/ folders
+Default: On
+Position: left

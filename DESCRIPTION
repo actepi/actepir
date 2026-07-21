@@ -23,5 +23,6 @@ Imports:
     labelled,
     sjlabelled,
     ggplot2,
-    gt
+    gt,
+    tools
 Config/testthat/edition: 3
