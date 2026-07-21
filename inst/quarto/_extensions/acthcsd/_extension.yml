@@ -44,7 +44,7 @@ contributes:
       lightbox: true
 
       # ---- branding ----------------------------------------------------
-      title-block-banner: #27015F"
+      title-block-banner: "#27015F"
       css: acthcsd.css
 
       # ---- output ------------------------------------------------------
