@@ -1,17 +1,35 @@
 # Metadata for the RStudio New Project wizard.
 # Binding must name an EXPORTED function in actepir.
 # Reference: https://rstudio.github.io/rstudio-extensions/rstudio_project_templates.html
+#
+# The .dcf format has no conditional or dependent widget support. The only
+# widget fields are Parameter, Widget, Label, Default, Position and - for
+# SelectInput - Fields, so options cannot be greyed out in response to each
+# other. The dependency below is enforced inside use_epi_analysis() instead,
+# which drops the selection and SQL chunks when the connection chunk is off.
 
 Binding: use_epi_analysis
-Title: ACT Health Epidemiology Analysis (Quarto)
+Title: ACTHCS Epidemiology Analysis (Quarto)
 Subtitle: Branded Quarto analysis using the acthd format extension
 Caption: Create a new Quarto analysis
 OpenFiles: *.qmd
 
 Parameter: conn
 Widget: CheckboxInput
-Label: Include EpiServer data chunk
+Label: Include odbc connection chunk
 Default: On
+Position: left
+
+Parameter: sel
+Widget: CheckboxInput
+Label: Include dbplyr selection chunk (needs connection)
+Default: On
+Position: right
+
+Parameter: sql
+Widget: CheckboxInput
+Label: Include native SQL chunk (needs connection)
+Default: Off
 Position: left
 
 Parameter: bib
@@ -22,6 +40,6 @@ Position: right
 
 Parameter: dirs
 Widget: CheckboxInput
-Label: Create data/ and output/ folders
+Label: Create data/, output/ and images/ folders
 Default: On
 Position: left

@@ -1,6 +1,10 @@
 /* ==========================================================================
-   ACT Health Directorate — Epidemiology
+   ACT Health & Community Services Directorate — Epidemiology
    Quarto HTML styling for the `acthd` format extension.
+
+   `acthd` names the palette, not the directorate: this is the existing blue /
+   turquoise scheme. The planned `acthcd` extension gets its own directory and
+   its own :root block rather than overriding this one.
 
    This stylesheet deliberately carries NO external image dependencies, so it
    behaves identically whether the extension arrived via actepir, `quarto add`

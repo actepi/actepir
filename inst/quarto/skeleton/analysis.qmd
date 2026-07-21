@@ -5,7 +5,7 @@ description: "One line on what this analysis addresses."
 author:
   - name: "`r paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl = TRUE))`"
     affiliations:
-      - name: "ACT Health Directorate, Epidemiology"
+      - name: "ACT Health & Community Services Directorate, Epidemiology"
     email: "`r paste0(gsub(' ', '.', Sys.info()['user']), '@act.gov.au')`"
 date: "{{DATE}}"
 date-modified: "`r Sys.Date()`"
@@ -52,7 +52,9 @@ Description of the problem.
 if (!require("pacman")) install.packages("pacman")
 
 pacman::p_load(
-   dplyr
+   DBI
+  ,odbc
+  ,dplyr
   ,dbplyr
   ,glue
   ,tidyverse
@@ -77,10 +79,19 @@ packageslist <- as.data.frame(installed.packages()[, c(1, 3)]) |>
 rm(packs_loaded)
 ```
 
-All analysis is performed in RStudio. Several R packages are also used to
-perform and enhance analysis and presentation and, as such, create dependencies
-for future replication. For transparency, the non-default packages used were as
+<!-- BEGIN:bib -->
+All analysis is performed in R [@rcore] via RStudio, drawing largely on the
+tidyverse collection of packages [@tidyverse]. Several other R packages are also
+used to perform and enhance analysis and presentation and, as such, create
+dependencies for future replication. For transparency, the non-default packages
+used were as follows: `r I(toString(packageslist))`.
+<!-- END:bib -->
+<!-- BEGIN:nobib -->
+All analysis is performed in RStudio. Several R packages are also used to perform
+and enhance analysis and presentation and, as such, create dependencies for
+future replication. For transparency, the non-default packages used were as
 follows: `r I(toString(packageslist))`.
+<!-- END:nobib -->
 
 ```{r}
 #| label: globals
@@ -95,21 +106,57 @@ follows: `r I(toString(packageslist))`.
 ### Sub-heading
 
 <!-- BEGIN:conn -->
-### Data
-
-`episerver_quickconnect()` handles driver selection, Windows authentication and
-the connection retry loop, so there is no need to hard-code server details or to
-work around the RStudio concurrency bug by hand.
+### Connection
 
 ```{r}
-#| label: data
+#| label: conn121
 
-dt <- episerver_quickconnect("TABLENAME") |>
-  # filter(), select() etc. go here — still a lazy query at this point
-  collect_withlabels()
+con121 <- DBI::dbConnect(
+  odbc::odbc(),
+  Driver = "ODBC Driver 17 for SQL Server",
+  Server = "PRDSQL121vs.act.gov.au",
+  Trusted_Connection = "Yes",
+  Port = 1433
+  )
+
+invisible(gc())   # retain to clear sporadic Type 29 ODBC error
 ```
 
 <!-- END:conn -->
+<!-- BEGIN:sel -->
+### Data selection
+
+```{r}
+#| label: selection
+
+db <- "Analysis"    # leave alone
+tb <- "TABLENAME"   # change to your required dataset
+
+dt <- dplyr::tbl(con121, dbplyr::in_catalog(db, "dbo", tb)) |>
+  # dplyr::filter() and dplyr::select() go here - the query stays lazy
+  # until it reaches collect_withlabels()
+  collect_withlabels()
+```
+
+<!-- END:sel -->
+<!-- BEGIN:sql -->
+### Data selection (SQL)
+
+An alternative to the dbplyr route. Results are written to `dt_sql` rather than
+`dt`, so both approaches can sit in the document while you decide which suits
+the job.
+
+```{sql}
+#| label: selection-sql
+#| connection: con121
+#| output.var: dt_sql
+
+SELECT TOP 100
+       *
+FROM   Analysis.dbo.TABLENAME
+```
+
+<!-- END:sql -->
 ## Analysis / Process
 
 ## Conclusion

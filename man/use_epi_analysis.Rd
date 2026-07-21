@@ -2,13 +2,15 @@
 % Please edit documentation in R/use_epi_analysis.R
 \name{use_epi_analysis}
 \alias{use_epi_analysis}
-\title{Create a branded ACT Health Quarto analysis}
+\title{Create a branded ACT Health & Community Services Quarto analysis}
 \usage{
 use_epi_analysis(
   path = ".",
   name = NULL,
   title = NULL,
   conn = TRUE,
+  sel = TRUE,
+  sql = FALSE,
   bib = TRUE,
   dirs = TRUE,
   overwrite = FALSE,
@@ -24,12 +26,17 @@ the directory name.}
 
 \item{title}{Document title. Defaults to a tidied version of \code{name}.}
 
-\item{conn}{Logical. Include a pre-filled EpiServer data chunk?}
+\item{conn}{Logical. Include the odbc connection chunk for EpiServer 121?}
 
-\item{bib}{Logical. Include a \code{references.yaml} bibliography stub and a
-References section?}
+\item{sel}{Logical. Include the dbplyr selection chunk? Requires \code{conn}.}
 
-\item{dirs}{Logical. Create \verb{data/} and \verb{output/} subdirectories?}
+\item{sql}{Logical. Include a native SQL chunk run against the connection?
+Requires \code{conn}. Off by default.}
+
+\item{bib}{Logical. Include a \code{references.yaml} bibliography stub, worked
+citations in the dependencies paragraph, and a References section?}
+
+\item{dirs}{Logical. Create \verb{data/}, \verb{output/} and \verb{images/} subdirectories?}
 
 \item{overwrite}{Logical. Replace an existing analysis document of the same name?}
 
@@ -41,24 +48,32 @@ Path to the created \code{.qmd}, invisibly.
 \description{
 Scaffolds a working Quarto analysis containing a starter \code{.qmd} pre-wired to
 the \code{acthd-html} format, the \code{acthd} Quarto format extension (layout, corporate
-colours, code styling), and optionally a bibliography stub and the standard
-project folders.
+colours, code styling), and an optional bibliography stub, data access chunks
+and standard project folders.
 }
 \details{
 Everything is copied out of the installed \code{actepir} package rather than fetched
 from GitHub, so the function works with no network access and the styling is
 pinned to whichever package version the analyst has installed.
 
-This function is also the binding for the \emph{ACT Health Epidemiology Analysis}
-entry in the RStudio \strong{New Project} wizard, which supplies \code{path} and the
-\code{conn} / \code{bib} / \code{dirs} arguments from its checkboxes.
+This function is also the binding for the \emph{ACTHCS Epidemiology Analysis} entry
+in the RStudio \strong{New Project} wizard, which supplies \code{path} and the checkbox
+arguments.
+
+\code{sel} and \code{sql} both depend on \code{conn}, because each references the \code{con121}
+object the connection chunk creates. The RStudio wizard cannot grey out
+dependent checkboxes, so that constraint is applied here instead: switching
+\code{conn} off silently drops both, with a message saying so.
 }
 \examples{
 \dontrun{
 # From the console
 use_epi_analysis("~/analyses/rsv-severity-2026")
 
-# Minimal: no database chunk, no bibliography
+# SQL rather than dbplyr
+use_epi_analysis("sql-extract", sel = FALSE, sql = TRUE)
+
+# Minimal: no data access, no bibliography, no folders
 use_epi_analysis("scratch", conn = FALSE, bib = FALSE, dirs = FALSE)
 }
 

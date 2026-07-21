@@ -1,21 +1,34 @@
 ---
-# CSL-YAML bibliography. Cite in the document with [@id], e.g. [@mohammed2008].
+# CSL-YAML bibliography. Cite in the document with [@id], e.g. [@rcore].
 #
-# The `id` is yours to choose — authoryear is the convention used here.
-# Delete the example below once you have real entries.
+# Both entries below are cited in the dependencies paragraph of the skeleton, so
+# the mechanism is working the moment the document renders. The tidyverse author
+# list is abbreviated - citation("tidyverse") and citation() regenerate both
+# entries in full whenever you want them exact.
 
 references:
 
-- id: mohammed2008
+- id: rcore
+  type: book
+  author:
+    - { literal: "R Core Team" }
+  title: "R: A Language and Environment for Statistical Computing"
+  publisher: "R Foundation for Statistical Computing"
+  publisher-place: "Vienna, Austria"
+  issued: { date-parts: [[2025]] }
+  URL: "https://www.R-project.org/"
+
+- id: tidyverse
   type: article-journal
   author:
-    - { family: Mohammed, given: M. A. }
-    - { family: Worthington, given: P. }
-    - { family: Woodall, given: W. H. }
-  title: "Plotting basic control charts: tutorial notes for healthcare practitioners"
-  container-title: Quality & Safety in Health Care
-  volume: '17'
-  issue: '2'
-  page: '137-145'
-  issued: { date-parts: [[2008]] }
-  DOI: 10.1136/qshc.2004.012047
+    - { family: Wickham, given: Hadley }
+    - { family: Averick, given: Mara }
+    - { family: Bryan, given: Jennifer }
+    - { family: Chang, given: Winston }
+  title: "Welcome to the tidyverse"
+  container-title: Journal of Open Source Software
+  volume: '4'
+  issue: '43'
+  page: '1686'
+  issued: { date-parts: [[2019]] }
+  DOI: 10.21105/joss.01686

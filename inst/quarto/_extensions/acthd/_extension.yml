@@ -1,9 +1,13 @@
-title: ACT Health Epidemiology HTML
-author: ACT Health Directorate, Epidemiology Section
-version: 1.0.0
+title: ACTHD HTML (Epidemiology)
+author: ACT Health & Community Services Directorate, Epidemiology Section
+version: 1.1.0
 quarto-required: ">=1.4.0"
 
 # Referenced from a document as:  format: acthd-html
+#
+# The `acthd` identifier records which brand palette this format carries, not
+# the current name of the directorate. A sibling `acthcd` extension with the
+# newer colours can live alongside it without either having to be renamed.
 #
 # Version this file independently of the actepir package version. When the
 # corporate palette or layout shifts, bumping the number here records what a
