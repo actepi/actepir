@@ -5,14 +5,24 @@
 # The .dcf format has no conditional or dependent widget support. The only
 # widget fields are Parameter, Widget, Label, Default, Position and - for
 # SelectInput - Fields, so options cannot be greyed out in response to each
-# other. The dependency below is enforced inside use_epi_analysis() instead,
-# which drops the selection and SQL chunks when the connection chunk is off.
+# other. The conn/sel/sql dependency is enforced inside use_epi_analysis().
+#
+# 'Brand theme' sets which theme the document opens on. It is not a lock-in:
+# every bundled theme is copied into the project, and the theme is changed
+# afterwards by editing one line in the .qmd.
 
 Binding: use_epi_analysis
-Title: ACT Epidemiology Analysis (Quarto)
+Title: ACTHCS Epidemiology Analysis (Quarto)
 Subtitle: Branded Quarto analysis using the acthd format extension
 Caption: Create a new Quarto analysis
 OpenFiles: *.qmd
+
+Parameter: theme
+Widget: SelectInput
+Label: Brand theme (switchable later)
+Fields: acthcsd, acthd
+Default: acthcsd
+Position: left
 
 Parameter: conn
 Widget: CheckboxInput
@@ -40,6 +50,6 @@ Position: right
 
 Parameter: dirs
 Widget: CheckboxInput
-Label: Create standard sub-folders
+Label: Create data/, output/ and images/ folders
 Default: On
 Position: left

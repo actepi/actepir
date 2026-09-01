@@ -19,7 +19,37 @@ author:
     # orcid: 0000-0000-0000-0000
 date: "{{DATE}}"
 date-modified: "`r Sys.Date()`"
-format: acthcsd-html
+format:
+  html:
+    # theme is the one line to change to reskin this document. Options:
+    #   bundled brand themes ..... acthcsd.scss  acthd.scss
+    #   built-in Bootswatch ...... cosmo  journal  flatly  litera  yeti  (25 in all)
+    #   layer brand over a base .. [journal, acthcsd.scss]
+    #   light + dark toggle ...... {light: acthcsd.scss, dark: darkly}
+    # https://quarto.org/docs/output-formats/html-themes.html
+    theme: {{THEME}}
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    toc-expand: true
+    page-layout: article
+    smooth-scroll: true
+    grid:
+      margin-width: 250px
+      body-width: 900px
+    code-fold: true
+    code-link: false
+    code-overflow: scroll
+    code-tools:
+      source: true
+      toggle: true
+      caption: none
+    tbl-cap-location: margin
+    fig-cap-location: margin
+    reference-location: margin
+    lightbox: true
+    title-block-banner: true    # theme colours the banner; see the .scss rules
+    embed-resources: true
 # BEGIN:bib
 bibliography: references.yaml
 # END:bib
@@ -149,7 +179,7 @@ predictive text while the selection below is being written.
 ```{r}
 #| label: lazy_alias
 
-con121_tbl <- dplyr::tbl(con121, dbplyr::in_catalog("Analysis", "dbo", "ACTGHSMYX"))
+con121_tbl <- episerver_lazytable(con121, "ACTGHSMYX")
 ```
 
 ```{r}
@@ -195,3 +225,35 @@ FROM   Analysis.dbo.ACTGHSMYX
 ::: {#refs}
 :::
 <!-- END:bib -->
+
+```{=html}
+<script>
+// ---------------------------------------------------------------------------
+// Workaround for a Quarto 1.8.x bug in the code-tools "Code" menu.
+//
+// Quarto's code-copy feature wraps each folded block's .sourceCode in
+// <div class="code-copy-outer-scaffold">, but the built-in Show All / Hide All
+// Code handler selects `.cell > details > .sourceCode` - a *direct* child - so
+// it now matches nothing and the two menu items do nothing. (View Source uses a
+// separate mechanism and is unaffected.) This re-binds the two items with a
+// selector that matches the actual DOM. Harmless once Quarto fixes it upstream;
+// remove then.
+// ---------------------------------------------------------------------------
+window.addEventListener("DOMContentLoaded", function () {
+  function toggleAllCode(open) {
+    document.querySelectorAll("details.code-fold").forEach(function (d) {
+      if (open) { d.setAttribute("open", ""); } else { d.removeAttribute("open"); }
+    });
+    document.querySelectorAll(".cell > .sourceCode").forEach(function (c) {
+      c.classList.toggle("hidden", !open);
+      c.classList.toggle("unhidden", open);
+    });
+    return false;
+  }
+  var show = document.getElementById("quarto-show-all-code");
+  var hide = document.getElementById("quarto-hide-all-code");
+  if (show) { show.addEventListener("click", function () { return toggleAllCode(true); }); }
+  if (hide) { hide.addEventListener("click", function () { return toggleAllCode(false); }); }
+});
+</script>
+```

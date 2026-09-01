@@ -1,0 +1,88 @@
+/*-- scss:defaults --*/
+// ============================================================================
+//  ACT Health & Community Services Directorate — purple brand theme
+//  A Quarto Sass theme. Apply it with:  theme: acthcsd.scss
+//  Switch away at any time to a bundled theme (acthd.scss) or any of the
+//  25 built-in Bootswatch themes (cosmo, journal, flatly, ...). One line.
+// ============================================================================
+
+// ---- brand palette ---------------------------------------------------------
+$acthcsd-purple:        #27015F !default;
+$acthcsd-purple-offset: #8667b3 !default;
+$acthcsd-purple-hi:     #aa96c7 !default;
+$acthcsd-purple-vibr:   #600dfd !default;
+$acthcsd-yellow:        #dfcb21 !default;
+$acthcsd-orange:        #f26c23 !default;
+$acthcsd-red:           #ce1e25 !default;
+$acthcsd-green:         #9fc13a !default;
+$acthcsd-violet:        #aa4298 !default;
+$acthcsd-darkgrey:      #333740 !default;
+$acthcsd-midgrey:       #929487 !default;
+$acthcsd-sqlcode:       #fd7830 !default;
+
+// ---- map onto Bootstrap theme colours --------------------------------------
+$primary:   $acthcsd-purple !default;
+$secondary: $acthcsd-midgrey !default;
+$success:   $acthcsd-green !default;
+$info:      $acthcsd-purple-offset !default;
+$warning:   $acthcsd-yellow !default;
+$danger:    $acthcsd-red !default;
+
+$link-color: $acthcsd-purple-vibr !default;
+$code-color: $acthcsd-purple-offset !default;
+
+$callout-color-note: $acthcsd-purple !default;
+
+
+/*-- scss:rules --*/
+// ---- title banner ----------------------------------------------------------
+.quarto-title-block .quarto-title-banner {
+  background-color: $acthcsd-purple;
+  border-bottom: 7px solid $acthcsd-purple-offset;
+  color: #fdfeff;
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+// ---- section headings ------------------------------------------------------
+h2.anchored {
+  color: $acthcsd-purple;
+  border-bottom: 2px solid $acthcsd-purple-offset;
+}
+
+// ---- code blocks -----------------------------------------------------------
+pre.sourceCode {
+  font-size: 12px;
+  position: relative;
+}
+pre.sourceCode.r,
+pre.sourceCode.sql {
+  border-style: solid none;
+  border-width: 1px;
+}
+pre.sourceCode.r   { border-color: $acthcsd-purple-offset; }
+pre.sourceCode.sql { border-color: $acthcsd-sqlcode; }
+
+pre.sourceCode.r::after,
+pre.sourceCode.sql::after {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+pre.sourceCode.r::after   { content: "R";   color: $acthcsd-purple-offset; }
+pre.sourceCode.sql::after { content: "SQL"; color: $acthcsd-sqlcode; }
+
+// ---- widgets ---------------------------------------------------------------
+.btn-default        { float: right; margin: 5px 5px 15px 0; }
+.dataTables_wrapper { padding: 25px 0; }
+
+// ---- accessibility floor ---------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}

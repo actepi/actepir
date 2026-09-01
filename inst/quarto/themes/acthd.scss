@@ -1,0 +1,102 @@
+/*-- scss:defaults --*/
+// ============================================================================
+//  ACT Health Directorate — blue / turquoise brand theme
+//  A Quarto Sass theme. Apply it with:  theme: acthd.scss
+//  Switch away at any time to a bundled theme (acthcsd.scss) or any of the
+//  25 built-in Bootswatch themes (cosmo, journal, flatly, ...). One line.
+//
+//  Palette mirrors actepir::.acthd_colors(). Keep the two in step.
+//
+//  The `!default` flag lets a document layer its own values on top, e.g.
+//    theme: [acthd.scss, local-overrides.scss]
+// ============================================================================
+
+// ---- brand palette ---------------------------------------------------------
+$acthd-blue:      #002677 !default;
+$acthd-turq:      #78D5E1 !default;
+$acthd-aqua:      #00828c !default;
+$acthd-navy:      #22397e !default;
+$acthd-yellow:    #dfcb21 !default;
+$acthd-orange:    #f26c23 !default;
+$acthd-red:       #ce1e25 !default;
+$acthd-green:     #9fc13a !default;
+$acthd-purple:    #aa4298 !default;
+$acthd-darkgrey:  #333740 !default;
+$acthd-midgrey:   #929487 !default;
+
+// ---- map onto Bootstrap theme colours --------------------------------------
+// Setting these means every Bootstrap component — buttons, links, tables,
+// callouts, badges — inherits the brand automatically, rather than only the
+// handful of elements styled by hand in the rules section below.
+$primary:         $acthd-blue !default;
+$secondary:       $acthd-midgrey !default;
+$success:         $acthd-green !default;
+$info:            $acthd-aqua !default;
+$warning:         $acthd-yellow !default;
+$danger:          $acthd-red !default;
+
+$link-color:      $acthd-aqua !default;
+$code-color:      #009caf !default;
+
+// Quarto callout accent
+$callout-color-note: $acthd-blue !default;
+
+
+/*-- scss:rules --*/
+// ---- title banner ----------------------------------------------------------
+// The theme owns the banner colour. With `title-block-banner: true` in the
+// document, switching the theme file reskins the banner — no YAML edit. The
+// two-class selector outranks Quarto's default single-class banner rule and
+// loads after it, so this wins without !important.
+.quarto-title-block .quarto-title-banner {
+  background-color: $acthd-blue;
+  border-bottom: 7px solid $acthd-turq;
+  color: #fdfeff;
+  padding-left: 30px;
+  padding-right: 30px;
+}
+
+// ---- section headings ------------------------------------------------------
+h2.anchored {
+  color: $acthd-blue;
+  border-bottom: 2px solid $acthd-turq;
+}
+
+// ---- code blocks -----------------------------------------------------------
+// Thin brand rule top and bottom; language marker drawn in CSS (no image
+// dependency) and parked bottom-right, clear of the copy button.
+pre.sourceCode {
+  font-size: 12px;
+  position: relative;
+}
+pre.sourceCode.r,
+pre.sourceCode.sql {
+  border-style: solid none;
+  border-width: 1px;
+}
+pre.sourceCode.r   { border-color: $acthd-turq; }
+pre.sourceCode.sql { border-color: $acthd-orange; }
+
+pre.sourceCode.r::after,
+pre.sourceCode.sql::after {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+pre.sourceCode.r::after   { content: "R";   color: $acthd-aqua; }
+pre.sourceCode.sql::after { content: "SQL"; color: $acthd-orange; }
+
+// ---- widgets ---------------------------------------------------------------
+.btn-default        { float: right; margin: 5px 5px 15px 0; }
+.dataTables_wrapper { padding: 25px 0; }
+
+// ---- accessibility floor ---------------------------------------------------
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}

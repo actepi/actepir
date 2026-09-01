@@ -1,4 +1,4 @@
-Name: Browse EpiServer
-Description: Interactively browse databases, schemas, tables and columns on the EpiServer.
-Binding: episerver_browse
+Name: New ACTHCS Quarto Document
+Description: Create a branded Quarto analysis document in the current project or folder, and open it.
+Binding: addin_new_epi_document
 Interactive: true
