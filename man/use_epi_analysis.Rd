@@ -2,12 +2,13 @@
 % Please edit documentation in R/use_epi_analysis.R
 \name{use_epi_analysis}
 \alias{use_epi_analysis}
-\title{Create a branded ACT Health & Community Services Quarto analysis}
+\title{Create a branded ACT Health & Community Services Quarto analysis project}
 \usage{
 use_epi_analysis(
   path = ".",
   name = NULL,
   title = NULL,
+  theme = "acthcsd",
   conn = TRUE,
   sel = TRUE,
   sql = FALSE,
@@ -18,13 +19,16 @@ use_epi_analysis(
 )
 }
 \arguments{
-\item{path}{Directory to create the analysis in. Created if it does not exist.
-Supplied automatically by the RStudio New Project wizard.}
+\item{path}{Directory to create the analysis in. Created if it does not exist.}
 
 \item{name}{Base name for the analysis document, without extension. Defaults to
 the directory name.}
 
 \item{title}{Document title. Defaults to a tidied version of \code{name}.}
+
+\item{theme}{Brand theme the document opens on, e.g. \code{"acthcsd"} or \code{"acthd"}.
+Sets the initial \verb{theme:} line only; every bundled theme is copied in
+regardless, so this is not a lock-in.}
 
 \item{conn}{Logical. Include the odbc connection chunk for EpiServer 121?}
 
@@ -46,37 +50,33 @@ citations in the dependencies paragraph, and a References section?}
 Path to the created \code{.qmd}, invisibly.
 }
 \description{
-Scaffolds a working Quarto analysis containing a starter \code{.qmd} pre-wired to
-the \code{acthd-html} format, the \code{acthd} Quarto format extension (layout, corporate
-colours, code styling), and an optional bibliography stub, data access chunks
-and standard project folders.
+Scaffolds a working Quarto analysis in its own directory: a starter \code{.qmd},
+every bundled brand theme, an optional bibliography stub, optional data-access
+chunks, and the standard project folders.
 }
 \details{
-Everything is copied out of the installed \code{actepir} package rather than fetched
-from GitHub, so the function works with no network access and the styling is
-pinned to whichever package version the analyst has installed.
+For a single document dropped into a folder you already have — inside an
+existing project, or nowhere in particular — use \code{\link[=use_epi_document]{use_epi_document()}} instead.
+
+Styling is applied through Quarto's \code{theme} mechanism rather than a format
+extension, so it can be changed at any time by editing one line. Because
+\emph{all} bundled themes are copied in, switching between them — or to any of the
+25 built-in Bootswatch themes — needs no further setup.
 
 This function is also the binding for the \emph{ACTHCS Epidemiology Analysis} entry
-in the RStudio \strong{New Project} wizard, which supplies \code{path} and the checkbox
-arguments.
-
-\code{sel} and \code{sql} both depend on \code{conn}, because each references the \code{con121}
-object the connection chunk creates. The RStudio wizard cannot grey out
-dependent checkboxes, so that constraint is applied here instead: switching
-\code{conn} off silently drops both, with a message saying so.
+in the RStudio \strong{New Project} wizard.
 }
 \examples{
 \dontrun{
-# From the console
 use_epi_analysis("~/analyses/rsv-severity-2026")
-
-# SQL rather than dbplyr
-use_epi_analysis("sql-extract", sel = FALSE, sql = TRUE)
-
-# Minimal: no data access, no bibliography, no folders
+use_epi_analysis("legacy-report", theme = "acthd")
 use_epi_analysis("scratch", conn = FALSE, bib = FALSE, dirs = FALSE)
 }
 
+}
+\seealso{
+\code{\link[=use_epi_document]{use_epi_document()}} for a single document, \code{\link[=use_epi_themes]{use_epi_themes()}} to
+add or refresh themes in an existing project.
 }
 \author{
 Warren Holroyd
