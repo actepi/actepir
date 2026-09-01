@@ -56,6 +56,14 @@ $callout-color-note: $acthd-blue !default;
   padding-right: 30px;
 }
 
+// ---- title banner code menu -------------------------------------------------
+.quarto-title-banner a {
+    color: $acthd-blue
+}
+.dropdown-item:hover,.dropdown-item:focus {
+    color: $acthd-blue
+}
+
 // ---- section headings ------------------------------------------------------
 h2.anchored {
   color: $acthd-blue;

@@ -44,6 +44,14 @@ $callout-color-note: $acthcsd-purple !default;
   padding-right: 30px;
 }
 
+// ---- title banner code menu -------------------------------------------------
+.quarto-title-banner a {
+    color: $acthcsd-purple-offset
+}
+.dropdown-item:hover,.dropdown-item:focus {
+    color: $acthcsd-purple-offset
+}
+
 // ---- section headings ------------------------------------------------------
 h2.anchored {
   color: $acthcsd-purple;
