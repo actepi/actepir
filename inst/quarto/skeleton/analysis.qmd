@@ -5,28 +5,14 @@ description: "One line on what this analysis addresses."
 author:
   - name: "`r paste0(gsub('(?<=\\b)([a-z])', '\\U\\1', tolower(Sys.info()['user']), perl = TRUE))`"
     email: "`r paste0(gsub(' ', '.', Sys.info()['user']), '@act.gov.au')`"
-    # The stock HTML title block renders each affiliation's `name` and nothing
-    # else, so the hierarchy is expressed as stacked entries rather than as
-    # department/group keys. See INSTALL.md section 9 before changing this.
     affiliations:
       - name: ACT Government
       - name: Health & Community Services Directorate
       - name: Epidemiology Section
-    # Optional - see https://quarto.org/docs/journals/authors.html
-    # roles: [investigation, formal analysis, writing]   # free text or CRediT terms
-    # corresponding: true
-    # degrees: [BSc, MPH]
-    # orcid: 0000-0000-0000-0000
 date: "{{DATE}}"
 date-modified: "`r Sys.Date()`"
 format:
   html:
-    # theme is the one line to change to reskin this document. Options:
-    #   bundled brand themes ..... acthcsd.scss  acthd.scss
-    #   built-in Bootswatch ...... cosmo  journal  flatly  litera  yeti  (25 in all)
-    #   layer brand over a base .. [journal, acthcsd.scss]
-    #   light + dark toggle ...... {light: acthcsd.scss, dark: darkly}
-    # https://quarto.org/docs/output-formats/html-themes.html
     theme: {{THEME}}
     toc: true
     toc-location: left

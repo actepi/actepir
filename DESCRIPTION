@@ -24,6 +24,14 @@ Imports:
     sjlabelled,
     ggplot2,
     gt,
-    tools
+    tibble,
+    tools,
+    DT,
+    htmltools,
+    miniUI,
+    shiny,
+    rstudioapi
+Suggests:
+    testthat (>= 3.0.0),
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
