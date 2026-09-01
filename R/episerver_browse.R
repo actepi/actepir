@@ -60,6 +60,8 @@
 #'
 #' @keywords episerver database metadata interactive
 #'
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #'
 #' @examples
@@ -70,7 +72,7 @@
 #'
 #' @author Warren Holroyd
 #'
-episerver_browse <- function(driver = NULL, max_attempts = NULL) {
+episerver_browse <- function(driver = NULL, max_attempts = NULL, ...) {
   
   # ── Check dependencies ────────────────────────────────────────────────────
   if (!requireNamespace("shiny", quietly = TRUE) ||
@@ -87,7 +89,7 @@ episerver_browse <- function(driver = NULL, max_attempts = NULL) {
   connect_args <- list()
   if (!is.null(driver)) connect_args$driver <- driver
   if (!is.null(max_attempts)) connect_args$max_attempts <- max_attempts
-  conn <- do.call(episerver_connect, connect_args)
+  conn <- do.call(episerver_connect, c(connect_args, list(...)))
   
   # Helper: run a query and return a data frame
   run_query <- function(sql) {

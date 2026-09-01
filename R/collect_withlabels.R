@@ -24,6 +24,8 @@
 #' 
 #' @importFrom dplyr collect
 #' 
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #' 
 #' @examples 
@@ -42,12 +44,12 @@
 #'     lbl_db = "HospitalAPC"
 #'     )
 #'   
-collect_withlabels <- function(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL, driver = NULL, max_attempts = NULL) {
+collect_withlabels <- function(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL, driver = NULL, max_attempts = NULL, ...) {
   
   return(
     applydatalabels(
       data   = dplyr::collect(dataset),
-      labels = episerver_getlabels(dataset, lbl_table, lbl_schema, lbl_db,driver=driver,max_attempts=max_attempts)
+      labels = episerver_getlabels(dataset, lbl_table, lbl_schema, lbl_db,driver=driver,max_attempts=max_attempts, ...)
     )
   ) 
   

@@ -48,6 +48,8 @@
 #'
 #' @importFrom DBI dbGetQuery dbDisconnect dbIsValid
 #'
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #'
 #' @examples
@@ -68,13 +70,13 @@
 #' @author Warren Holroyd
 #'
 episerver_info <- function(db = "Analysis", schema = "dbo", dataset = NULL,
-                           driver = NULL, max_attempts = NULL) {
+                           driver = NULL, max_attempts = NULL, ...) {
   
   # Establish connection
   connect_args <- list()
   if (!is.null(driver)) connect_args$driver <- driver
   if (!is.null(max_attempts)) connect_args$max_attempts <- max_attempts
-  conn <- do.call(episerver_connect, connect_args)
+  conn <- do.call(episerver_connect, c(connect_args, list(...)))
   
   # Ensure connection is closed on exit
   on.exit({

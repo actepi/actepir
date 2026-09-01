@@ -58,6 +58,8 @@
 #'
 #' @importFrom DBI dbGetQuery dbDisconnect dbIsValid
 #'
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #'
 #' @examples
@@ -80,7 +82,7 @@ episerver_dictionary <- function(dataset,
                                  lbl_table = "DataLabels",
                                  lbl_schema = "ref",
                                  driver = NULL,
-                                 max_attempts = NULL) {
+                                 max_attempts = NULL, ...) {
   
   # ── Check dependencies ────────────────────────────────────────────────────
   if (!requireNamespace("DT", quietly = TRUE) ||
@@ -103,7 +105,7 @@ episerver_dictionary <- function(dataset,
   connect_args <- list()
   if (!is.null(driver)) connect_args$driver <- driver
   if (!is.null(max_attempts)) connect_args$max_attempts <- max_attempts
-  conn <- do.call(episerver_connect, connect_args)
+  conn <- do.call(episerver_connect, c(connect_args, list(...)))
   invisible(gc())
   
   on.exit({

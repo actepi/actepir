@@ -60,6 +60,8 @@
 #' @importFrom dbplyr in_catalog
 #' @importFrom magrittr %>%
 #' 
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #' 
 #' @examples 
@@ -96,7 +98,7 @@
 #' 
 #' @author Warren Holroyd
 #'
-episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, max_attempts = NULL) {
+episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = NULL, max_attempts = NULL, ...) {
   
   # check required arguments present
   if (is_invalid(table) | table == "") {
@@ -104,7 +106,7 @@ episerver_quickconnect <- function(table, schema="dbo", db="Analysis", driver = 
   }
   
   # create connection
-  conn_obj <- episerver_connect(driver=driver, max_attempts=max_attempts)
+  conn_obj <- episerver_connect(driver=driver, max_attempts=max_attempts, ...)
   
   # create lazy table
   lazy_tbl <- dplyr::tbl(conn_obj, dbplyr::in_catalog(db,schema,table))

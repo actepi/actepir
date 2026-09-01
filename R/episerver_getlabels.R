@@ -30,6 +30,8 @@
 #' @importFrom dbplyr in_catalog
 #' @importFrom magrittr %>%
 #' 
+#' @inheritDotParams episerver_connect encrypt trust_certificate
+#' 
 #' @export
 #' 
 #' @examples 
@@ -45,7 +47,7 @@
 #'   )
 #'  
 
-episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lbl_db = NULL, driver = NULL, max_attempts = NULL) {
+episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lbl_db = NULL, driver = NULL, max_attempts = NULL, ...) {
   
   # check required arguments present
   if (is_invalid(dataset)) {
@@ -111,7 +113,7 @@ episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lb
             !is_invalid(lbl_schema) & 
             !is_invalid(lbl_table)) {
     
-    conn = episerver_connect(driver=driver,max_attempts=max_attempts)
+    conn = episerver_connect(driver=driver,max_attempts=max_attempts, ...)
     
     collection = dataset
     
