@@ -1,6 +1,6 @@
 Package: actepir
 Title: ACT Health Epidemiology R Functions & Materials
-Version: 0.0.16
+Version: 0.0.17
 Authors@R:
     person("Warren", "Holroyd", , "warren.holroyd@act.gov.au", role = c("aut", "cre"),
             comment = c(ORCID = "0009-0000-2335-6155"))
@@ -10,7 +10,10 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends: R (>= 4.1.0)
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    callr,
+    httpuv,
+    jsonlite
 Imports:
     dplyr,
     dbplyr,
@@ -26,6 +29,7 @@ Imports:
     gt,
     tibble,
     tools,
+    utils,
     DT,
     htmltools,
     miniUI,

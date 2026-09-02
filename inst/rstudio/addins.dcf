@@ -2,3 +2,13 @@ Name: New ACTHCS Quarto Document
 Description: Create a branded Quarto analysis document in the current project or folder, and open it.
 Binding: addin_new_epi_document
 Interactive: true
+
+Name: Browse EpiServer (Viewer)
+Description: Open the EpiServer browser in the Viewer pane. Runs in a background process; the console remains free.
+Binding: addin_browse_viewer
+Interactive: true
+
+Name: Browse EpiServer (Browser)
+Description: Open the EpiServer browser in the system web browser. Runs in a background process.
+Binding: addin_browse_browser
+Interactive: true

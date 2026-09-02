@@ -4,9 +4,28 @@
 \alias{episerver_browse}
 \title{Interactively Browse EpiServer Database Structure}
 \usage{
-episerver_browse(driver = NULL, max_attempts = NULL)
+episerver_browse(
+  background = TRUE,
+  display = c("viewer", "window", "browser"),
+  port = NULL,
+  driver = NULL,
+  max_attempts = NULL
+)
 }
 \arguments{
+\item{background}{Logical. If \code{TRUE} (default), the app runs in a
+background R process and the console remains free. If \code{FALSE}, the
+app runs as a blocking gadget in the current session.}
+
+\item{display}{Character. Where to open the app: \code{"viewer"} (the
+RStudio Viewer pane, default), \code{"window"} (a standalone RStudio
+dialog window), or \code{"browser"} (the system web browser). Outside
+RStudio the system browser is always used.}
+
+\item{port}{Integer or \code{NULL}. The local port for the background app.
+If \code{NULL} (default), the background process chooses a free port
+itself, retrying on collision.}
+
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the
 connection. If \code{NULL} (default), the function will automatically select
 the appropriate driver using \code{episerver_serverdetails("driver")}.}
@@ -14,12 +33,21 @@ the appropriate driver using \code{episerver_serverdetails("driver")}.}
 \item{max_attempts}{Integer to specify the number of connection attempts.
 Defaults to \code{episerver_connect} default.}
 }
+\value{
+In background mode, invisibly returns the \code{callr} process
+handle. In foreground mode, returns nothing.
+}
 \description{
-Launches an interactive browser in the RStudio Viewer pane that allows users
-to explore databases, schemas, tables, and column metadata on the EpiServer.
-The browser provides cascading dropdown selectors, a searchable metadata
-table with selectable columns, label integration, and the ability to generate
-and insert connection code at the cursor position.
+Launches an interactive browser that allows users to explore databases,
+schemas, tables, and column metadata on the EpiServer. The browser provides
+cascading dropdown selectors, a searchable metadata table with selectable
+columns, label integration, and generation of ready-made connection code.
+
+By default the app runs in a background R process using
+\code{callr::r_bg()}, following the technique described by Will Landau
+(\url{https://wlandau.github.io/posts/2020-12-18-non-blocking-app/}). The
+main R console therefore remains free while the browser is open. Set
+\code{background = FALSE} for the original blocking gadget behaviour.
 
 This function is registered as an RStudio Addin and can be launched from the
 Addins menu, or called directly from the console.
@@ -38,39 +66,85 @@ metadata in a searchable table
 \code{collect()} and \code{collect_withlabels()} in the output code
 \item Choose a labels table source (auto-detected from the database) to
 enrich the column display with variable descriptions
+\item Toggle \strong{Show value labels} to append a collapsible list of
+value labels (DataCode = LabelName) for each column that has them
 \item Toggle between \strong{quickconnect} mode (single
 \code{episerver_quickconnect()} call) and \strong{connect} mode
 (separate \code{episerver_connect()} + \code{episerver_lazytable()} calls)
-\item Click \strong{Insert Code} to generate ready-made connection and
-collection code at the cursor position
+\item Generate the connection and collection code via the code button
 \item Click \strong{Done} to close the browser
 }
 
-The function requires \code{shiny}, \code{miniUI}, and \code{DT} to be
-installed. These are listed as \code{Suggests} dependencies -- if missing,
-the function will prompt the user to install them.
+The code button adapts to the mode. In foreground mode it is labelled
+\strong{Insert Code} and inserts at the cursor position via
+\code{rstudioapi::insertText()}. A background process has no connection to
+the RStudio editor, so in background mode the button is labelled
+\strong{Copy Code} and places the generated code on the clipboard instead.
+
+The \code{"window"} display uses RStudio's gadget dialog, which is modal
+over the IDE: scripts cannot be edited while the window is open. In
+background mode the app keeps running when the window is closed, and can be
+reattached (in any display) by calling \code{episerver_browse()} again; the
+Done button stops the app as usual. The \code{"browser"} display offers the
+most screen space and leaves the IDE fully usable.
+
+In background mode, calling the function again while the app is running
+reopens the existing app rather than starting a second process, after first
+verifying it is still serving; a process that is alive but no longer
+responding is killed and replaced automatically. Stop the background app
+with the Done button or \code{\link{episerver_browse_stop}};
+it is also stopped automatically when the R session exits. Process
+supervision is attempted but falls back gracefully where blocked by system
+policy (a message is shown once per launch). After an abnormal R crash an
+orphaned background process can be ended from Task Manager (Rscript.exe).
+
+The function requires \code{shiny}, \code{miniUI}, and \code{DT}, plus
+\code{callr} for background mode. These are listed as \code{Suggests}
+dependencies. If the background process cannot be spawned in a restricted
+environment, use \code{background = FALSE}.
 }
 \note{
 \itemize{
 \item Requires an active network connection to the EpiServer
 \item The initial connection may take a few seconds to establish
-\item The RStudio Viewer pane must be available (will not work in plain R)
 \item Database/schema/table visibility is limited by the user's permissions
+\item System databases (tempdb, master, msdb) and any database whose
+name begins with an underscore are hidden from the Database dropdown
+\item The database connection is validated before each query and
+re-established automatically if it has been dropped
+\item The labels dropdown only offers tables containing the required
+label columns (Dataset, VarName, LabelType, LabelName, DataCode,
+DataType); older formats are hidden, and column listings fall back to
+an unlabelled view if a labels join fails
+\item Tables with DataLabels in the name are excluded from the Table
+dropdown
 \item Label descriptions are only shown when a labels table is detected
 in the selected database
 }
 }
 \examples{
 \dontrun{
-# Launch the browser
+# Launch in a background process; console stays free
 episerver_browse()
+
+# Open in a standalone RStudio window instead of the Viewer pane
+episerver_browse(display = "window")
+
+# Open in the system web browser
+episerver_browse(display = "browser")
+
+# Original blocking gadget behaviour
+episerver_browse(background = FALSE)
+
+# Stop the background app
+episerver_browse_stop()
 }
 
 }
 \seealso{
+\code{\link{episerver_browse_stop}} for stopping the background app,
+\code{\link{episerver_browser}} for the static HTML snapshot version,
 \code{\link{episerver_info}} for non-interactive metadata queries,
-\code{\link{episerver_connect}} for establishing database connections,
-\code{\link{episerver_lazytable}} for creating lazy table references,
 \code{\link{collect_withlabels}} for collecting data with labels applied
 }
 \author{
