@@ -4,7 +4,12 @@
 \alias{episerver_connect}
 \title{Establish a Connection to EpiServer Database}
 \usage{
-episerver_connect(driver = NULL, max_attempts = 10)
+episerver_connect(
+  driver = NULL,
+  max_attempts = 10,
+  encrypt = NULL,
+  trust_certificate = NULL
+)
 }
 \arguments{
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
@@ -15,6 +20,21 @@ to identify which drivers you have access to.}
 \item{max_attempts}{Integer to specify the number of attempts which will be made
 to connect to the server. Defaults to 10.  Workaround for concurrency bug in
 rstudio.}
+
+\item{encrypt}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}. Sets the
+ODBC \code{Encrypt} keyword, and takes effect only for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved, in order, from
+\code{getOption("actepir.encrypt")}, then the \code{ACTEPIR_ENCRYPT} environment
+variable, then \code{"Yes"}. Set the option or the environment variable to change
+the default for every EpiServer connection on a machine or in a session without
+passing this argument to each function (see Details).}
+
+\item{trust_certificate}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}.
+Sets the ODBC \code{TrustServerCertificate} keyword, for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved from
+\code{getOption("actepir.trust_certificate")}, then \code{ACTEPIR_TRUST_CERTIFICATE},
+then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
+\code{"Yes"} whenever \code{encrypt = "Yes"} on Driver 18.}
 }
 \value{
 A \code{DBIConnection} object representing the database connection to
@@ -40,10 +60,24 @@ meaning it will authenticate using the credentials of the currently logged-in
 Windows user. This requires that the user has appropriate database access
 permissions configured in EpiServer.
 
-When \code{register = TRUE}, the function attempts to register the connection
-with RStudio's Connections pane by sending a connection command to the console.
-This feature requires the \code{rstudioapi} package and will only work when
-running in RStudio.
+ODBC Driver 18 changed the default of the \code{Encrypt} keyword from \code{"no"}
+to \code{"yes"}. With encryption on, the driver validates the server certificate,
+which fails against EpiServer's self-signed certificate. From Driver 18 onward the
+function therefore adds \code{Encrypt} and \code{TrustServerCertificate} to the
+connection. Driver 17 and earlier default \code{Encrypt} to \code{"no"} and need
+neither keyword, so the function leaves that path exactly as it was.
+
+A refused TLS handshake is a property of a machine or server rather than of an
+individual query, so the encryption settings are resolved from options and
+environment variables, not only from arguments. Every function that connects to
+EpiServer does so through \code{episerver_connect}, so a single machine-level
+setting changes them all at once. For example, on a machine whose server refuses
+the encrypted handshake, adding \code{ACTEPIR_ENCRYPT=No} to \code{.Renviron}, or
+\code{options(actepir.encrypt = "No")} to \code{.Rprofile}, makes
+\code{episerver_quickconnect}, \code{collect_withlabels}, \code{episerver_getlabels},
+\code{episerver_browse} and the rest all connect unencrypted, with no argument
+passed to any of them. An explicit argument to \code{episerver_connect} still
+overrides both.
 }
 \note{
 \itemize{
@@ -60,41 +94,15 @@ database access permissions
 # Basic connection with default settings
 conn <- episerver_connect()
 
-# Check connection status
-DBI::dbIsValid(conn)
+# One-off override for a single connection
+conn_noenc <- episerver_connect(encrypt = "No")
 
-# List available tables
-DBI::dbListTables(conn)
-
-# Connect without registering in RStudio (for automated scripts)
-conn_auto <- episerver_connect(register = FALSE)
+# Machine-wide override (put in .Renviron, then restart R):
+#   ACTEPIR_ENCRYPT=No
+# every EpiServer function then connects unencrypted, no argument needed.
 
 # Connect with specific driver
-conn_custom <- episerver_connect(
-  driver = "ODBC Driver 17 for SQL Server"
-)
-
-# Use connection for table reference
-library(dplyr)
-my_table <- tbl(conn, "TableName")
-
-# Query data using the connection
-result <- tbl(conn, "APC") \%>\%
-  filter(admissiondate >= "2023-01-01") \%>\%
-  collect()
-
-# Example workflow: connect, query, disconnect
-tryCatch({
-  conn <- episerver_connect()
-  data <- tbl(conn, "MyTable") \%>\%
-    select(id, value, date) \%>\%
-    collect()
-  print(nrow(data))
-}, finally = {
-  if (exists("conn") && DBI::dbIsValid(conn)) {
-    DBI::dbDisconnect(conn)
-  }
-})
+conn_custom <- episerver_connect(driver = "ODBC Driver 17 for SQL Server")
 }
 
 }

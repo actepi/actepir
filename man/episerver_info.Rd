@@ -9,7 +9,8 @@ episerver_info(
   schema = "dbo",
   dataset = NULL,
   driver = NULL,
-  max_attempts = NULL
+  max_attempts = NULL,
+  ...
 )
 }
 \arguments{
@@ -28,6 +29,24 @@ the appropriate driver using \code{episerver_serverdetails("driver")}.}
 
 \item{max_attempts}{Integer to specify the number of connection attempts.
 Defaults to \code{episerver_connect} default.}
+
+\item{...}{
+  Arguments passed on to \code{\link{episerver_connect}}
+  \describe{
+    \item{\code{encrypt}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}. Sets the
+ODBC \code{Encrypt} keyword, and takes effect only for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved, in order, from
+\code{getOption("actepir.encrypt")}, then the \code{ACTEPIR_ENCRYPT} environment
+variable, then \code{"Yes"}. Set the option or the environment variable to change
+the default for every EpiServer connection on a machine or in a session without
+passing this argument to each function (see Details).}
+    \item{\code{trust_certificate}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}.
+Sets the ODBC \code{TrustServerCertificate} keyword, for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved from
+\code{getOption("actepir.trust_certificate")}, then \code{ACTEPIR_TRUST_CERTIFICATE},
+then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
+\code{"Yes"} whenever \code{encrypt = "Yes"} on Driver 18.}
+  }}
 }
 \value{
 A data frame. If \code{dataset} is \code{NULL}, a data frame with

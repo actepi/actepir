@@ -10,7 +10,8 @@ collect_withlabels(
   lbl_schema = NULL,
   lbl_table = NULL,
   driver = NULL,
-  max_attempts = NULL
+  max_attempts = NULL,
+  ...
 )
 }
 \arguments{
@@ -34,6 +35,24 @@ to identify which drivers you have access to.}
 \item{max_attempts}{Integer to specify the number of attempts which will be made
 to connect to the server. Defaults to \code{episerver_connect} default.  Workaround
 for concurrency bug in RStudio.}
+
+\item{...}{
+  Arguments passed on to \code{\link{episerver_connect}}
+  \describe{
+    \item{\code{encrypt}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}. Sets the
+ODBC \code{Encrypt} keyword, and takes effect only for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved, in order, from
+\code{getOption("actepir.encrypt")}, then the \code{ACTEPIR_ENCRYPT} environment
+variable, then \code{"Yes"}. Set the option or the environment variable to change
+the default for every EpiServer connection on a machine or in a session without
+passing this argument to each function (see Details).}
+    \item{\code{trust_certificate}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}.
+Sets the ODBC \code{TrustServerCertificate} keyword, for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved from
+\code{getOption("actepir.trust_certificate")}, then \code{ACTEPIR_TRUST_CERTIFICATE},
+then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
+\code{"Yes"} whenever \code{encrypt = "Yes"} on Driver 18.}
+  }}
 }
 \description{
 This function is a wraparound function which combines the \code{episerver_getlabels} and \code{dplyr::collect} functions and feeds them to the \code{applydatalabels} function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
