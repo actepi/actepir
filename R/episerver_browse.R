@@ -53,9 +53,17 @@
 #'     enrich the column display with variable descriptions
 #'   \item Toggle \strong{Show value labels} to append a collapsible list of
 #'     value labels (DataCode = LabelName) for each column that has them
-#'   \item Toggle between \strong{quickconnect} mode (single
-#'     \code{episerver_quickconnect()} call) and \strong{connect} mode
-#'     (separate \code{episerver_connect()} + \code{episerver_lazytable()} calls)
+#'   \item Toggle between \strong{quickconnect} mode (an inline
+#'     \code{episerver_quickconnect()} pipe), \strong{connect} mode
+#'     (separate \code{episerver_connect()} + \code{episerver_lazytable()}
+#'     calls with optional \code{library()} declarations), and \strong{none}
+#'     (emit only the collection pipe, assuming a \code{tb} lazy table
+#'     already exists)
+#'   \item Toggle \strong{Declare packages} to control namespacing: when on,
+#'     inline modes use \code{pkg::} prefixes and connect mode adds
+#'     \code{library()} calls; when off, calls are bare
+#'   \item Adjust the table height and expanded-levels height with the
+#'     sliders under Table sizing
 #'   \item Generate the connection and collection code via the code button
 #'   \item Click \strong{Done} to close the browser
 #' }
@@ -474,16 +482,42 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
     miniUI::miniContentPanel(
 
       shiny::tags$style(shiny::HTML("
+        :root {
+          --epi-primary:      #320557;  /* Nightshade */
+          --epi-primary-brdr: #24043f;  /* button borders */
+          --epi-accent:       #562C8C;  /* Iris: accents, controls, selection focus */
+          --epi-info-bg:      #eae6f1;  /* info bar */
+          --epi-select-bg:    #eae6f1;  /* selected row */
+          --epi-levels-max:   150px;    /* expanded level list height (slider) */
+        }
         .gadget-content { padding: 10px; }
+        /* Title bar: Nightshade background, white title */
+        .gadget-title { background-color: var(--epi-primary); }
+        .gadget-title h1 { color: #fff; }
+        /* Done button only (scoped by id): contrast against the dark bar */
+        #done.btn-primary {
+          background-color: var(--epi-primary) !important;
+          border-color: #fff !important;
+          color: #fff !important;
+        }
+        #done.btn-primary:hover, #done.btn-primary:focus,
+        #done.btn-primary:active {
+          background-color: var(--epi-primary) !important;
+          border-color: #DCC8FA !important;
+          color: #DCC8FA !important;
+        }
         .selector-row { display: flex; gap: 10px; margin-bottom: 10px;
                         align-items: flex-end; }
         .selector-row > * { flex: 1; }
         .selector-row .form-group { margin-bottom: 0; }
-        .labels-slot { border-left: 3px solid #b39ddb; padding-left: 10px; }
-        .labels-slot .control-label { color: #6a4fa3; }
-        #labels_source { background-color: #f7f4fb; border-color: #b39ddb; }
+        .labels-slot { border-left: 3px solid var(--epi-accent);
+                       padding-left: 10px; }
+        .labels-slot .control-label { color: var(--epi-accent); }
+        #labels_source { background-color: #f7f4fb;
+                         border-color: var(--epi-accent); }
         .info-bar {
-          background: #f0f4f8; border-left: 3px solid #337ab7;
+          background: var(--epi-info-bg);
+          border-left: 3px solid var(--epi-primary);
           padding: 8px 12px; margin-bottom: 10px; font-size: 12px;
           color: #555;
         }
@@ -494,6 +528,38 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
         .options-row .form-group { margin-bottom: 0; }
         .radio-inline { margin-top: 0; padding-top: 0; }
         #insert_mode { margin-bottom: 0; }
+        /* Recolour native radios and checkboxes */
+        input[type=radio], input[type=checkbox] {
+          accent-color: var(--epi-accent);
+        }
+        /* Themed primary buttons */
+        .btn-primary {
+          background-color: var(--epi-primary) !important;
+          border-color: var(--epi-primary-brdr) !important;
+        }
+        .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+          background-color: var(--epi-primary-brdr) !important;
+          border-color: var(--epi-primary-brdr) !important;
+        }
+        /* Focus glow on inputs/selects: replace Bootstrap blue */
+        .form-control:focus, select:focus, .selectize-input.focus {
+          border-color: var(--epi-accent) !important;
+          box-shadow: 0 0 0 2px rgba(86, 44, 140, 0.35) !important;
+          outline: none !important;
+        }
+        /* Selected option in a native multi/again-open select list */
+        select option:checked, select option:hover {
+          box-shadow: 0 0 10px 100px var(--epi-primary) inset;
+          color: #fff;
+        }
+        /* selectize dropdown (Shiny's default select widget): 'selected' is
+           the current item, 'active' is hover. Theme the current item; leave
+           hover as the default subtle grey. */
+        .selectize-dropdown .option.selected,
+        .selectize-dropdown .option.selected.active {
+          background-color: var(--epi-primary) !important;
+          color: #fff !important;
+        }
         /* DataTables centres the filter below 768px via its own media
            query; pin it right at all widths (both core and bootstrap
            stylesheet variants) */
@@ -502,13 +568,49 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
           float: right !important;
           text-align: right !important;
         }
-        td.levels-cell details summary { cursor: pointer; color: #337ab7;
+        td.levels-cell details summary { cursor: pointer;
+                                         color: var(--epi-accent);
                                          font-size: 11px; }
         td.levels-cell details div { font-size: 11px; color: #555;
-                                     padding-top: 2px; max-height: 150px;
+                                     padding-top: 2px;
+                                     max-height: var(--epi-levels-max);
                                      overflow-y: auto; }
-        table.dataTable thead th { background: #337ab7; color: #fff; }
-        table.dataTable tbody tr.selected { background-color: #d9edf7 !important; }
+        table.dataTable thead th { background: var(--epi-primary);
+                                   color: #fff; }
+        /* Selected rows. This DataTables build marks selection with the
+           class 'active' (not 'selected'), and the stock rule keys on
+           'table.dataTable tbody tr.active td' with white text. Override
+           that exact shape, covering odd/even and hover. */
+        table.dataTable tbody tr.active td,
+        table.dataTable tbody td.active,
+        table.dataTable.stripe tbody tr.odd.active td,
+        table.dataTable.stripe tbody tr.even.active td,
+        table.dataTable.display tbody tr.odd.active td,
+        table.dataTable.display tbody tr.even.active td,
+        table.dataTable.hover tbody tr.active:hover td,
+        table.dataTable.display tbody tr.active:hover td {
+          background-color: var(--epi-select-bg) !important;
+          color: #333 !important;
+        }
+        /* ionRangeSlider (Shiny sliderInput) theming: default is #428bca */
+        .irs--shiny .irs-bar,
+        .irs--shiny .irs-to,
+        .irs--shiny .irs-from,
+        .irs--shiny .irs-single {
+          background-color: var(--epi-accent) !important;
+        }
+        .irs--shiny .irs-bar {
+          border-top-color: var(--epi-accent) !important;
+          border-bottom-color: var(--epi-accent) !important;
+        }
+        .irs--shiny .irs-handle > i:first-child {
+          background-color: var(--epi-accent) !important;
+        }
+        .irs--shiny .irs-to::before,
+        .irs--shiny .irs-from::before,
+        .irs--shiny .irs-single::before {
+          border-top-color: var(--epi-accent) !important;
+        }
       ")),
 
       # Clipboard handler used when running outside RStudio (background mode)
@@ -547,6 +649,14 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
               e.stopPropagation();
             }
           }, true);
+        });
+      ")),
+
+      # Live-update the expanded levels max-height from its slider
+      shiny::tags$script(shiny::HTML("
+        Shiny.addCustomMessageHandler('actepir_levels_height', function(px) {
+          document.documentElement.style.setProperty('--epi-levels-max',
+                                                      px + 'px');
         });
       ")),
 
@@ -592,10 +702,16 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
         ),
         shiny::radioButtons(
           "insert_mode", NULL,
-          choices  = c("quickconnect", "connect"),
+          choices  = c("quickconnect", "connect", "none"),
           selected = "quickconnect",
           inline   = TRUE
         ),
+        shiny::checkboxInput(
+          "declare_pkgs", "Declare packages",
+          value = TRUE
+        ),
+        # Spacer pushes the label options to the right of the row
+        shiny::div(style = "flex: 1 1 auto;"),
         shiny::checkboxInput(
           "use_labels", "Import with labels",
           value = TRUE
@@ -603,6 +719,26 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
         shiny::checkboxInput(
           "show_levels", "Show value labels",
           value = FALSE
+        )
+      ),
+
+      # Sizing options (collapsible to keep the top area uncluttered)
+      shiny::tags$details(
+        style = "margin-bottom: 10px;",
+        shiny::tags$summary(
+          "Table sizing",
+          style = "cursor: pointer; font-size: 12px; color: var(--epi-accent);"
+        ),
+        shiny::div(
+          style = "display: flex; gap: 25px; flex-wrap: wrap; padding-top: 8px;",
+          shiny::sliderInput(
+            "table_height", "Table height (px)",
+            min = 200, max = 900, value = 360, step = 20, width = "260px"
+          ),
+          shiny::sliderInput(
+            "levels_height", "Expanded levels height (px)",
+            min = 60, max = 400, value = 150, step = 10, width = "260px"
+          )
         )
       ),
 
@@ -617,6 +753,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
 
   # ── Server ────────────────────────────────────────────────────────────────
   server <- function(input, output, session) {
+
+    # Relay the expanded-levels height slider to the CSS variable
+    shiny::observeEvent(input$levels_height, {
+      session$sendCustomMessage("actepir_levels_height", input$levels_height)
+    })
 
     # Reactive values
     rv <- shiny::reactiveValues(
@@ -888,7 +1029,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
         options   = list(
           paging         = FALSE,
           dom            = "ft",
-          scrollY        = "40vh",
+          scrollY        = paste0(if (is.null(input$table_height)) 360
+                                  else input$table_height, "px"),
           scrollCollapse = TRUE,
           ordering       = TRUE,
           autoWidth      = FALSE,
@@ -908,58 +1050,65 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
       # Selected columns (if any rows selected)
       selected_rows <- input$col_table_rows_selected
       if (length(selected_rows) > 0 && nrow(rv$col_data) > 0) {
-        sel_cols    <- rv$col_data[["Column"]][selected_rows]
-        select_line <- paste0("  select(",
-                              paste(sel_cols, collapse = ", "),
-                              ") |>\n")
+        sel_cols <- rv$col_data[["Column"]][selected_rows]
       } else {
-        select_line <- ""
+        sel_cols <- character(0)
       }
+      sel_args <- paste(sel_cols, collapse = ", ")
 
-      # Collect function
-      collect_fn <- if (isTRUE(input$use_labels)) {
+      declare  <- isTRUE(input$declare_pkgs)
+      # Package qualifier for inline (quickconnect / none) code
+      q <- function(pkg, fn) if (declare) paste0(pkg, "::", fn) else fn
+
+      # dplyr::select() pipe segment
+      dplyr_select <- paste0("  ", q("dplyr", "select"), "(", sel_args, ") |>\n")
+
+      collect_call <- if (isTRUE(input$use_labels)) {
         "collect_withlabels()"
       } else {
         "collect()"
       }
 
-      # Collection nub
-      collect_nub <- paste0("data <- tb |>\n",
-                            select_line,
-                            "  ", collect_fn, "\n")
-
-      # Connection code
-      gc_line <- "invisible(gc())\n"
+      # Argument tail shared by quickconnect and lazytable calls
+      arg_tail <- if (input$db == "Analysis" && input$schema == "dbo") {
+        sprintf('"%s"', input$table)
+      } else if (input$db == "Analysis") {
+        sprintf('"%s", schema = "%s"', input$table, input$schema)
+      } else {
+        sprintf('"%s", schema = "%s", db = "%s"',
+                input$table, input$schema, input$db)
+      }
 
       if (input$insert_mode == "quickconnect") {
 
-        qc_code <- if (input$db == "Analysis" && input$schema == "dbo") {
-          sprintf('tb <- episerver_quickconnect("%s")', input$table)
-        } else if (input$db == "Analysis") {
-          sprintf('tb <- episerver_quickconnect("%s", schema = "%s")',
-                  input$table, input$schema)
-        } else {
-          sprintf('tb <- episerver_quickconnect("%s", schema = "%s", db = "%s")',
-                  input$table, input$schema, input$db)
-        }
-        code <- paste0(gc_line, qc_code, "\n", gc_line, "\n", collect_nub)
+        # Inline, package-qualified pipe; no intermediate 'tb'
+        code <- paste0(
+          "data <- ", q("actepir", "episerver_quickconnect"), "(", arg_tail, ") |>\n",
+          dplyr_select,
+          "  ", q("actepir", collect_call), "\n"
+        )
+
+      } else if (input$insert_mode == "connect") {
+
+        # Multi-object form with optional library() declarations
+        header <- if (declare) "library(actepir)\nlibrary(dplyr)\n\n" else ""
+        code <- paste0(
+          header,
+          "conn <- episerver_connect()\n",
+          "tb <- episerver_lazytable(conn, ", arg_tail, ")\n\n",
+          "data <- tb |>\n",
+          "  select(", sel_args, ") |>\n",
+          "  ", collect_call, "\n"
+        )
 
       } else {
 
-        tbl_code <- if (input$db == "Analysis" && input$schema == "dbo") {
-          sprintf('tb <- episerver_lazytable(conn, "%s")', input$table)
-        } else if (input$db == "Analysis") {
-          sprintf('tb <- episerver_lazytable(conn, "%s", schema = "%s")',
-                  input$table, input$schema)
-        } else {
-          sprintf('tb <- episerver_lazytable(conn, "%s", schema = "%s", db = "%s")',
-                  input$table, input$schema, input$db)
-        }
-        code <- paste0(gc_line,
-                        "conn <- episerver_connect()\n",
-                        gc_line,
-                        tbl_code, "\n\n",
-                        collect_nub)
+        # none: assume 'tb' already exists; emit only the collection pipe
+        code <- paste0(
+          "data <- tb |>\n",
+          dplyr_select,
+          "  ", q("actepir", collect_call), "\n"
+        )
 
       }
 
@@ -1000,31 +1149,163 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
 }
 
 
-#' RStudio Addin Bindings for the EpiServer Browser
+#' RStudio Addin Binding for the EpiServer Browser
 #'
 #' @description
-#' Thin wrappers that launch \code{\link{episerver_browse}} with a fixed
-#' \code{display} argument. RStudio's Addins menu does not support sub-menus
-#' or arguments, so the viewer and browser displays are registered as
-#' separate menu entries. Keyboard shortcuts can be assigned to individual
-#' entries via Tools > Modify Keyboard Shortcuts.
+#' Shows the ACT Epidemiology menu: a small dialog whose Browse EpiServer
+#' group offers the three \code{display} options of
+#' \code{\link{episerver_browse}} (Viewer pane, web browser, or standalone
+#' RStudio window), plus Cancel. Selecting an option launches the browser
+#' with the chosen display. Registered as a single entry ("Open Menu") in
+#' the RStudio Addins menu. Closing the dialog or pressing Escape cancels.
 #'
-#' These functions are not intended to be called directly.
+#' Intended as an extensible launcher for package tools. Not intended to be
+#' called directly. Outside RStudio, a console list selection is offered
+#' instead of the dialog.
 #'
-#' @return See \code{\link{episerver_browse}}.
+#' @return See \code{\link{episerver_browse}}. Invisibly returns \code{NULL}
+#'   if cancelled.
 #'
 #' @keywords internal
-#' @name browse_addins
-NULL
-
-#' @rdname browse_addins
+#'
 #' @export
-addin_browse_viewer <- function() {
-  episerver_browse(display = "viewer")
+addin_browse <- function() {
+
+  choice <- episerver_display_dialog()
+
+  if (is.null(choice)) {
+    return(invisible(NULL))
+  }
+
+  episerver_browse(display = choice)
+
 }
 
-#' @rdname browse_addins
-#' @export
-addin_browse_browser <- function() {
-  episerver_browse(display = "browser")
+# Internal chooser for the display argument. Returns "viewer", "window",
+# "browser", or NULL on cancel. The gadget briefly blocks the console while
+# the dialog is open, which is inherent to a modal question; the launched
+# browser itself then runs in the background as usual.
+#' @noRd
+episerver_display_dialog <- function() {
+
+  # Outside RStudio the gadget dialog is unavailable; fall back to a plain
+  # console selection
+  if (!rstudioapi::isAvailable()) {
+    picked <- utils::select.list(
+      c("viewer", "window", "browser"),
+      title = "Open the EpiServer browser in..."
+    )
+    return(if (nzchar(picked)) picked else NULL)
+  }
+
+  # Build a data-URI <img> for the header logo, or NULL if the file is not
+  # installed. Embedding as base64 avoids addResourcePath(), so it behaves
+  # identically in foreground and background contexts.
+  logo_tag <- local({
+    logo_path <- system.file("www", "ACTGov_inline_rev.png",
+                             package = "actepir")
+    if (!nzchar(logo_path) || !file.exists(logo_path)) {
+      return(NULL)
+    }
+    raw_png <- readBin(logo_path, "raw", file.info(logo_path)$size)
+    b64 <- if (requireNamespace("jsonlite", quietly = TRUE)) {
+      jsonlite::base64_enc(raw_png)
+    } else {
+      # base64enc-free fallback via the tools shipped with base R
+      xfun_ok <- requireNamespace("xfun", quietly = TRUE)
+      if (xfun_ok) xfun::base64_encode(raw_png) else NULL
+    }
+    if (is.null(b64)) return(NULL)
+    shiny::tags$img(
+      src   = paste0("data:image/png;base64,", b64),
+      style = "height: 34px; vertical-align: middle;",
+      alt   = "ACT Government"
+    )
+  })
+
+  ui <- miniUI::miniPage(
+    shiny::tags$style(shiny::HTML("
+      :root {
+        --epi-primary: #320557;
+      }
+      .epi-dialog-bar {
+        background-color: var(--epi-primary);
+        color: #fff; padding: 12px 15px; margin: 0;
+        display: flex; align-items: center; gap: 12px;
+      }
+      .epi-dialog-bar h4 { margin: 0; font-size: 15px; color: #fff; }
+      .epi-dialog-body { padding: 15px; }
+      .epi-group {
+        border: 1px solid #ddd; border-radius: 4px;
+        padding: 12px; margin: 0 0 12px 0;
+      }
+      .epi-group > legend {
+        width: auto; margin: 0 0 6px 0; padding: 0 6px;
+        font-size: 12px; font-weight: 600; color: var(--epi-primary);
+        border: 0;
+      }
+      /* All options share one style: white with nightshade border/text,
+         filling nightshade on hover */
+      .epi-dialog-body .epi-option {
+        background-color: #fff !important;
+        border: 1px solid var(--epi-primary) !important;
+        color: var(--epi-primary) !important;
+      }
+      .epi-dialog-body .epi-option:hover,
+      .epi-dialog-body .epi-option:focus,
+      .epi-dialog-body .epi-option:active {
+        background-color: var(--epi-primary) !important;
+        color: #fff !important;
+      }
+      .epi-dialog-body .btn-link { color: #777 !important; }
+      .epi-dialog-body .btn-link:hover { color: var(--epi-primary) !important; }
+    ")),
+    shiny::div(
+      class = "epi-dialog-bar",
+      logo_tag,
+      shiny::h4("ACT Epidemiology Menu")
+    ),
+    miniUI::miniContentPanel(
+      padding = 0,
+      shiny::div(
+        class = "epi-dialog-body",
+        shiny::tags$fieldset(
+          class = "epi-group",
+          shiny::tags$legend("Browse EpiServer"),
+          shiny::actionButton(
+            "viewer", "Viewer pane",
+            width = "100%", class = "epi-option",
+            style = "margin-bottom: 8px;"
+          ),
+          shiny::actionButton(
+            "browser", "Web browser",
+            width = "100%", class = "epi-option",
+            style = "margin-bottom: 8px;"
+          ),
+          shiny::actionButton(
+            "window", "Standalone RStudio window",
+            width = "100%", class = "epi-option"
+          )
+        ),
+        shiny::actionButton(
+          "cancel", "Cancel",
+          width = "100%", class = "btn-link"
+        )
+      )
+    )
+  )
+
+  server <- function(input, output, session) {
+    shiny::observeEvent(input$viewer,  shiny::stopApp("viewer"))
+    shiny::observeEvent(input$window,  shiny::stopApp("window"))
+    shiny::observeEvent(input$browser, shiny::stopApp("browser"))
+    # Also fired by the dialog's close button and Escape
+    shiny::observeEvent(input$cancel,  shiny::stopApp(NULL))
+  }
+
+  shiny::runGadget(
+    ui, server,
+    viewer       = shiny::paneViewer(minHeight = 320),    stopOnCancel = FALSE
+  )
+
 }

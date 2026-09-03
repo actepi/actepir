@@ -68,9 +68,17 @@ metadata in a searchable table
 enrich the column display with variable descriptions
 \item Toggle \strong{Show value labels} to append a collapsible list of
 value labels (DataCode = LabelName) for each column that has them
-\item Toggle between \strong{quickconnect} mode (single
-\code{episerver_quickconnect()} call) and \strong{connect} mode
-(separate \code{episerver_connect()} + \code{episerver_lazytable()} calls)
+\item Toggle between \strong{quickconnect} mode (an inline
+\code{episerver_quickconnect()} pipe), \strong{connect} mode
+(separate \code{episerver_connect()} + \code{episerver_lazytable()}
+calls with optional \code{library()} declarations), and \strong{none}
+(emit only the collection pipe, assuming a \code{tb} lazy table
+already exists)
+\item Toggle \strong{Declare packages} to control namespacing: when on,
+inline modes use \code{pkg::} prefixes and connect mode adds
+\code{library()} calls; when off, calls are bare
+\item Adjust the table height and expanded-levels height with the
+sliders under Table sizing
 \item Generate the connection and collection code via the code button
 \item Click \strong{Done} to close the browser
 }

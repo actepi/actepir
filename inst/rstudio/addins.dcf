@@ -3,12 +3,7 @@ Description: Create a branded Quarto analysis document in the current project or
 Binding: addin_new_epi_document
 Interactive: true
 
-Name: Browse EpiServer (Viewer)
-Description: Open the EpiServer browser in the Viewer pane. Runs in a background process; the console remains free.
-Binding: addin_browse_viewer
-Interactive: true
-
-Name: Browse EpiServer (Browser)
-Description: Open the EpiServer browser in the system web browser. Runs in a background process.
-Binding: addin_browse_browser
+Name: Open Menu
+Description: Open the ACT Epidemiology menu. Choose how to launch the EpiServer browser and access other package tools.
+Binding: addin_browse
 Interactive: true
