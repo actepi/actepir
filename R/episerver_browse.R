@@ -577,10 +577,41 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
                                      overflow-y: auto; }
         table.dataTable thead th { background: var(--epi-primary);
                                    color: #fff; }
-        /* Selected rows. This DataTables build marks selection with the
-           class 'active' (not 'selected'), and the stock rule keys on
-           'table.dataTable tbody tr.active td' with white text. Override
-           that exact shape, covering odd/even and hover. */
+        /* Sort indicators: dataTables.bootstrap draws Unicode glyphs on
+           'thead>tr>th.sorting:before/:after' with no color (so they inherit
+           the white header text) but at opacity .125 inactive / .6 active,
+           which is nearly invisible on the dark header. Raise the opacity;
+           colour is already white by inheritance. Match the real selector
+           shape (child combinators, th, and the _disabled variants). */
+        table.dataTable thead > tr > th.sorting:before,
+        table.dataTable thead > tr > th.sorting:after,
+        table.dataTable thead > tr > th.sorting_asc:before,
+        table.dataTable thead > tr > th.sorting_asc:after,
+        table.dataTable thead > tr > th.sorting_desc:before,
+        table.dataTable thead > tr > th.sorting_desc:after,
+        table.dataTable thead > tr > th.sorting_asc_disabled:before,
+        table.dataTable thead > tr > th.sorting_desc_disabled:before {
+          opacity: 0.45 !important;
+        }
+        table.dataTable thead > tr > th.sorting_asc:before,
+        table.dataTable thead > tr > th.sorting_desc:after {
+          opacity: 1 !important;
+        }
+        /* Selected rows. Two upstream mechanisms colour these blue:
+           (1) dataTables.bootstrap.extra.css targets '.table.dataTable
+           tbody tr.active td' directly with white text;
+           (2) dataTables.bootstrap.min.css paints 'tr.selected>*' with an
+           inset box-shadow keyed on the --dt-row-selected RGB variable.
+           Redefine the variable and override the .extra rule (covering the
+           stripe/hover permutations); keep text dark. This build tags rows
+           'active' rather than 'selected'. */
+        :root {
+          --dt-row-selected: 234, 230, 241;      /* #eae6f1 */
+          --dt-row-selected-text: 51, 51, 51;    /* #333 */
+          --dt-row-selected-link: 51, 51, 51;
+        }
+        .table.dataTable tbody td.active,
+        .table.dataTable tbody tr.active td,
         table.dataTable tbody tr.active td,
         table.dataTable tbody td.active,
         table.dataTable.stripe tbody tr.odd.active td,
@@ -1060,8 +1091,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
       # Package qualifier for inline (quickconnect / none) code
       q <- function(pkg, fn) if (declare) paste0(pkg, "::", fn) else fn
 
-      # dplyr::select() pipe segment
-      dplyr_select <- paste0("  ", q("dplyr", "select"), "(", sel_args, ") |>\n")
+      # dplyr::select() pipe segment, only when columns are actually chosen
+      have_sel <- length(sel_cols) > 0
+      dplyr_select <- if (have_sel) {
+        paste0("  ", q("dplyr", "select"), "(", sel_args, ") |>\n")
+      } else {
+        ""
+      }
+      plain_select <- if (have_sel) {
+        paste0("  select(", sel_args, ") |>\n")
+      } else {
+        ""
+      }
 
       collect_call <- if (isTRUE(input$use_labels)) {
         "collect_withlabels()"
@@ -1097,7 +1138,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
           "conn <- episerver_connect()\n",
           "tb <- episerver_lazytable(conn, ", arg_tail, ")\n\n",
           "data <- tb |>\n",
-          "  select(", sel_args, ") |>\n",
+          plain_select,
           "  ", collect_call, "\n"
         )
 
@@ -1233,11 +1274,28 @@ episerver_display_dialog <- function() {
         color: #fff; padding: 12px 15px; margin: 0;
         display: flex; align-items: center; gap: 12px;
       }
+      .epi-dialog-bar .epi-bar-logo { flex: 1 1 0; display: flex;
+                                      align-items: center; }
+      .epi-dialog-bar .epi-bar-title { flex: 2 1 0; text-align: center; }
+      .epi-dialog-bar .epi-bar-action { flex: 1 1 0; text-align: right; }
       .epi-dialog-bar h4 { margin: 0; font-size: 15px; color: #fff; }
+      /* Done button in the bar: white outline, lilac on hover */
+      .epi-dialog-bar .epi-done {
+        background-color: var(--epi-primary) !important;
+        border: 1px solid #fff !important;
+        color: #fff !important;
+      }
+      .epi-dialog-bar .epi-done:hover,
+      .epi-dialog-bar .epi-done:focus,
+      .epi-dialog-bar .epi-done:active {
+        border-color: #DCC8FA !important;
+        color: #DCC8FA !important;
+        background-color: var(--epi-primary) !important;
+      }
       .epi-dialog-body { padding: 15px; }
       .epi-group {
         border: 1px solid #ddd; border-radius: 4px;
-        padding: 12px; margin: 0 0 12px 0;
+        padding: 12px; margin: 0;
       }
       .epi-group > legend {
         width: auto; margin: 0 0 6px 0; padding: 0 6px;
@@ -1257,13 +1315,21 @@ episerver_display_dialog <- function() {
         background-color: var(--epi-primary) !important;
         color: #fff !important;
       }
-      .epi-dialog-body .btn-link { color: #777 !important; }
-      .epi-dialog-body .btn-link:hover { color: var(--epi-primary) !important; }
     ")),
     shiny::div(
       class = "epi-dialog-bar",
-      logo_tag,
-      shiny::h4("ACT Epidemiology Menu")
+      shiny::div(class = "epi-bar-logo", logo_tag),
+      shiny::div(
+        class = "epi-bar-title",
+        shiny::h4("ACT Epidemiology Menu")
+      ),
+      shiny::div(
+        class = "epi-bar-action",
+        shiny::actionButton(
+          "cancel", "Done",
+          class = "epi-done btn-sm"
+        )
+      )
     ),
     miniUI::miniContentPanel(
       padding = 0,
@@ -1286,10 +1352,6 @@ episerver_display_dialog <- function() {
             "window", "Standalone RStudio window",
             width = "100%", class = "epi-option"
           )
-        ),
-        shiny::actionButton(
-          "cancel", "Cancel",
-          width = "100%", class = "btn-link"
         )
       )
     )
