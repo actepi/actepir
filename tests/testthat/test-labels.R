@@ -4,7 +4,9 @@ library(testthat)
 library(actepir)
 
 test_that("load episerver data with labels", {
-  
+
+  skip_if_no_episerver()
+
   # multistep connection process
   con = episerver_connect()
   table = episerver_quickconnect("ACTGHSMYX")

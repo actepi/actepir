@@ -7,6 +7,8 @@ library(actepir)
 
 test_that("episerver_info returns table list for default namespace", {
 
+  skip_if_no_episerver()
+
   result <- episerver_info()
 
   expect_s3_class(result, "data.frame")
@@ -18,6 +20,8 @@ test_that("episerver_info returns table list for default namespace", {
 })
 
 test_that("episerver_info returns table list for ref schema", {
+
+  skip_if_no_episerver()
 
   result <- episerver_info(schema = "ref")
 
@@ -34,6 +38,8 @@ test_that("episerver_info returns table list for ref schema", {
 
 test_that("episerver_info returns column metadata for known table", {
 
+  skip_if_no_episerver()
+
   # Use a table known to exist from the labels test
   result <- episerver_info(dataset = "ACTGHSMYX")
 
@@ -46,6 +52,8 @@ test_that("episerver_info returns column metadata for known table", {
 })
 
 test_that("episerver_info returns column metadata for DataLabels in ref schema", {
+
+  skip_if_no_episerver()
 
   result <- episerver_info(schema = "ref", dataset = "DataLabels")
 
@@ -63,6 +71,8 @@ test_that("episerver_info returns column metadata for DataLabels in ref schema",
 
 test_that("episerver_info warns on nonexistent table", {
 
+  skip_if_no_episerver()
+
   expect_warning(
     result <- episerver_info(dataset = "ThisTableDoesNotExist_XYZ999"),
     regexp = "No columns found"
@@ -73,6 +83,8 @@ test_that("episerver_info warns on nonexistent table", {
 })
 
 test_that("episerver_info warns on nonexistent schema", {
+
+  skip_if_no_episerver()
 
   expect_warning(
     result <- episerver_info(schema = "nonexistent_schema_xyz"),
