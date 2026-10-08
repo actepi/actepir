@@ -20,6 +20,8 @@
 #' @export
 #' 
 #' @examples 
+#' my_gt_table <- gt::gt(head(mtcars))
+#'
 #' # Normal theme application
 #' my_gt_table |>
 #'   acthd_gt_theme()

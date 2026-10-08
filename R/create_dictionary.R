@@ -22,6 +22,13 @@
 #' @export
 #' 
 #' @examples 
+#' df <- tibble::tibble(
+#'   gender = haven::labelled(c(1, 2, 1), c(Male = 1, Female = 2),
+#'                            label = "Gender of the respondent"),
+#'   status = haven::labelled(c(1, 2, 2), c(Single = 1, Married = 2),
+#'                            label = "Marital status")
+#'   )
+#'
 #' # Get flattened dictionary from already-labelled dataset
 #' dictionary = create_dictionary(df)
 #' 

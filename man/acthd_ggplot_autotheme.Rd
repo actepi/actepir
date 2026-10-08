@@ -14,16 +14,16 @@ This function allows the user to apply pre-defined theme to a ggplot object.
 }
 \examples{
 # Two-step application
-output = mpg |> 
-  ggplot(aes(x = manufacturer, y=hwy)) +
-  geom_col()
+output = ggplot2::mpg |> 
+  ggplot2::ggplot(ggplot2::aes(x = manufacturer, y=hwy)) +
+  ggplot2::geom_col()
 output |> 
   acthd_ggplot_autotheme()
   
 # Single-step application
-{ output = mpg |> 
-    ggplot(aes(x = manufacturer, y=hwy)) +
-    geom_col()
+{ output = ggplot2::mpg |> 
+    ggplot2::ggplot(ggplot2::aes(x = manufacturer, y=hwy)) +
+    ggplot2::geom_col()
 } |> 
   acthd_ggplot_autotheme()
  

@@ -61,6 +61,7 @@ This function will allow the user to download the labels file for a given datase
 Almost all non-administrative users will not need to use the lbl_* arguments.
 }
 \examples{
+\dontrun{
 # Import APC labels from default `Analysis` database
 labels = episerver_getlabels("APC")
 
@@ -71,6 +72,7 @@ labels = episerver_getlabels(
   lbl_schema = "dbo", 
   lbl_db = "HospitalAPC"
   )
+}
  
 }
 \keyword{episerver}

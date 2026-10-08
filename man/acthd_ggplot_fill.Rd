@@ -70,8 +70,8 @@ Approach taken from \href{https://drsimonj.svbtle.com/creating-corporate-colour-
 }
 }
 \examples{
-ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
-  geom_bar() +
+ggplot2::ggplot(ggplot2::mpg, ggplot2::aes(manufacturer, fill = manufacturer)) +
+  ggplot2::geom_bar() +
   acthd_ggplot_fill(
     palette = "spectral", 
     guide = "none"

@@ -18,6 +18,13 @@ This function allow the users to extract variable and value labels into a flatte
 It assumes that the labels conform to the haven_labelled class and uses the \code{sjlabelled::get_label} and \code{sjlabelled::get_labels} functions.  This is a convenience wraparound function.
 }
 \examples{
+df <- tibble::tibble(
+  gender = haven::labelled(c(1, 2, 1), c(Male = 1, Female = 2),
+                           label = "Gender of the respondent"),
+  status = haven::labelled(c(1, 2, 2), c(Single = 1, Married = 2),
+                           label = "Marital status")
+  )
+
 # Get flattened dictionary from already-labelled dataset
 dictionary = create_dictionary(df)
 

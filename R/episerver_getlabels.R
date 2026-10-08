@@ -35,6 +35,7 @@
 #' @export
 #' 
 #' @examples 
+#' \dontrun{
 #' # Import APC labels from default `Analysis` database
 #' labels = episerver_getlabels("APC")
 #' 
@@ -45,6 +46,7 @@
 #'   lbl_schema = "dbo", 
 #'   lbl_db = "HospitalAPC"
 #'   )
+#' }
 #'  
 
 episerver_getlabels <- function(dataset, lbl_table = NULL, lbl_schema = NULL, lbl_db = NULL, driver = NULL, max_attempts = NULL, ...) {

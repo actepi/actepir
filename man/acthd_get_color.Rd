@@ -6,6 +6,10 @@
 \usage{
 acthd_get_color(color = "bgs blue")
 }
+\arguments{
+\item{color}{Name of the colour to return. See \code{\link[=acthd_list_colors]{acthd_list_colors()}} for
+available names.}
+}
 \description{
 Function return ACTHD color
 }
