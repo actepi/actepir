@@ -29,6 +29,7 @@
 #' @export
 #' 
 #' @examples 
+#' \dontrun{
 #' # One-step process: apply labels as part of collect() 
 #' # statement when a dbplyr lazy object is passed to it
 #' dat = episerver_connect("APC") %>% 
@@ -43,6 +44,7 @@
 #'     lbl_schema = "dbo", 
 #'     lbl_db = "HospitalAPC"
 #'     )
+#' }
 #'   
 collect_withlabels <- function(dataset, lbl_db = NULL, lbl_schema = NULL, lbl_table = NULL, driver = NULL, max_attempts = NULL, ...) {
   

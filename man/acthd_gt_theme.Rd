@@ -70,6 +70,8 @@ Approach taken from \href{https://drsimonj.svbtle.com/creating-corporate-colour-
 }
 }
 \examples{
+my_gt_table <- gt::gt(head(mtcars))
+
 # Normal theme application
 my_gt_table |>
   acthd_gt_theme()

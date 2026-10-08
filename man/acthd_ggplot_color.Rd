@@ -76,16 +76,16 @@ Approach taken from \href{https://drsimonj.svbtle.com/creating-corporate-colour-
 }
 \examples{
 # Color by numeric variable with web-compliant purples palette
-ggplot(iris, aes(Sepal.Width, Sepal.Length, color = Sepal.Length)) +
-  geom_point(size = 4, alpha = .6) +
+ggplot2::ggplot(iris, ggplot2::aes(Sepal.Width, Sepal.Length, color = Sepal.Length)) +
+  ggplot2::geom_point(size = 4, alpha = .6) +
   acthd_ggplot_color(
     palette = "web_purples", 
     discrete = FALSE
     )
   
 # Fill by discrete variable with different palette + remove legend (guide)
-ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
-  geom_bar() +
+ggplot2::ggplot(ggplot2::mpg, ggplot2::aes(manufacturer, fill = manufacturer)) +
+  ggplot2::geom_bar() +
   acthd_ggplot_color(
     palette = "spectral", 
     guide = "none"

@@ -16,11 +16,13 @@
 #' @export
 #' 
 #' @examples 
+#' \dontrun{
 #' # Alias the APC table in default `Analysis` database
 #' apc_tbl = episerver_lazytable("APC")
 #' 
 #' # Alias the `TestTable` table in non-default `AnalysisArchive` database
 #' test_tbl = episerver_lazytable("TestTable", db="AnalysisArchive")
+#' }
 #'
 episerver_lazytable <- function(con, table, schema="dbo", db="Analysis") {
   

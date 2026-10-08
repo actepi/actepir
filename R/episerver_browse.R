@@ -117,7 +117,6 @@
 #'
 #' @seealso
 #' \code{\link{episerver_browse_stop}} for stopping the background app,
-#' \code{\link{episerver_browser}} for the static HTML snapshot version,
 #' \code{\link{episerver_info}} for non-interactive metadata queries,
 #' \code{\link{collect_withlabels}} for collecting data with labels applied
 #'
@@ -1249,14 +1248,7 @@ episerver_display_dialog <- function() {
       return(NULL)
     }
     raw_png <- readBin(logo_path, "raw", file.info(logo_path)$size)
-    b64 <- if (requireNamespace("jsonlite", quietly = TRUE)) {
-      jsonlite::base64_enc(raw_png)
-    } else {
-      # base64enc-free fallback via the tools shipped with base R
-      xfun_ok <- requireNamespace("xfun", quietly = TRUE)
-      if (xfun_ok) xfun::base64_encode(raw_png) else NULL
-    }
-    if (is.null(b64)) return(NULL)
+    b64 <- jsonlite::base64_enc(raw_png)
     shiny::tags$img(
       src   = paste0("data:image/png;base64,", b64),
       style = "height: 34px; vertical-align: middle;",

@@ -61,6 +61,7 @@ This function is a wraparound function which combines the \code{episerver_getlab
 Almost all non-administrative users will not need to use the lbl_* arguments.  In most cases, when accessing the "Analysis" database, you will not need to supply the "dataset" argument.
 }
 \examples{
+\dontrun{
 # One-step process: apply labels as part of collect() 
 # statement when a dbplyr lazy object is passed to it
 dat = episerver_connect("APC") \%>\% 
@@ -75,6 +76,7 @@ dat = episerver_connect("APC") \%>\%
     lbl_schema = "dbo", 
     lbl_db = "HospitalAPC"
     )
+}
   
 }
 \keyword{episerver}

@@ -10,16 +10,16 @@
 #' 
 #' @examples 
 #' # Normal theme application
-#' ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
-#'   geom_bar() +
-#'   coord_flip() +
-#'   acthd_ggplot_theme(flip=TRUE)
+#' ggplot2::ggplot(ggplot2::mpg, ggplot2::aes(manufacturer, fill = manufacturer)) +
+#'   ggplot2::geom_bar() +
+#'   ggplot2::coord_flip() +
+#'   actepir:::acthd_ggplot_theme(flip=TRUE)
 #'   
 #' # Flipped application
-#' ggplot(mpg, aes(manufacturer, fill = manufacturer)) +
-#'   geom_bar() +
-#'   coord_flip() +
-#'   acthd_ggplot_theme(flip=TRUE)
+#' ggplot2::ggplot(ggplot2::mpg, ggplot2::aes(manufacturer, fill = manufacturer)) +
+#'   ggplot2::geom_bar() +
+#'   ggplot2::coord_flip() +
+#'   actepir:::acthd_ggplot_theme(flip=TRUE)
 #'  
 acthd_ggplot_theme <- function(flip=FALSE) {
   

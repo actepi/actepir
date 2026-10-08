@@ -16,8 +16,19 @@
 #' @export
 #' 
 #' @examples 
+#' # Labels in the EpiServer DataLabels structure
+#' mylabelsdf <- data.frame(
+#'   VarName   = c("var1", "var1", "var2", "var2"),
+#'   LabelType = "OPT",
+#'   DataType  = "INT",
+#'   DataCode  = c(1, 2, 1, 2),
+#'   LabelName = c("Male", "Female", "No", "Yes")
+#'   )
+#' # The value 3 in var2 has no label and is assigned to `nolabel`
+#' mydata <- data.frame(var1 = c(1, 2, 1), var2 = c(2, 3, 1))
+#'
 #' varlist <- c("var1","var2")
-#' mydata <- mydata %>% 
+#' mydata <- mydata |> 
 #'   autofactor(
 #'     dflabels = mylabelsdf,
 #'     vars = varlist,

@@ -34,6 +34,7 @@
 #' @export
 #' 
 #' @examples 
+#' \dontrun{
 #' # Two-step process: download labels first 
 #' # and save to object, then apply labels as 
 #' # last step in downloading data
@@ -41,6 +42,7 @@
 #' dat = episerver_connect("APC") %>% 
 #'   collect() %>% 
 #'   applydatalabels(lab)
+#' }
 #' 
 applydatalabels <- function(data = parent.frame(), labels = NULL) {
   

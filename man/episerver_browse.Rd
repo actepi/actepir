@@ -151,7 +151,6 @@ episerver_browse_stop()
 }
 \seealso{
 \code{\link{episerver_browse_stop}} for stopping the background app,
-\code{\link{episerver_browser}} for the static HTML snapshot version,
 \code{\link{episerver_info}} for non-interactive metadata queries,
 \code{\link{collect_withlabels}} for collecting data with labels applied
 }

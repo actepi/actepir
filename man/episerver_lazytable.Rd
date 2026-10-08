@@ -19,11 +19,13 @@ episerver_lazytable(con, table, schema = "dbo", db = "Analysis")
 This function allows the user to alias a specific table (with a \code{dbplyr} lazy query).  Note that this function is hard-coded to reference the EpiServer and cannot be used to contact a different server.  It will default to the \code{Analysis.dbo} namespace unless \code{schema} and \code{db} arguments are also supplied.
 }
 \examples{
+\dontrun{
 # Alias the APC table in default `Analysis` database
 apc_tbl = episerver_lazytable("APC")
 
 # Alias the `TestTable` table in non-default `AnalysisArchive` database
 test_tbl = episerver_lazytable("TestTable", db="AnalysisArchive")
+}
 
 }
 \keyword{episerver}
