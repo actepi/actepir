@@ -2,24 +2,25 @@
 % Please edit documentation in R/episerver_browse.R
 \name{addin_browse}
 \alias{addin_browse}
-\title{RStudio Addin Binding for the EpiServer Browser}
+\title{RStudio Addin Binding for the ACT Epidemiology Menu}
 \usage{
 addin_browse()
 }
 \value{
-See \code{\link{episerver_browse}}. Invisibly returns \code{NULL}
-if cancelled.
+See \code{\link{episerver_browse}} and \code{\link{episerver_dsr}}.
+Invisibly returns \code{NULL} if cancelled.
 }
 \description{
-Shows the ACT Epidemiology menu: a small dialog whose Browse EpiServer
-group offers the three \code{display} options of
-\code{\link{episerver_browse}} (Viewer pane, web browser, or standalone
-RStudio window), plus Cancel. Selecting an option launches the browser
-with the chosen display. Registered as a single entry ("Open Menu") in
-the RStudio Addins menu. Closing the dialog or pressing Escape cancels.
+Shows the ACT Epidemiology menu: a small dialog with a group for each
+package tool, Browse EpiServer (\code{\link{episerver_browse}}) and DSR
+calculator (\code{\link{episerver_dsr}}). Each group offers the three
+\code{display} options (Viewer pane, web browser, or standalone RStudio
+window). Selecting an option launches the tool with the chosen display.
+Registered as a single entry ("Open Menu") in the RStudio Addins menu.
+Closing the dialog or pressing Escape cancels.
 
 Intended as an extensible launcher for package tools. Not intended to be
-called directly. Outside RStudio, a console list selection is offered
+called directly. Outside RStudio, console list selections are offered
 instead of the dialog.
 }
 \keyword{internal}

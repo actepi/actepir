@@ -1,6 +1,3 @@
-# Package-level environment holding the background process handle
-.actepir_env <- new.env(parent = emptyenv())
-
 #' Interactively Browse EpiServer Database Structure
 #'
 #' @description
@@ -151,200 +148,16 @@ episerver_browse <- function(background = TRUE,
 
   display <- match.arg(display)
 
-  if (!background) {
-    app <- episerver_browse_app(driver = driver, max_attempts = max_attempts)
-    viewer_fn <- switch(display,
-      viewer  = shiny::paneViewer(minHeight = 550),
-      window  = shiny::dialogViewer("EpiServer Browser",
-                                    width = 1000, height = 800),
-      browser = shiny::browserViewer()
-    )
-    return(shiny::runGadget(app, viewer = viewer_fn))
-  }
-
-  # ── Background mode ──────────────────────────────────────────────────────
-  if (!requireNamespace("callr", quietly = TRUE)) {
-    stop(
-      "The 'callr' package is required for background mode.\n",
-      "Install it with: install.packages('callr'), ",
-      "or use episerver_browse(background = FALSE).",
-      call. = FALSE
-    )
-  }
-
-  # Open the running app according to the display argument. Outside RStudio
-  # the system browser is the only option. The RStudio dialog window is
-  # opened via shiny::dialogViewer(), whose viewer functions are function(url)
-  # and therefore work for a background URL as well as for runGadget().
-  show_app <- function(url) {
-    if (!rstudioapi::isAvailable()) {
-      utils::browseURL(url)
-      return(invisible(NULL))
-    }
-    switch(display,
-      viewer  = rstudioapi::viewer(url),
-      window  = shiny::dialogViewer("EpiServer Browser",
-                                    width = 1000, height = 800)(url),
-      browser = utils::browseURL(url)
-    )
-    invisible(NULL)
-  }
-
-  # Readiness/health probe. A direct TCP connection is used deliberately:
-  # libcurl-based alternatives such as url() honour the http_proxy variables
-  # set by the staff .Rprofile and route 127.0.0.1 requests through the
-  # corporate proxy, which breaks the check.
-  port_open <- function(p) {
-    con <- suppressWarnings(try(
-      socketConnection("127.0.0.1", port = p, open = "r+",
-                       blocking = TRUE, timeout = 1),
-      silent = TRUE
-    ))
-    if (inherits(con, "connection")) {
-      try(close(con), silent = TRUE)
-      return(TRUE)
-    }
-    FALSE
-  }
-
-  # Reuse an existing live app rather than spawning a duplicate, but only
-  # after verifying it is actually serving. A worker can outlive its server
-  # (e.g. a hung ODBC disconnect during shutdown); such zombies are killed
-  # and replaced automatically.
-  existing <- .actepir_env$browse_proc
-  if (!is.null(existing) && existing$is_alive()) {
-    old_port <- .actepir_env$browse_port
-    if (!is.null(old_port) && port_open(old_port)) {
-      url <- .actepir_env$browse_url
-      show_app(url)
-      message("EpiServer Browser is already running at ", url)
-      return(invisible(existing))
-    }
-    existing$kill()
-    message("A previous browser process was no longer responding ",
-            "and has been replaced.")
-  }
-
-  # Clear a stale handle from a process that has died
-  .actepir_env$browse_proc <- NULL
-
-  if (!is.null(port)) port <- as.integer(port)
-
-  # The background process selects and binds its own port (atomically, with
-  # retries on collision) and reports the chosen port through a temp file.
-  # Selecting the port in the parent and binding it later in the child is a
-  # race that can produce 'address already in use' failures.
-  portfile <- tempfile("actepir_browse_port_")
-
-  # Spawn the app in a background process. Supervision requires processx's
-  # bundled supervisor.exe, which restricted environments (e.g. AppLocker
-  # policies blocking executables under AppData) may refuse to run, raising
-  # system error 1260. Attempt supervision first and fall back without it.
-  bg_func <- function(port, portfile, driver, max_attempts) {
-    app <- actepir:::episerver_browse_app(
-      driver       = driver,
-      max_attempts = max_attempts
-    )
-    candidates <- if (!is.null(port)) {
-      as.integer(port)
-    } else if (requireNamespace("httpuv", quietly = TRUE)) {
-      replicate(10, httpuv::randomPort())
-    } else {
-      sample(20000:60000, 10)
-    }
-    for (p in candidates) {
-      writeLines(as.character(p), portfile)
-      served <- tryCatch({
-        shiny::runApp(app, port = p, host = "127.0.0.1",
-                      launch.browser = FALSE)
-        TRUE
-      }, error = function(e) {
-        if (grepl("Failed to create server", conditionMessage(e),
-                  fixed = TRUE)) {
-          FALSE  # port collision: try the next candidate
-        } else {
-          stop(e)
-        }
-      })
-      if (served) break
-    }
-    # Exit the worker immediately once the server has stopped. A graceful R
-    # shutdown can hang on ODBC handle finalisation, leaving a zombie process
-    # that blocks relaunch; process death releases all handles regardless.
-    tools::pskill(Sys.getpid())
-  }
-  bg_args <- list(port = port, portfile = portfile,
-                  driver = driver, max_attempts = max_attempts)
-
-  proc <- tryCatch(
-    callr::r_bg(func = bg_func, args = bg_args, supervise = TRUE),
-    error = function(e) {
-      message("Process supervision is unavailable on this system ",
-              "(spawn blocked by policy); launching without it.")
-      callr::r_bg(func = bg_func, args = bg_args, supervise = FALSE)
-    }
+  .run_app(
+    key          = "browse",
+    title        = "EpiServer Browser",
+    fn           = "episerver_browse",
+    factory      = "episerver_browse_app",
+    factory_args = list(driver = driver, max_attempts = max_attempts),
+    background   = background,
+    display      = display,
+    port         = port
   )
-
-  # Wait for the app to start serving (port_open is defined above, before
-  # the reuse check)
-  started  <- FALSE
-  deadline <- Sys.time() + 45
-  while (Sys.time() < deadline) {
-    cand <- NA_integer_
-    if (file.exists(portfile)) {
-      cand <- suppressWarnings(
-        as.integer(readLines(portfile, warn = FALSE)[1])
-      )
-    }
-    if (!is.na(cand) && port_open(cand)) {
-      port    <- cand
-      started <- TRUE
-      break
-    }
-    if (!proc$is_alive()) break
-    Sys.sleep(0.25)
-  }
-  unlink(portfile)
-
-  if (!started) {
-    err <- tryCatch(proc$read_all_error(), error = function(e) "")
-    if (proc$is_alive()) proc$kill()
-    stop(
-      "The background EpiServer Browser failed to start within 45 seconds.\n",
-      if (nzchar(err)) paste0("Process error output:\n", err) else "",
-      "\nTry episerver_browse(background = FALSE).",
-      call. = FALSE
-    )
-  }
-
-  url <- sprintf("http://127.0.0.1:%d", port)
-  .actepir_env$browse_proc <- proc
-  .actepir_env$browse_url  <- url
-  .actepir_env$browse_port <- port
-
-  # Safety net for unsupervised processes: kill the background app when this
-  # R session exits. Registered once per session.
-  if (!isTRUE(.actepir_env$finalizer_set)) {
-    reg.finalizer(
-      .actepir_env,
-      function(e) {
-        p <- e$browse_proc
-        if (!is.null(p) && p$is_alive()) p$kill()
-      },
-      onexit = TRUE
-    )
-    .actepir_env$finalizer_set <- TRUE
-  }
-
-  show_app(url)
-
-  message(
-    "EpiServer Browser running in a background process at ", url, "\n",
-    "The console remains free. Stop it with the Done button or ",
-    "episerver_browse_stop()."
-  )
-
-  invisible(proc)
 
 }
 
@@ -373,19 +186,7 @@ episerver_browse <- function(background = TRUE,
 #'
 episerver_browse_stop <- function() {
 
-  proc <- .actepir_env$browse_proc
-
-  if (is.null(proc) || !proc$is_alive()) {
-    message("No background EpiServer Browser is running.")
-    return(invisible(FALSE))
-  }
-
-  proc$kill()
-  .actepir_env$browse_proc <- NULL
-  .actepir_env$browse_url  <- NULL
-  .actepir_env$browse_port <- NULL
-  message("Background EpiServer Browser stopped.")
-  invisible(TRUE)
+  .stop_app("browse", "EpiServer Browser")
 
 }
 
@@ -411,38 +212,16 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
   in_rstudio <- tryCatch(rstudioapi::isAvailable(), error = function(e) FALSE)
 
   # ── Establish connection ──────────────────────────────────────────────────
-  invisible(gc())
   connect_args <- list()
   if (!is.null(driver)) connect_args$driver <- driver
   if (!is.null(max_attempts)) connect_args$max_attempts <- max_attempts
-  conn <- do.call(episerver_connect, connect_args)
-  invisible(gc())
+  db <- .epi_connection(connect_args)
 
-  # Helper: run a query and return a data frame. The connection is validated
-  # before each query and re-established (gc-wrapped, per the Type 29 ODBC
-  # corruption workaround) if it has been dropped. On a query error, one
-  # reconnect-and-retry is attempted before giving up, so a corrupted
-  # connection does not leave the app permanently blank.
-  reconnect <- function() {
-    invisible(gc())
-    conn <<- do.call(episerver_connect, connect_args)
-    invisible(gc())
-  }
-
+  # Helper: run a query and return a data frame, or an empty data frame if the
+  # query still fails after the reconnect-and-retry in .epi_connection(), so a
+  # failed query does not stop the app.
   run_query <- function(sql) {
-    conn_bad <- tryCatch(!DBI::dbIsValid(conn), error = function(e) TRUE)
-    if (conn_bad) {
-      tryCatch(reconnect(), error = function(e) invisible(NULL))
-    }
-    tryCatch(
-      DBI::dbGetQuery(conn, sql),
-      error = function(e) {
-        tryCatch({
-          reconnect()
-          DBI::dbGetQuery(conn, sql)
-        }, error = function(e2) data.frame())
-      }
-    )
+    tryCatch(db$query(sql), error = function(e) data.frame())
   }
 
   # ── Fetch available databases ─────────────────────────────────────────────
@@ -480,93 +259,19 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
 
     miniUI::miniContentPanel(
 
+      .epi_app_style(),
+
+      # Browser-only rules: labels selector, insert mode, value-label cells
       shiny::tags$style(shiny::HTML("
         :root {
-          --epi-primary:      #320557;  /* Nightshade */
-          --epi-primary-brdr: #24043f;  /* button borders */
-          --epi-accent:       #562C8C;  /* Iris: accents, controls, selection focus */
-          --epi-info-bg:      #eae6f1;  /* info bar */
-          --epi-select-bg:    #eae6f1;  /* selected row */
           --epi-levels-max:   150px;    /* expanded level list height (slider) */
         }
-        .gadget-content { padding: 10px; }
-        /* Title bar: Nightshade background, white title */
-        .gadget-title { background-color: var(--epi-primary); }
-        .gadget-title h1 { color: #fff; }
-        /* Done button only (scoped by id): contrast against the dark bar */
-        #done.btn-primary {
-          background-color: var(--epi-primary) !important;
-          border-color: #fff !important;
-          color: #fff !important;
-        }
-        #done.btn-primary:hover, #done.btn-primary:focus,
-        #done.btn-primary:active {
-          background-color: var(--epi-primary) !important;
-          border-color: #DCC8FA !important;
-          color: #DCC8FA !important;
-        }
-        .selector-row { display: flex; gap: 10px; margin-bottom: 10px;
-                        align-items: flex-end; }
-        .selector-row > * { flex: 1; }
-        .selector-row .form-group { margin-bottom: 0; }
         .labels-slot { border-left: 3px solid var(--epi-accent);
                        padding-left: 10px; }
         .labels-slot .control-label { color: var(--epi-accent); }
         #labels_source { background-color: #f7f4fb;
                          border-color: var(--epi-accent); }
-        .info-bar {
-          background: var(--epi-info-bg);
-          border-left: 3px solid var(--epi-primary);
-          padding: 8px 12px; margin-bottom: 10px; font-size: 12px;
-          color: #555;
-        }
-        .options-row {
-          display: flex; align-items: center; gap: 15px;
-          margin-bottom: 10px; flex-wrap: wrap;
-        }
-        .options-row .form-group { margin-bottom: 0; }
-        .radio-inline { margin-top: 0; padding-top: 0; }
         #insert_mode { margin-bottom: 0; }
-        /* Recolour native radios and checkboxes */
-        input[type=radio], input[type=checkbox] {
-          accent-color: var(--epi-accent);
-        }
-        /* Themed primary buttons */
-        .btn-primary {
-          background-color: var(--epi-primary) !important;
-          border-color: var(--epi-primary-brdr) !important;
-        }
-        .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
-          background-color: var(--epi-primary-brdr) !important;
-          border-color: var(--epi-primary-brdr) !important;
-        }
-        /* Focus glow on inputs/selects: replace Bootstrap blue */
-        .form-control:focus, select:focus, .selectize-input.focus {
-          border-color: var(--epi-accent) !important;
-          box-shadow: 0 0 0 2px rgba(86, 44, 140, 0.35) !important;
-          outline: none !important;
-        }
-        /* Selected option in a native multi/again-open select list */
-        select option:checked, select option:hover {
-          box-shadow: 0 0 10px 100px var(--epi-primary) inset;
-          color: #fff;
-        }
-        /* selectize dropdown (Shiny's default select widget): 'selected' is
-           the current item, 'active' is hover. Theme the current item; leave
-           hover as the default subtle grey. */
-        .selectize-dropdown .option.selected,
-        .selectize-dropdown .option.selected.active {
-          background-color: var(--epi-primary) !important;
-          color: #fff !important;
-        }
-        /* DataTables centres the filter below 768px via its own media
-           query; pin it right at all widths (both core and bootstrap
-           stylesheet variants) */
-        .dataTables_wrapper .dataTables_filter,
-        div.dataTables_wrapper div.dataTables_filter {
-          float: right !important;
-          text-align: right !important;
-        }
         td.levels-cell details summary { cursor: pointer;
                                          color: var(--epi-accent);
                                          font-size: 11px; }
@@ -574,93 +279,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
                                      padding-top: 2px;
                                      max-height: var(--epi-levels-max);
                                      overflow-y: auto; }
-        table.dataTable thead th { background: var(--epi-primary);
-                                   color: #fff; }
-        /* Sort indicators: dataTables.bootstrap draws Unicode glyphs on
-           'thead>tr>th.sorting:before/:after' with no color (so they inherit
-           the white header text) but at opacity .125 inactive / .6 active,
-           which is nearly invisible on the dark header. Raise the opacity;
-           colour is already white by inheritance. Match the real selector
-           shape (child combinators, th, and the _disabled variants). */
-        table.dataTable thead > tr > th.sorting:before,
-        table.dataTable thead > tr > th.sorting:after,
-        table.dataTable thead > tr > th.sorting_asc:before,
-        table.dataTable thead > tr > th.sorting_asc:after,
-        table.dataTable thead > tr > th.sorting_desc:before,
-        table.dataTable thead > tr > th.sorting_desc:after,
-        table.dataTable thead > tr > th.sorting_asc_disabled:before,
-        table.dataTable thead > tr > th.sorting_desc_disabled:before {
-          opacity: 0.45 !important;
-        }
-        table.dataTable thead > tr > th.sorting_asc:before,
-        table.dataTable thead > tr > th.sorting_desc:after {
-          opacity: 1 !important;
-        }
-        /* Selected rows. Two upstream mechanisms colour these blue:
-           (1) dataTables.bootstrap.extra.css targets '.table.dataTable
-           tbody tr.active td' directly with white text;
-           (2) dataTables.bootstrap.min.css paints 'tr.selected>*' with an
-           inset box-shadow keyed on the --dt-row-selected RGB variable.
-           Redefine the variable and override the .extra rule (covering the
-           stripe/hover permutations); keep text dark. This build tags rows
-           'active' rather than 'selected'. */
-        :root {
-          --dt-row-selected: 234, 230, 241;      /* #eae6f1 */
-          --dt-row-selected-text: 51, 51, 51;    /* #333 */
-          --dt-row-selected-link: 51, 51, 51;
-        }
-        .table.dataTable tbody td.active,
-        .table.dataTable tbody tr.active td,
-        table.dataTable tbody tr.active td,
-        table.dataTable tbody td.active,
-        table.dataTable.stripe tbody tr.odd.active td,
-        table.dataTable.stripe tbody tr.even.active td,
-        table.dataTable.display tbody tr.odd.active td,
-        table.dataTable.display tbody tr.even.active td,
-        table.dataTable.hover tbody tr.active:hover td,
-        table.dataTable.display tbody tr.active:hover td {
-          background-color: var(--epi-select-bg) !important;
-          color: #333 !important;
-        }
-        /* ionRangeSlider (Shiny sliderInput) theming: default is #428bca */
-        .irs--shiny .irs-bar,
-        .irs--shiny .irs-to,
-        .irs--shiny .irs-from,
-        .irs--shiny .irs-single {
-          background-color: var(--epi-accent) !important;
-        }
-        .irs--shiny .irs-bar {
-          border-top-color: var(--epi-accent) !important;
-          border-bottom-color: var(--epi-accent) !important;
-        }
-        .irs--shiny .irs-handle > i:first-child {
-          background-color: var(--epi-accent) !important;
-        }
-        .irs--shiny .irs-to::before,
-        .irs--shiny .irs-from::before,
-        .irs--shiny .irs-single::before {
-          border-top-color: var(--epi-accent) !important;
-        }
       ")),
 
       # Clipboard handler used when running outside RStudio (background mode)
-      shiny::tags$script(shiny::HTML("
-        Shiny.addCustomMessageHandler('actepir_copy', function(text) {
-          function fallback() {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); } catch(e) {}
-            document.body.removeChild(ta);
-          }
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function() {}, fallback);
-          } else {
-            fallback();
-          }
-        });
-      ")),
+      .epi_copy_script(),
 
       # Restrict row selection to the Column/Description/Type cells. DT's
       # selection handler may be bound to mousedown or pointer events rather
@@ -1152,13 +774,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
 
       }
 
-      if (rstudioapi::isAvailable()) {
-        rstudioapi::insertText(text = code)
-      } else {
-        session$sendCustomMessage("actepir_copy", code)
-        shiny::showNotification("Code copied to clipboard",
-                                duration = 2, type = "message")
-      }
+      .epi_send_code(session, code)
     })
 
     # ── Done button ────────────────────────────────────────────────────────
@@ -1176,12 +792,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
     server  = server,
     onStart = function() {
       if (in_rstudio) {
-        shiny::onStop(function() {
-          tryCatch(
-            if (DBI::dbIsValid(conn)) DBI::dbDisconnect(conn),
-            error = function(e) invisible(NULL)
-          )
-        })
+        shiny::onStop(db$disconnect)
       }
     }
   )
@@ -1189,22 +800,23 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
 }
 
 
-#' RStudio Addin Binding for the EpiServer Browser
+#' RStudio Addin Binding for the ACT Epidemiology Menu
 #'
 #' @description
-#' Shows the ACT Epidemiology menu: a small dialog whose Browse EpiServer
-#' group offers the three \code{display} options of
-#' \code{\link{episerver_browse}} (Viewer pane, web browser, or standalone
-#' RStudio window), plus Cancel. Selecting an option launches the browser
-#' with the chosen display. Registered as a single entry ("Open Menu") in
-#' the RStudio Addins menu. Closing the dialog or pressing Escape cancels.
+#' Shows the ACT Epidemiology menu: a small dialog with a group for each
+#' package tool, Browse EpiServer (\code{\link{episerver_browse}}) and DSR
+#' calculator (\code{\link{episerver_dsr}}). Each group offers the three
+#' \code{display} options (Viewer pane, web browser, or standalone RStudio
+#' window). Selecting an option launches the tool with the chosen display.
+#' Registered as a single entry ("Open Menu") in the RStudio Addins menu.
+#' Closing the dialog or pressing Escape cancels.
 #'
 #' Intended as an extensible launcher for package tools. Not intended to be
-#' called directly. Outside RStudio, a console list selection is offered
+#' called directly. Outside RStudio, console list selections are offered
 #' instead of the dialog.
 #'
-#' @return See \code{\link{episerver_browse}}. Invisibly returns \code{NULL}
-#'   if cancelled.
+#' @return See \code{\link{episerver_browse}} and \code{\link{episerver_dsr}}.
+#'   Invisibly returns \code{NULL} if cancelled.
 #'
 #' @keywords internal
 #'
@@ -1217,25 +829,32 @@ addin_browse <- function() {
     return(invisible(NULL))
   }
 
-  episerver_browse(display = choice)
+  switch(choice$tool,
+    browse = episerver_browse(display = choice$display),
+    dsr    = episerver_dsr(display = choice$display)
+  )
 
 }
 
-# Internal chooser for the display argument. Returns "viewer", "window",
-# "browser", or NULL on cancel. The gadget briefly blocks the console while
-# the dialog is open, which is inherent to a modal question; the launched
-# browser itself then runs in the background as usual.
+# Internal chooser for the menu. Returns list(tool, display), where tool is
+# "browse" or "dsr" and display is "viewer", "window" or "browser", or NULL on
+# cancel. The gadget briefly blocks the console while the dialog is open,
+# which is inherent to a modal question; the launched tool itself then runs
+# in the background as usual.
 #' @noRd
 episerver_display_dialog <- function() {
 
-  # Outside RStudio the gadget dialog is unavailable; fall back to a plain
-  # console selection
+  # Outside RStudio the gadget dialog is unavailable; fall back to plain
+  # console selections
   if (!rstudioapi::isAvailable()) {
+    tools <- c("EpiServer browser" = "browse", "DSR calculator" = "dsr")
+    tool <- utils::select.list(names(tools), title = "ACT Epidemiology Menu")
+    if (!nzchar(tool)) return(NULL)
     picked <- utils::select.list(
       c("viewer", "window", "browser"),
-      title = "Open the EpiServer browser in..."
+      title = paste0("Open the ", tool, " in...")
     )
-    return(if (nzchar(picked)) picked else NULL)
+    return(if (nzchar(picked)) list(tool = tools[[tool]], display = picked) else NULL)
   }
 
   # Build a data-URI <img> for the header logo, or NULL if the file is not
@@ -1289,6 +908,7 @@ episerver_display_dialog <- function() {
         border: 1px solid #ddd; border-radius: 4px;
         padding: 12px; margin: 0;
       }
+      .epi-group + .epi-group { margin-top: 12px; }
       .epi-group > legend {
         width: auto; margin: 0 0 6px 0; padding: 0 6px;
         font-size: 12px; font-weight: 600; color: var(--epi-primary);
@@ -1344,22 +964,45 @@ episerver_display_dialog <- function() {
             "window", "Standalone RStudio window",
             width = "100%", class = "epi-option"
           )
+        ),
+        shiny::tags$fieldset(
+          class = "epi-group",
+          shiny::tags$legend("DSR calculator"),
+          shiny::actionButton(
+            "dsr_viewer", "Viewer pane",
+            width = "100%", class = "epi-option",
+            style = "margin-bottom: 8px;"
+          ),
+          shiny::actionButton(
+            "dsr_browser", "Web browser",
+            width = "100%", class = "epi-option",
+            style = "margin-bottom: 8px;"
+          ),
+          shiny::actionButton(
+            "dsr_window", "Standalone RStudio window",
+            width = "100%", class = "epi-option"
+          )
         )
       )
     )
   )
 
   server <- function(input, output, session) {
-    shiny::observeEvent(input$viewer,  shiny::stopApp("viewer"))
-    shiny::observeEvent(input$window,  shiny::stopApp("window"))
-    shiny::observeEvent(input$browser, shiny::stopApp("browser"))
+    browse <- function(display) list(tool = "browse", display = display)
+    dsr    <- function(display) list(tool = "dsr", display = display)
+    shiny::observeEvent(input$viewer,      shiny::stopApp(browse("viewer")))
+    shiny::observeEvent(input$window,      shiny::stopApp(browse("window")))
+    shiny::observeEvent(input$browser,     shiny::stopApp(browse("browser")))
+    shiny::observeEvent(input$dsr_viewer,  shiny::stopApp(dsr("viewer")))
+    shiny::observeEvent(input$dsr_window,  shiny::stopApp(dsr("window")))
+    shiny::observeEvent(input$dsr_browser, shiny::stopApp(dsr("browser")))
     # Also fired by the dialog's close button and Escape
     shiny::observeEvent(input$cancel,  shiny::stopApp(NULL))
   }
 
   shiny::runGadget(
     ui, server,
-    viewer       = shiny::paneViewer(minHeight = 320),    stopOnCancel = FALSE
+    viewer       = shiny::paneViewer(minHeight = 480),    stopOnCancel = FALSE
   )
 
 }

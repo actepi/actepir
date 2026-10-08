@@ -28,6 +28,7 @@ Imports:
     tibble,
     tools,
     utils,
+    stats,
     DT,
     htmltools,
     miniUI,
