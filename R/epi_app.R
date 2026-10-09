@@ -290,14 +290,21 @@
   if (rstudioapi::isAvailable()) {
     rstudioapi::insertText(text = code)
   } else {
-    session$sendCustomMessage("actepir_copy", code)
-    shiny::showNotification("Code copied to clipboard",
-                            duration = 2, type = "message")
+    .epi_copy_text(session, code, "Code copied to clipboard")
   }
 }
 
 
-# Clipboard handler used when running outside RStudio (background mode)
+# Copies text to the clipboard through .epi_copy_script(), from the browser
+# or Viewer showing the app
+#' @noRd
+.epi_copy_text <- function(session, text, message = "Copied to clipboard") {
+  session$sendCustomMessage("actepir_copy", text)
+  shiny::showNotification(message, duration = 2, type = "message")
+}
+
+
+# Clipboard handler for .epi_copy_text()
 #' @noRd
 .epi_copy_script <- function() {
   shiny::tags$script(shiny::HTML("
@@ -451,6 +458,28 @@
     table.dataTable.display tbody tr.active:hover td {
       background-color: var(--epi-select-bg) !important;
       color: #333 !important;
+    }
+    /* DataTables pagination (Bootstrap 3 markup: ul.pagination with
+       li.paginate_button): replace Bootstrap blue links and active page */
+    .pagination > li > a, .pagination > li > span {
+      color: var(--epi-accent);
+    }
+    .pagination > li > a:hover, .pagination > li > a:focus,
+    .pagination > li > span:hover, .pagination > li > span:focus {
+      color: var(--epi-primary);
+      background-color: var(--epi-info-bg);
+    }
+    .pagination > .active > a, .pagination > .active > a:hover,
+    .pagination > .active > a:focus, .pagination > .active > span,
+    .pagination > .active > span:hover, .pagination > .active > span:focus {
+      background-color: var(--epi-primary) !important;
+      border-color: var(--epi-primary) !important;
+      color: #fff !important;
+    }
+    .pagination > .disabled > a, .pagination > .disabled > a:hover,
+    .pagination > .disabled > a:focus {
+      color: #999;
+      background-color: #fff;
     }
     /* ionRangeSlider (Shiny sliderInput) theming: default is #428bca */
     .irs--shiny .irs-bar,

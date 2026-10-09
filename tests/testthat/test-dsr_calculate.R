@@ -249,6 +249,47 @@ test_that("inputs are validated", {
   expect_error(dsr_calculate(ev2, po2[0, ], st2), "no rows")
   expect_error(dsr_calculate(ev2, po2, rbind(st2, st2)), "one row per AgeGroup")
   expect_error(dsr_calculate(ev2, po2, st2[1, ]), "no row for AgeGroup 2")
+  for (bad in list(-1, NA_real_, Inf, "5", c(1, 5))) {
+    expect_error(dsr_calculate(ev2, po2, st2, suppress = bad),
+                 "'suppress' must be a number of events")
+  }
+
+})
+
+# ── Suppression ─────────────────────────────────────────────────────────────
+
+test_that("rows with fewer events than the threshold are suppressed", {
+
+  full <- dsr_calculate(ev_sex, po_sex, st_sex, by_sex = TRUE)
+  expect_false(any(full$Suppressed))
+
+  # Females have 8 events; males 10 and persons 20 are kept
+  r <- dsr_calculate(ev_sex, po_sex, st_sex, by_sex = TRUE, suppress = 10)
+  expect_equal(r$Suppressed, c(FALSE, TRUE, FALSE))
+
+  rates <- c("Events", "Crude", "CrudeLower", "CrudeUpper",
+             "DSR", "DSRLower", "DSRUpper")
+  expect_true(all(is.na(r[2, rates])))
+  expect_equal(r$Population, full$Population)
+  expect_equal(r[-2, ], full[-2, ])
+
+})
+
+test_that("suppression counts zero events and judges each age group", {
+
+  ev <- data.frame(Area = "A", AgeGroup = 1:2, Events = c(10, 20))
+  po <- data.frame(Area = rep(c("A", "B"), each = 2), AgeGroup = rep(1:2, 2),
+                   Population = c(1000, 4000, 500, 500))
+  r <- dsr_calculate(ev, po, st2, by = "Area", suppress = 1)
+  expect_equal(r$Suppressed, c(FALSE, TRUE))
+  expect_true(is.na(r$DSR[2]))
+
+  # Age groups with 4 and 3 events fall below 5
+  a <- dsr_age_specific(ev_sex, po_sex, by_sex = TRUE, suppress = 5)
+  expect_equal(a$Suppressed, c(TRUE, FALSE, TRUE, FALSE, FALSE, FALSE))
+  expect_equal(a$Events, c(NA, 6, NA, 5, 7, 13))
+  expect_true(all(is.na(a$Rate[a$Suppressed])))
+  expect_false(anyNA(a$Rate[!a$Suppressed]))
 
 })
 

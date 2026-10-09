@@ -62,8 +62,9 @@ Opens the DSR Calculator, which calculates directly age-standardised rates
 separations (APC). It queries EpiServer for event counts by calendar year,
 sex, 5-year age group and area of residence, matches them to the estimated
 resident population of the same year, and standardises them to a chosen
-standard population. It shows counts, crude rates and DSRs, optionally with
-age-specific rates, and copies R code that reproduces the results.
+standard population. Events can be limited to ICD-10 diagnosis codes. It
+shows counts, crude rates and DSRs, optionally with age-specific rates,
+maps them by area, and copies R code that reproduces the results.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
@@ -90,7 +91,37 @@ year only partly covered by the event data is flagged.
 \item \emph{Male and female}: adds male and female rates to the rates for persons.
 \item \emph{Age-specific rates}: adds a table of rates by 5-year age group.
 \item \emph{Rate per}: 1,000, 10,000 or 100,000 population.
+\item \emph{Suppress counts below}: rows with fewer events than this have their
+events and rates withheld (see \code{\link[=dsr_calculate]{dsr_calculate()}}). The default is 5; 0
+turns suppression off.
+\item \emph{Diagnosis codes}: counts only events with a diagnosis matching any of
+the ICD-10 codes or ranges entered, for example \code{J45}, \code{C13-C15.45} or
+\verb{E18.3 to E18.78}. A partial code matches every code that starts with
+it. A range runs from its first code to its last and includes every
+code that starts with the last. Dots and case do not matter. Only
+ICD-10 coded records are searched: ED records with an \code{ICD10AMEdition}
+other than 99, and APC records with an \code{ICDVersion} of 10. With no codes
+every event is counted.
+\item \emph{Search}: the principal diagnosis (\code{Diagnosis1}) or any diagnosis
+(\code{Diagnosis1} to \code{Diagnosis3} in ED, \code{Diagnosis1} to \code{Diagnosis100} in
+APC).
 }
+
+\strong{Tables and map}
+
+The \emph{Tables} tab shows the rates and, when chosen, the age-specific
+rates. \emph{Copy table} copies a table as tab-separated text that pastes into
+Excel.
+
+The \emph{Map} tab maps the age-standardised rate, crude rate or events of one
+year and sex by area. Australia-wide SA3 and SA2 maps open on the ACT and
+surrounding region; the view of Australia leaves out Christmas, Cocos
+(Keeling) and Norfolk Islands. Boundaries are the ASGS Edition 3 (2021) boundaries,
+downloaded from the ABS boundary service (\code{geo.abs.gov.au}) the first time
+a level is mapped and kept in the folder given by
+\code{tools::R_user_dir("actepir", "cache")}.
+\emph{Copy map} copies the map as an image where the browser allows it; \emph{PNG}
+and \emph{PDF} download it.
 
 \strong{Data}
 
@@ -112,8 +143,9 @@ calculated.
 
 The code button (\emph{Copy Code} in background mode, \emph{Insert Code} in
 foreground mode) gives R code containing the three SQL queries the
-calculator runs and the \code{\link[=dsr_calculate]{dsr_calculate()}} call that turns their results
-into the table shown. The code reproduces the results outside the
+calculator runs, including any diagnosis condition, and the
+\code{\link[=dsr_calculate]{dsr_calculate()}} call, with the suppression threshold, that turns their
+results into the table shown. The code reproduces the results outside the
 calculator and can be adapted, for example by adding conditions to the
 events query.
 }

@@ -27,16 +27,18 @@
 #'   Default 100,000.
 #' @param conf_level Number between 0 and 1. Confidence level of the
 #'   intervals. Default 0.95.
+#' @param suppress Number. Rows with fewer events than this are suppressed:
+#'   their events and rates are not reported. Default 0, no suppression.
 #'
 #' @return `dsr_calculate()` returns a data frame with the `by` columns, `Sex`
 #'   (`"Male"`, `"Female"` or `"Persons"`), `Events`, `Population`, the crude
-#'   rate (`Crude`, `CrudeLower`, `CrudeUpper`) and the DSR (`DSR`,
-#'   `DSRLower`, `DSRUpper`). `dsr_age_specific()` returns the `by` columns,
-#'   `Sex`, `AgeGroup`, `AgeGroupName` (when `population` has it), `Events`,
-#'   `Population` and the rate (`Rate`, `RateLower`, `RateUpper`). Rates are
-#'   per `multiplier`. Events left out of the rates are counted in the
-#'   `"excluded"` attribute (columns `Reason` and `Events`) and reported in a
-#'   message.
+#'   rate (`Crude`, `CrudeLower`, `CrudeUpper`), the DSR (`DSR`, `DSRLower`,
+#'   `DSRUpper`) and `Suppressed`. `dsr_age_specific()` returns the `by`
+#'   columns, `Sex`, `AgeGroup`, `AgeGroupName` (when `population` has it),
+#'   `Events`, `Population`, the rate (`Rate`, `RateLower`, `RateUpper`) and
+#'   `Suppressed`. Rates are per `multiplier`. Events left out of the rates
+#'   are counted in the `"excluded"` attribute (columns `Reason` and `Events`)
+#'   and reported in a message.
 #'
 #' @details
 #' **Matching.** Events are matched to the population on every column the two
@@ -68,6 +70,12 @@
 #' the method of Dobson et al. (1991), which scales the exact Poisson limits of
 #' the total count by the variance of the DSR; a negative lower limit is set
 #' to 0. The DSR interval is `NA` when there are no events.
+#'
+#' **Suppression.** A row with fewer than `suppress` events, zero included,
+#' has `Suppressed` set to `TRUE` and its events and rates set to `NA`; the
+#' population is kept. Each row is judged on its own count, so a suppressed
+#' count can sometimes be worked out from other rows (persons less females,
+#' for example). Complementary suppression is not applied.
 #'
 #' @references
 #' Dobson AJ, Kuulasmaa K, Eberle E, Scherer J (1991). Confidence intervals
@@ -106,9 +114,10 @@
 #'
 dsr_calculate <- function(events, population, standard,
                           by = NULL, by_sex = FALSE,
-                          multiplier = 100000, conf_level = 0.95) {
+                          multiplier = 100000, conf_level = 0.95,
+                          suppress = 0) {
 
-  .dsr_check_args(multiplier, conf_level)
+  .dsr_check_args(multiplier, conf_level, suppress)
   .dsr_check_df(standard, "standard", c("AgeGroup", "StdPopValue"))
   if (anyDuplicated(standard$AgeGroup)) {
     stop("'standard' must have one row per AgeGroup.", call. = FALSE)
@@ -168,7 +177,7 @@ dsr_calculate <- function(events, population, standard,
             "group that has no population.")
   }
 
-  .dsr_report(out, st$excluded)
+  .dsr_report(.dsr_suppress(out, suppress), st$excluded)
 
 }
 
@@ -177,9 +186,10 @@ dsr_calculate <- function(events, population, standard,
 #' @export
 dsr_age_specific <- function(events, population,
                              by = NULL, by_sex = FALSE,
-                             multiplier = 100000, conf_level = 0.95) {
+                             multiplier = 100000, conf_level = 0.95,
+                             suppress = 0) {
 
-  .dsr_check_args(multiplier, conf_level)
+  .dsr_check_args(multiplier, conf_level, suppress)
 
   st <- .dsr_strata(events, population, by, by_sex)
   out <- st$data
@@ -203,8 +213,19 @@ dsr_age_specific <- function(events, population,
                     "Rate", "RateLower", "RateUpper")]
   rownames(out) <- NULL
 
-  .dsr_report(out, st$excluded)
+  .dsr_report(.dsr_suppress(out, suppress), st$excluded)
 
+}
+
+
+# Flags rows with fewer than `suppress` events and blanks their events and
+# rates (every column after Population)
+#' @noRd
+.dsr_suppress <- function(out, suppress) {
+  rates <- names(out)[-seq_len(match("Population", names(out)))]
+  out$Suppressed <- out$Events < suppress
+  out[out$Suppressed, c("Events", rates)] <- NA
+  out
 }
 
 
@@ -400,7 +421,7 @@ dsr_age_specific <- function(events, population,
 
 
 #' @noRd
-.dsr_check_args <- function(multiplier, conf_level) {
+.dsr_check_args <- function(multiplier, conf_level, suppress) {
   if (!is.numeric(multiplier) || length(multiplier) != 1 ||
       !is.finite(multiplier) || multiplier <= 0) {
     stop("'multiplier' must be a positive number.", call. = FALSE)
@@ -408,5 +429,9 @@ dsr_age_specific <- function(events, population,
   if (!is.numeric(conf_level) || length(conf_level) != 1 ||
       is.na(conf_level) || conf_level <= 0 || conf_level >= 1) {
     stop("'conf_level' must be a number between 0 and 1.", call. = FALSE)
+  }
+  if (!is.numeric(suppress) || length(suppress) != 1 ||
+      !is.finite(suppress) || suppress < 0) {
+    stop("'suppress' must be a number of events, 0 or more.", call. = FALSE)
   }
 }

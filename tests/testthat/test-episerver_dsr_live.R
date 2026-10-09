@@ -144,6 +144,72 @@ test_that("ACT rates for 2023 are complete and plausible", {
 
 })
 
+test_that("diagnosis codes select the events the R reading of the codes does", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+
+  # Distinct diagnoses of 2023 events with their counts, for checking the
+  # calculator's condition against dsr_code_matches() (helper-dsr.R)
+  diagnoses <- function(dataset, fields) {
+    ds <- .dsr_datasets[[dataset]]
+    db$query(.dsr_fill("SELECT {fields}, COUNT(*) AS n
+FROM Analysis.dbo.{table}
+WHERE {date} >= '20230101'
+  AND {date} < '20240101'
+  AND {icd10}
+GROUP BY {fields}",
+      fields = paste(fields, collapse = ", "), table = ds$table,
+      date = ds$date, icd10 = ds$icd10))
+  }
+  counted <- function(dataset, codes, diagnosis) {
+    s <- .dsr_spec(dataset, "AUS", "state", 2023, codes = codes,
+                   diagnosis = diagnosis)
+    sum(db$query(.dsr_sql_events(s))$Events)
+  }
+
+  checks <- list(
+    ED  = c("J45", "S00-S09.9", "T78.3 to T78.4"),
+    APC = c("C13-C15.45", "E10-E14", "I21")
+  )
+  for (dataset in names(checks)) {
+    codes <- .dsr_parse_codes(checks[[dataset]])
+    principal <- counted(dataset, checks[[dataset]], "principal")
+    any_diag  <- counted(dataset, checks[[dataset]], "all")
+
+    d <- diagnoses(dataset, "Diagnosis1")
+    expect_equal(principal, sum(d$n[dsr_code_matches(d$Diagnosis1, codes)]),
+                 label = paste(dataset, "principal"))
+    expect_gt(principal, 0)
+    expect_gte(any_diag, principal)
+    expect_lt(any_diag, sum(db$query(.dsr_sql_events(
+      .dsr_spec(dataset, "AUS", "state", 2023)))$Events))
+  }
+
+  # Every ED diagnosis field, checked the same way
+  d <- diagnoses("ED", paste0("Diagnosis", 1:3))
+  hit <- Reduce(`|`, lapply(d[paste0("Diagnosis", 1:3)], dsr_code_matches,
+                            codes = .dsr_parse_codes(checks$ED)))
+  expect_equal(counted("ED", checks$ED, "all"), sum(d$n[hit]))
+
+})
+
+test_that("ABS boundaries cover every area in the population tables", {
+
+  skip_if_no_episerver()
+  skip_if_no_abs()
+  db <- live_db()
+  cache <- withr::local_tempdir()
+
+  for (level in c("sa3", "sa2")) {
+    s <- .dsr_spec("ED", "ACT", level, 2023)
+    areas <- unique(db$query(.dsr_sql_population(s))$Area)
+    missing <- setdiff(areas, .dsr_boundaries(level, "ACT", cache = cache)$Area)
+    expect_equal(missing, character(0), label = level)
+  }
+
+})
+
 test_that("the app calculates against EpiServer", {
 
   skip_if_no_episerver()
@@ -162,6 +228,16 @@ test_that("the app calculates against EpiServer", {
     expect_null(r$error)
     expect_gt(nrow(r$summary), 0)
     expect_equal(nrow(age_results()), nrow(r$summary) * 18)
+
+    # Asthma in any diagnosis, with the usual suppression
+    total <- sum(r$summary$Events)
+    session$setInputs(codes = "J45", diagnosis = "all", suppress = 5)
+    session$setInputs(calculate = 2)
+    expect_null(rv$error)
+    r <- results()
+    expect_null(r$error)
+    expect_lt(sum(r$summary$Events, na.rm = TRUE), total)
+    expect_true(all(is.na(r$summary$Events) == r$summary$Suppressed))
   })
 
 })

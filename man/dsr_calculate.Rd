@@ -12,7 +12,8 @@ dsr_calculate(
   by = NULL,
   by_sex = FALSE,
   multiplier = 1e+05,
-  conf_level = 0.95
+  conf_level = 0.95,
+  suppress = 0
 )
 
 dsr_age_specific(
@@ -21,7 +22,8 @@ dsr_age_specific(
   by = NULL,
   by_sex = FALSE,
   multiplier = 1e+05,
-  conf_level = 0.95
+  conf_level = 0.95,
+  suppress = 0
 )
 }
 \arguments{
@@ -49,17 +51,20 @@ Default 100,000.}
 
 \item{conf_level}{Number between 0 and 1. Confidence level of the
 intervals. Default 0.95.}
+
+\item{suppress}{Number. Rows with fewer events than this are suppressed:
+their events and rates are not reported. Default 0, no suppression.}
 }
 \value{
 \code{dsr_calculate()} returns a data frame with the \code{by} columns, \code{Sex}
 (\code{"Male"}, \code{"Female"} or \code{"Persons"}), \code{Events}, \code{Population}, the crude
-rate (\code{Crude}, \code{CrudeLower}, \code{CrudeUpper}) and the DSR (\code{DSR},
-\code{DSRLower}, \code{DSRUpper}). \code{dsr_age_specific()} returns the \code{by} columns,
-\code{Sex}, \code{AgeGroup}, \code{AgeGroupName} (when \code{population} has it), \code{Events},
-\code{Population} and the rate (\code{Rate}, \code{RateLower}, \code{RateUpper}). Rates are
-per \code{multiplier}. Events left out of the rates are counted in the
-\code{"excluded"} attribute (columns \code{Reason} and \code{Events}) and reported in a
-message.
+rate (\code{Crude}, \code{CrudeLower}, \code{CrudeUpper}), the DSR (\code{DSR}, \code{DSRLower},
+\code{DSRUpper}) and \code{Suppressed}. \code{dsr_age_specific()} returns the \code{by}
+columns, \code{Sex}, \code{AgeGroup}, \code{AgeGroupName} (when \code{population} has it),
+\code{Events}, \code{Population}, the rate (\code{Rate}, \code{RateLower}, \code{RateUpper}) and
+\code{Suppressed}. Rates are per \code{multiplier}. Events left out of the rates
+are counted in the \code{"excluded"} attribute (columns \code{Reason} and \code{Events})
+and reported in a message.
 }
 \description{
 Calculates event counts, crude rates and directly age-standardised rates
@@ -101,6 +106,12 @@ limits for the count (Garwood, 1936), divided by the population. DSRs use
 the method of Dobson et al. (1991), which scales the exact Poisson limits of
 the total count by the variance of the DSR; a negative lower limit is set
 to 0. The DSR interval is \code{NA} when there are no events.
+
+\strong{Suppression.} A row with fewer than \code{suppress} events, zero included,
+has \code{Suppressed} set to \code{TRUE} and its events and rates set to \code{NA}; the
+population is kept. Each row is judged on its own count, so a suppressed
+count can sometimes be worked out from other rows (persons less females,
+for example). Complementary suppression is not applied.
 }
 \examples{
 events <- data.frame(
