@@ -4,6 +4,6 @@ Binding: addin_new_epi_document
 Interactive: true
 
 Name: Open Menu
-Description: Open the ACT Epidemiology menu. Choose how to launch the EpiServer browser and access other package tools.
+Description: Open the ACT Epidemiology menu. Choose how to launch the EpiServer browser or the DSR calculator.
 Binding: addin_browse
 Interactive: true
