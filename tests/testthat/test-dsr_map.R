@@ -148,6 +148,41 @@ test_that("field names are read from the layer", {
 
 })
 
+test_that("the ACT and surrounds take the ACT and the bordering SA3s", {
+
+  surrounds <- paste0(" OR sa2_code_2021 LIKE '", c("10102", "10103", "10106",
+                                                    "11302"), "%'",
+                      collapse = "")
+  layer <- fake_layer(
+    c("objectid", "sa2_code_2021", "sa2_name_2021", "state_code_2021"),
+    area_features(c("801011001", "101021007"), c("Acton", "Braidwood"),
+                  "sa2_code_2021", "sa2_name_2021")
+  )
+  local_mocked_bindings(.dsr_fetch_json = layer$fetch)
+  b <- .dsr_boundaries("sa2", "SURROUNDS", cache = NULL)
+  expect_equal(unique(b$Area), c("801011001", "101021007"))
+  expect_match(utils::URLdecode(layer$urls()[2]),
+               paste0("where=state_code_2021 = '8'", surrounds, "&"),
+               fixed = TRUE)
+
+  # States come from the SA3s: the ACT, and the NSW surrounds as one area
+  layer <- fake_layer(
+    c("objectid", "sa3_code_2021", "sa3_name_2021", "state_code_2021"),
+    area_features(c("80101", "80104", "10102"),
+                  c("Belconnen", "Gungahlin", "Queanbeyan"),
+                  "sa3_code_2021", "sa3_name_2021")
+  )
+  local_mocked_bindings(.dsr_fetch_json = layer$fetch)
+  b <- .dsr_boundaries("state", "SURROUNDS", cache = NULL)
+  expect_match(layer$urls()[1], "/ASGS2021/SA3/MapServer/0?f=json", fixed = TRUE)
+  expect_equal(unique(b$Area), c("ACT", "NSW (surrounds)"))
+  expect_equal(unique(b$Name), c("ACT", "NSW (surrounds)"))
+  expect_length(unique(b$group), 3)
+  expect_equal(.dsr_point_area(1.5, 0.5, b), "ACT")
+  expect_equal(.dsr_point_area(2.5, 0.5, b), "NSW (surrounds)")
+
+})
+
 test_that(".dsr_fetch_json raises the service's errors and failed downloads", {
 
   dir <- withr::local_tempdir()
@@ -271,5 +306,13 @@ test_that("ABS boundaries cover the ACT's areas and every state", {
 
   states <- .dsr_boundaries("state", "AUS", cache = cache)
   expect_setequal(unique(states$Area), unname(.dsr_states))
+
+  # The ACT and surrounds: the ACT's SA2s and the 18 SA2s of the four NSW SA3s
+  sa2 <- unique(.dsr_boundaries("sa2", "SURROUNDS", cache = cache)$Area)
+  nsw <- sa2[!startsWith(sa2, "8")]
+  expect_setequal(unique(substr(nsw, 1, 5)), names(.dsr_surrounds))
+  expect_length(nsw, 18)
+  expect_setequal(unique(.dsr_boundaries("state", "SURROUNDS", cache = cache)$Area),
+                  c("ACT", "NSW (surrounds)"))
 
 })

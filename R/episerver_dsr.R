@@ -25,8 +25,12 @@
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
-#' * *Population*: ACT residents, using the ACT population tables, or
-#'   Australian residents, using the Australian tables.
+#' * *Population*: ACT residents, using the ACT population tables; ACT and
+#'   surrounds; or Australian residents, using the Australian tables. ACT and
+#'   surrounds covers the ACT and the four NSW SA3s that border it
+#'   (Queanbeyan, Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with
+#'   their SA2s, and also uses the Australian tables. At state level it gives
+#'   two areas, the ACT and NSW (surrounds), each summed from its SA3s.
 #' * *Geographic level*: state or territory (`geo_STATE`), SA3
 #'   (`geo_SA3_2021`) or SA2 (`geo_SA2_2021`) of residence, with rates for
 #'   each area. Populations by 5-year age group are not available below SA2,
@@ -34,9 +38,15 @@
 #' * *Standard population*: any standard with 5-year age groups in
 #'   `Analysis.dbo.StandardPops`. The default is the Australian 2001 standard
 #'   population.
-#' * *Calendar years*: one row of results per year. The years offered are
-#'   those covered by both the event data and the population table, and a
-#'   year only partly covered by the event data is flagged.
+#' * *Calendar years*: one row of results per year, or per period when the
+#'   years are pooled. The years offered are those covered by both the event
+#'   data and the population table, and a year only partly covered by the
+#'   event data is flagged.
+#' * *Pool years*: pools the years into periods of 2 to 5 years, or into one
+#'   period of all the selected years, for areas or conditions with few
+#'   events. The number of years selected must be a multiple of the period
+#'   length. Events and populations are summed over the years of a period, so
+#'   the rates are per person-year.
 #' * *Male and female*: adds male and female rates to the rates for persons.
 #' * *Age-specific rates*: adds a table of rates by 5-year age group.
 #' * *Rate per*: 1,000, 10,000 or 100,000 population.
@@ -51,9 +61,11 @@
 #'   ICD-10 coded records are searched: ED records with an `ICD10AMEdition`
 #'   other than 99, and APC records with an `ICDVersion` of 10. With no codes
 #'   every event is counted.
-#' * *Search*: the principal diagnosis (`Diagnosis1`) or any diagnosis
-#'   (`Diagnosis1` to `Diagnosis3` in ED, `Diagnosis1` to `Diagnosis100` in
-#'   APC).
+#' * *Search*: for APC, the principal diagnosis (`Diagnosis1`) or any
+#'   diagnosis (`Diagnosis1` to `Diagnosis100`). ED always searches all four
+#'   of its diagnosis fields (`EDShortListCode` and `Diagnosis1` to
+#'   `Diagnosis3`), as `Diagnosis1` is recorded to 2020 and `EDShortListCode`
+#'   from 2013, so neither holds the principal diagnosis in every year.
 #'
 #' **Tables and map**
 #'
@@ -62,12 +74,12 @@
 #' Excel.
 #'
 #' The *Map* tab maps the age-standardised rate, crude rate or events of one
-#' year and sex by area. Australia-wide SA3 and SA2 maps open on the ACT and
-#' surrounding region; the view of Australia leaves out Christmas, Cocos
-#' (Keeling) and Norfolk Islands. Boundaries are the ASGS Edition 3 (2021) boundaries,
-#' downloaded from the ABS boundary service (`geo.abs.gov.au`) the first time
-#' a level is mapped and kept in the folder given by
-#' `tools::R_user_dir("actepir", "cache")`.
+#' year or period and sex by area. Australia-wide SA3 and SA2 maps open on
+#' the ACT and surrounding region; the view of Australia leaves out
+#' Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
+#' Edition 3 (2021) boundaries, downloaded from the ABS boundary service
+#' (`geo.abs.gov.au`) the first time a level is mapped and kept in the folder
+#' given by `tools::R_user_dir("actepir", "cache")`.
 #' *Copy map* copies the map as an image where the browser allows it; *PNG*
 #' and *PDF* download it.
 #'
@@ -79,7 +91,8 @@
 #' population tables (`ERP5_STE`, `ERP5_SA3` and `ERP5_SA2`, ACT or
 #' Australian) for the same year as the events. Area of residence comes from
 #' the geocoded `geo_` columns, on the ASGS 2021 boundaries the population
-#' tables use.
+#' tables use; for ACT and surrounds, the state comes from the SA3
+#' (`geo_SA3_2021`).
 #'
 #' Events with no geocoded residence, events in an area missing from the
 #' population table and events with no recorded age are left out of the
@@ -91,7 +104,8 @@
 #'
 #' The code button (*Copy Code* in background mode, *Insert Code* in
 #' foreground mode) gives R code containing the three SQL queries the
-#' calculator runs, including any diagnosis condition, and the
+#' calculator runs, including any diagnosis condition, the lines that assign
+#' each year to its period when the years are pooled, and the
 #' [dsr_calculate()] call, with the suppression threshold, that turns their
 #' results into the table shown. The code reproduces the results outside the
 #' calculator and can be adapted, for example by adding conditions to the
@@ -173,20 +187,46 @@ episerver_dsr_stop <- function() {
 # ── Definitions ─────────────────────────────────────────────────────────────
 
 # Event tables in Analysis.dbo: the date that sets the calendar year, the age
-# in years, the diagnosis fields (principal first) and the condition that
-# keeps ICD-10 coded records when diagnosis codes are searched. Older APC
-# records are coded in ICD-9, and ED records with ICD10AMEdition 99 are not
-# ICD-10, so codes such as V56.0 would otherwise match the wrong conditions.
+# in years, the diagnosis fields, whether the first of them is a principal
+# diagnosis, and the condition that keeps ICD-10 coded records when diagnosis
+# codes are searched. ED has no principal diagnosis field that spans the
+# years: Diagnosis1 is recorded to 2020 and EDShortListCode from 2013, alone
+# from 2021, and the two can differ, so ED always searches all four fields.
+# Older APC records are coded in ICD-9, and ED records with ICD10AMEdition 99
+# are not ICD-10, so codes such as V56.0 would otherwise match the wrong
+# conditions.
 .dsr_datasets <- list(
   ED  = list(table = "ED",  date = "PresentationDateTime", age = "AgeYrs",
              label = "ED presentations",
-             diagnoses = paste0("Diagnosis", 1:3),
+             diagnoses = c("EDShortListCode", paste0("Diagnosis", 1:3)),
+             principal = FALSE,
              icd10 = "COALESCE(ICD10AMEdition, 0) <> 99"),
   APC = list(table = "APC", date = "SeparationDate",       age = "AgeYears",
              label = "APC separations",
              diagnoses = paste0("Diagnosis", 1:100),
+             principal = TRUE,
              icd10 = "ICDVersion = 10")
 )
+
+# Populations: the choice offered, the wording in descriptions and the ERP5
+# tables used. The ACT and surrounds take their populations from the
+# Australian tables.
+.dsr_scopes <- list(
+  ACT       = list(label = "ACT residents", describe = "ACT residents",
+                   erp = "ACT"),
+  SURROUNDS = list(label = "ACT and surrounds",
+                   describe = "residents of the ACT and surrounds",
+                   erp = "AUS"),
+  AUS       = list(label = "Australian residents",
+                   describe = "Australian residents", erp = "AUS")
+)
+
+# The NSW SA3s (ASGS 2021) that share a border with the ACT. With the ACT they
+# make up the ACT and surrounds, at SA2 level too, as SA2 codes start with the
+# code of their SA3. At state level they form one area with this label.
+.dsr_surrounds <- c("10102" = "Queanbeyan", "10103" = "Snowy Mountains",
+                    "10106" = "Young - Yass", "11302" = "Tumut - Tumbarumba")
+.dsr_surrounds_label <- "NSW (surrounds)"
 
 # Geographic levels: the geo_ column holding the area of residence and the
 # level of the ERP5 population table. The ERP5 tables use ASGS 2021.
@@ -206,15 +246,18 @@ episerver_dsr_stop <- function() {
 # Validated calculator settings. Every value interpolated into SQL passes
 # through here: names are matched against the definitions above, numbers are
 # coerced to integer and diagnosis codes are parsed by .dsr_parse_codes().
+# `pool` pools the years into periods of that many years, which must divide
+# the range evenly.
 #' @noRd
 .dsr_spec <- function(dataset = "ED", scope = "ACT", level = "state",
                       years, standard = 101L, codes = NULL,
-                      diagnosis = "principal") {
+                      diagnosis = "principal", pool = 1L) {
 
   dataset   <- match.arg(dataset, names(.dsr_datasets))
-  scope     <- match.arg(scope, c("ACT", "AUS"))
+  scope     <- match.arg(scope, names(.dsr_scopes))
   level     <- match.arg(level, names(.dsr_levels))
   diagnosis <- match.arg(diagnosis, c("principal", "all"))
+  if (!.dsr_datasets[[dataset]]$principal) diagnosis <- "all"
   if (is.data.frame(codes)) codes <- codes$Label
   codes <- .dsr_parse_codes(codes)
 
@@ -231,8 +274,19 @@ episerver_dsr_stop <- function() {
     stop("'standard' must be a StdPopCode.", call. = FALSE)
   }
 
+  pool <- suppressWarnings(as.integer(pool))
+  if (length(pool) != 1 || is.na(pool) || pool < 1) {
+    stop("'pool' must be a whole number of years, 1 or more.", call. = FALSE)
+  }
+  n <- years[2] - years[1] + 1L
+  if (n %% pool != 0) {
+    stop(pool, "-year periods need a number of years that is a multiple of ",
+         pool, ": ", years[1], " to ", years[2], " is ", n,
+         if (n == 1) " year." else " years.", call. = FALSE)
+  }
+
   list(dataset = dataset, scope = scope, level = level, years = years,
-       standard = standard, codes = codes, diagnosis = diagnosis)
+       standard = standard, codes = codes, diagnosis = diagnosis, pool = pool)
 
 }
 
@@ -303,10 +357,36 @@ episerver_dsr_stop <- function() {
 }
 
 
-# Population table for the settings, e.g. ERP5_SA3_ACT
+# Population table for the settings, e.g. ERP5_SA3_ACT. The states of the ACT
+# and surrounds are summed from SA3s, as the surrounds are only part of NSW.
 #' @noRd
 .dsr_pop_table <- function(spec) {
-  paste0("ERP5_", .dsr_levels[[spec$level]]$erp, "_", spec$scope)
+  erp <- if (spec$scope == "SURROUNDS" && spec$level == "state") {
+    "SA3"
+  } else {
+    .dsr_levels[[spec$level]]$erp
+  }
+  paste0("ERP5_", erp, "_", .dsr_scopes[[spec$scope]]$erp)
+}
+
+
+# Pooled years: the column that holds the time in the results, and the label
+# of the period each year falls in, e.g. "2016-2018" for 3-year periods from
+# 2016
+#' @noRd
+.dsr_time <- function(spec) if (spec$pool > 1) "Period" else "Year"
+
+#' @noRd
+.dsr_period <- function(year, first, pool) {
+  start <- year - (year - first) %% pool
+  paste0(start, "-", start + pool - 1L)
+}
+
+# Adds the Period column to fetched events or population when years are pooled
+#' @noRd
+.dsr_pool <- function(df, spec) {
+  if (spec$pool > 1) df$Period <- .dsr_period(df$Year, spec$years[1], spec$pool)
+  df
 }
 
 
@@ -323,22 +403,12 @@ episerver_dsr_stop <- function() {
 
 # ── SQL ─────────────────────────────────────────────────────────────────────
 
-# Event counts by calendar year, sex, 5-year age group and area of residence.
-# For ACT residents, events with no recorded residence are kept so that they
-# can be counted and reported; dsr_calculate() leaves them out of the rates.
+# Event counts by calendar year, sex, 5-year age group and area of residence
 #' @noRd
 .dsr_sql_events <- function(spec) {
 
-  ds  <- .dsr_datasets[[spec$dataset]]
-  geo <- .dsr_levels[[spec$level]]$column
-
-  scope <- if (spec$scope == "ACT") {
-    # ASGS codes start with the state code, 8 for the ACT
-    in_act <- if (spec$level == "state") " = 'ACT'" else " LIKE '8%'"
-    paste0("\n      AND (", geo, in_act, " OR ", geo, " IS NULL)")
-  } else {
-    ""
-  }
+  ds   <- .dsr_datasets[[spec$dataset]]
+  area <- .dsr_sql_area(spec)
 
   .dsr_fill("SELECT Year, Sex, AgeGroup, Area, COUNT(*) AS Events
 FROM (
@@ -347,22 +417,60 @@ FROM (
            CASE WHEN {age} >= 85 THEN 18
                 WHEN {age} >= 0 THEN {age} / 5 + 1
            END AS AgeGroup,
-           {geo} AS Area
+           {area} AS Area
     FROM Analysis.dbo.{table}
     WHERE {date} >= '{from}0101'
       AND {date} < '{to}0101'{scope}{codes}
 ) AS e
 GROUP BY Year, Sex, AgeGroup, Area
 ORDER BY Year, Sex, AgeGroup, Area",
-    date = ds$date, age = ds$age, geo = geo, table = ds$table,
-    from = spec$years[1], to = spec$years[2] + 1L, scope = scope,
+    date = ds$date, age = ds$age, area = area$area, table = ds$table,
+    from = spec$years[1], to = spec$years[2] + 1L, scope = area$where,
     codes = .dsr_sql_codes(spec))
 
 }
 
 
+# Area of residence in the events query: the expression giving Area, and the
+# condition keeping the areas of the population. For the ACT and the ACT and
+# surrounds, events with no recorded residence are kept so that they can be
+# counted and reported; dsr_calculate() leaves them out of the rates. ASGS
+# codes start with the state code, 8 for the ACT, and SA2 codes start with
+# their SA3 code. The states of the ACT and surrounds come from the SA3.
+#' @noRd
+.dsr_sql_area <- function(spec) {
+
+  col  <- .dsr_levels[[spec$level]]$column
+  keep <- function(col, cond) {
+    paste0("\n      AND (", cond, " OR ", col, " IS NULL)")
+  }
+
+  if (spec$scope == "AUS") return(list(area = col, where = ""))
+
+  if (spec$scope == "ACT") {
+    in_act <- if (spec$level == "state") " = 'ACT'" else " LIKE '8%'"
+    return(list(area = col, where = keep(col, paste0(col, in_act))))
+  }
+
+  if (spec$level == "state") col <- .dsr_levels$sa3$column
+  sa3 <- if (spec$level == "sa2") paste0("LEFT(", col, ", 5)") else col
+  nsw <- paste0(sa3, " IN (",
+                paste0("'", names(.dsr_surrounds), "'", collapse = ", "), ")")
+  area <- if (spec$level == "state") {
+    paste0("CASE WHEN ", col, " LIKE '8%' THEN 'ACT'",
+           "\n                WHEN ", nsw, " THEN '", .dsr_surrounds_label, "'",
+           "\n           END")
+  } else {
+    col
+  }
+  list(area = area, where = keep(col, paste0(col, " LIKE '8%' OR ", nsw)))
+
+}
+
+
 # Condition keeping events with a diagnosis in the codes and ranges of the
-# settings, in the principal diagnosis or in any diagnosis field. Codes are
+# settings, in the principal diagnosis or in any diagnosis field (always any
+# for ED, which has no principal diagnosis field). Codes are
 # compared without dots or spaces. A range keeps codes from its first code up
 # to its last, plus every code that starts with the last; a single code keeps
 # every code that starts with it. Morphology codes (M8140/3) are skipped.
@@ -401,11 +509,32 @@ ORDER BY Year, Sex, AgeGroup, Area",
 }
 
 
-# Estimated resident population by year, sex, 5-year age group and area
+# Estimated resident population by year, sex, 5-year age group and area. The
+# ACT and surrounds select their SA3s and SA2s from the Australian tables, and
+# at state level sum the SA3s into the ACT and the NSW surrounds.
 #' @noRd
 .dsr_sql_population <- function(spec) {
 
-  if (spec$level == "state") {
+  population <- "ERPCount"
+  group      <- ""
+
+  if (spec$scope == "SURROUNDS") {
+    code   <- "CAST(EntityCode AS varchar(9))"
+    sa3    <- if (spec$level == "sa2") paste0("LEFT(", code, ", 5)") else code
+    nsw    <- paste0(sa3, " IN (",
+                     paste0("'", names(.dsr_surrounds), "'", collapse = ", "),
+                     ")")
+    entity <- paste0("\n  AND (", code, " LIKE '8%' OR ", nsw, ")")
+    if (spec$level == "state") {
+      area <- paste0("CASE WHEN ", code, " LIKE '8%' THEN 'ACT' ELSE '",
+                     .dsr_surrounds_label, "' END")
+      population <- "SUM(ERPCount)"
+      group <- paste0("\nGROUP BY ERPYear, SexCode, AgeGroup05Code, AgeGroup05Name,",
+                      "\n         ", area)
+    } else {
+      area <- code
+    }
+  } else if (spec$level == "state") {
     whens <- sprintf("WHEN %s THEN %-5s", names(.dsr_states),
                      paste0("'", .dsr_states, "'"))
     rows  <- split(whens, ceiling(seq_along(whens) / 3))
@@ -427,12 +556,12 @@ ORDER BY Year, Sex, AgeGroup, Area",
        AgeGroup05Code AS AgeGroup,
        AgeGroup05Name AS AgeGroupName,
        {area} AS Area,
-       ERPCount AS Population
+       {population} AS Population
 FROM Analysis.dbo.{table}
-WHERE ERPYear BETWEEN {from} AND {to}{entity}
+WHERE ERPYear BETWEEN {from} AND {to}{entity}{group}
 ORDER BY Year, Sex, AgeGroup, Area",
-    area = area, table = .dsr_pop_table(spec),
-    from = spec$years[1], to = spec$years[2], entity = entity)
+    area = area, population = population, table = .dsr_pop_table(spec),
+    from = spec$years[1], to = spec$years[2], entity = entity, group = group)
 
 }
 
@@ -540,12 +669,18 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 
 #' @noRd
 .dsr_describe <- function(spec, standard_name = NULL, years = TRUE) {
+  n <- spec$years[2] - spec$years[1] + 1L
   years <- if (!years) {
     NULL
-  } else if (spec$years[1] == spec$years[2]) {
+  } else if (n == 1) {
     paste0(", ", spec$years[1])
   } else {
-    paste0(", ", spec$years[1], " to ", spec$years[2])
+    paste0(", ", spec$years[1], " to ", spec$years[2],
+           if (spec$pool == n) {
+             " pooled"
+           } else if (spec$pool > 1) {
+             paste0(" in ", spec$pool, "-year periods")
+           })
   }
   level <- .dsr_levels[[spec$level]]$label
   if (spec$level == "state") level <- tolower(level)
@@ -562,7 +697,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   }
   paste0(
     .dsr_datasets[[spec$dataset]]$label, diagnosis, ", ",
-    if (spec$scope == "ACT") "ACT residents" else "Australian residents",
+    .dsr_scopes[[spec$scope]]$describe,
     ", by ", level, years,
     if (!is.null(standard_name)) paste0(", standardised to ", standard_name)
   )
@@ -576,11 +711,26 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
                       suppress = 0) {
 
   args <- paste0(
-    "  by = c(\"Year\", \"Area\"), by_sex = ", if (by_sex) "TRUE" else "FALSE",
+    "  by = c(\"", .dsr_time(spec), "\", \"Area\"), by_sex = ",
+    if (by_sex) "TRUE" else "FALSE",
     ", multiplier = ", format(multiplier, scientific = FALSE),
     if (suppress > 0) paste0(", suppress = ", format(suppress, scientific = FALSE)),
     "\n"
   )
+
+  # Same periods as .dsr_period()
+  pooling <- if (spec$pool > 1) {
+    paste0(
+      "# Pool the years into ", spec$pool, "-year periods from ",
+      spec$years[1], "\n",
+      "period <- function(year) {\n",
+      "  start <- year - (year - ", spec$years[1], ") %% ", spec$pool, "\n",
+      "  paste0(start, \"-\", start + ", spec$pool - 1L, ")\n",
+      "}\n",
+      "events$Period     <- period(events$Year)\n",
+      "population$Period <- period(population$Year)\n\n"
+    )
+  }
 
   paste0(
     "# DSR Calculator: ", .dsr_describe(spec, standard_name), "\n",
@@ -592,6 +742,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     "# Standard population\n",
     "standard <- DBI::dbGetQuery(conn, \"\n", .dsr_sql_standard(spec), "\n\")\n\n",
     "DBI::dbDisconnect(conn)\n\n",
+    pooling,
     "rates <- actepir::dsr_calculate(\n",
     "  events, population, standard,\n",
     args,
@@ -629,7 +780,8 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 .dsr_datatable <- function(df, area_label, multiplier, age = FALSE,
                            suppress = 0) {
 
-  id_cols <- c("Year", "Area", "Sex", if (age) "AgeGroupName")
+  time    <- if ("Period" %in% names(df)) "Period" else "Year"
+  id_cols <- c(time, "Area", "Sex", if (age) "AgeGroupName")
   if (age) {
     rate_cols  <- c("Rate", "RateLower", "RateUpper")
     rate_heads <- list("Age-specific rate (95% CI)")
@@ -640,7 +792,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   }
   df <- df[, c(id_cols, "Events", "Population", rate_cols)]
 
-  heads <- c(Year = "Year", Area = area_label, Sex = "Sex",
+  heads <- c(Year = "Year", Period = "Period", Area = area_label, Sex = "Sex",
              AgeGroupName = "Age group")[id_cols]
   sketch <- htmltools::tags$table(
     htmltools::tags$thead(
@@ -696,8 +848,9 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 #' @noRd
 .dsr_tsv <- function(df, area_label, multiplier, age = FALSE, suppress = 0) {
 
-  id_cols <- c("Year", "Area", "Sex", if (age) "AgeGroupName")
-  heads   <- c(Year = "Year", Area = area_label, Sex = "Sex",
+  time    <- if ("Period" %in% names(df)) "Period" else "Year"
+  id_cols <- c(time, "Area", "Sex", if (age) "AgeGroupName")
+  heads   <- c(Year = "Year", Period = "Period", Area = area_label, Sex = "Sex",
                AgeGroupName = "Age group")[id_cols]
   rates <- if (age) {
     c(Rate = "Age-specific rate", RateLower = "Lower 95% CI",
@@ -709,10 +862,13 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   }
   digits <- if (multiplier >= 100000) 1 else 2
 
-  # Excel reads age groups such as 05-09 as dates; an en dash keeps them text
+  # Excel reads age groups such as 05-09 as dates; an en dash keeps them,
+  # and periods such as 2016-2018, as text
   out <- lapply(id_cols, function(col) {
     x <- as.character(df[[col]])
-    if (col == "AgeGroupName") x <- gsub("-", "\u2013", x, fixed = TRUE)
+    if (col %in% c("AgeGroupName", "Period")) {
+      x <- gsub("-", "\u2013", x, fixed = TRUE)
+    }
     x
   })
   out <- c(out, list(
@@ -859,10 +1015,37 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         }
         .map-click { font-size: 12px; color: #333; min-height: 1.6em;
                      margin-top: 4px; }
+        .radio.disabled label { color: #999; }
       ")),
 
       # Clipboard handler for the code and table copy buttons
       .epi_copy_script(),
+
+      # A dataset without a principal diagnosis field (ED) searches every
+      # field: the principal option is disabled for it, and the last choice
+      # made for the other dataset comes back with that dataset
+      shiny::tags$script(shiny::HTML(sprintf("
+        (function() {
+          var none = %s, chosen = 'principal';
+          function sync() {
+            var principal = $('input[name=diagnosis][value=principal]');
+            var off = none.indexOf($('#dataset').val()) >= 0;
+            if (!principal.length || off === principal.prop('disabled')) return;
+            if (off) {
+              chosen = $('input[name=diagnosis]:checked').val() || chosen;
+              $('input[name=diagnosis][value=all]').prop('checked', true)
+                .trigger('change');
+            } else {
+              $('input[name=diagnosis][value=' + chosen + ']')
+                .prop('checked', true).trigger('change');
+            }
+            principal.prop('disabled', off).closest('.radio')
+              .toggleClass('disabled', off);
+          }
+          $(document).on('change', '#dataset', sync);
+          $(sync);
+        })();
+      ", jsonlite::toJSON(names(Filter(function(d) !d$principal, .dsr_datasets)))))),
 
       # Copy map: the plot is a PNG data URI, decoded and written to the
       # clipboard as an image within the click, where the browser allows it
@@ -904,7 +1087,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         ),
         shiny::selectInput(
           "scope", "Population",
-          choices = c("ACT residents" = "ACT", "Australian residents" = "AUS"),
+          choices = stats::setNames(
+            names(.dsr_scopes),
+            vapply(.dsr_scopes, `[[`, character(1), "label")
+          ),
           width = "100%"
         ),
         shiny::selectInput(
@@ -937,6 +1123,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::div(
           style = "flex: 1 1 0;",
           shiny::selectInput(
+            "pool", "Pool years",
+            choices = c("None" = "1", "2 years" = "2", "3 years" = "3",
+                        "4 years" = "4", "5 years" = "5",
+                        "All selected years" = "all"),
+            width = "100%"
+          )
+        ),
+        shiny::div(
+          style = "flex: 1 1 0;",
+          shiny::selectInput(
             "multiplier", "Rate per",
             choices  = c("1,000" = "1000", "10,000" = "10000",
                          "100,000" = "100000"),
@@ -952,6 +1148,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           )
         )
       ),
+      shiny::uiOutput("years_note"),
 
       shiny::div(
         class = "selector-row dsr-row",
@@ -1082,18 +1279,31 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }, error = function(e) conditionMessage(e))
     })
 
-    # Settings as entered; NULL while the years or codes are invalid
-    spec <- shiny::reactive({
+    # Years per period: "All selected years" pools the whole range
+    pool <- shiny::reactive({
+      if (is.null(input$pool)) return(1L)
+      if (input$pool == "all") return(as.integer(diff(input$years)) + 1L)
+      as.integer(input$pool)
+    })
+
+    # Settings as entered, and why they cannot be used if they cannot
+    settings <- shiny::reactive({
       shiny::req(input$dataset, input$scope, input$level, input$standard,
                  input$years)
       tryCatch(
-        .dsr_spec(input$dataset, input$scope, input$level, input$years,
-                  input$standard, codes = input$codes,
-                  diagnosis = if (is.null(input$diagnosis)) "principal"
-                              else input$diagnosis),
-        error = function(e) NULL
+        list(spec = .dsr_spec(input$dataset, input$scope, input$level,
+                              input$years, input$standard, codes = input$codes,
+                              diagnosis = if (is.null(input$diagnosis)) {
+                                "principal"
+                              } else {
+                                input$diagnosis
+                              },
+                              pool = pool()),
+             error = NULL),
+        error = function(e) list(spec = NULL, error = conditionMessage(e))
       )
     })
+    spec <- shiny::reactive(settings()$spec)
 
     # A cleared or negative threshold means no suppression, which the info
     # bar then states. Counts are whole numbers, so a fractional threshold is
@@ -1126,26 +1336,59 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       if (!is.null(err)) {
         return(shiny::div(class = "epi-note epi-error", err))
       }
+      dataset <- if (is.null(input$dataset)) "ED" else input$dataset
+      ds <- .dsr_datasets[[dataset]]
       shiny::div(
         class = "epi-note",
         "Leave empty for all events. A partial code such as J45 matches ",
         "every code that starts with it, and a range such as C13-C15.45 ",
-        "includes both ends. Only ICD-10 coded records are searched."
+        "includes both ends. Only ICD-10 coded records are searched.",
+        if (!ds$principal) {
+          paste0(" ", dataset, " searches all its diagnosis fields (",
+                 paste(ds$diagnoses, collapse = ", "), "), as none of them ",
+                 "holds the principal diagnosis in every year.")
+        }
       )
+    })
+
+    # The periods the years will be pooled into, or why they cannot be
+    output$years_note <- shiny::renderUI({
+      shiny::req(input$years, pool() > 1)
+      err <- tryCatch({
+        .dsr_spec(years = input$years, pool = pool())
+        NULL
+      }, error = function(e) conditionMessage(e))
+      if (!is.null(err)) {
+        return(shiny::div(class = "epi-note epi-error", err))
+      }
+      years   <- as.integer(input$years)
+      periods <- unique(.dsr_period(seq(years[1], years[2]), years[1], pool()))
+      shiny::div(class = "epi-note", paste0(
+        if (length(periods) == 1) "One period: " else
+          paste0(length(periods), " periods: "),
+        paste(periods, collapse = ", "), "."
+      ))
     })
 
     # ── Calculate: run the events and population queries ──────────────────
     shiny::observeEvent(input$calculate, {
-      s <- spec()
+      st <- settings()
+      s  <- st$spec
       if (is.null(s)) {
-        shiny::showNotification(
-          if (!is.null(codes_error())) "Correct the diagnosis codes first."
-          else "Choose a year range first.",
-          duration = 4, type = "warning"
-        )
+        shiny::showNotification(st$error, duration = 6, type = "warning")
         return(invisible(NULL))
       }
       rv$error <- NULL
+      # Settings that leave both queries unchanged, such as pooling, reuse the
+      # counts already fetched
+      f <- rv$fetched
+      if (!is.null(f) &&
+          identical(.dsr_sql_events(s), .dsr_sql_events(f$spec)) &&
+          identical(.dsr_sql_population(s), .dsr_sql_population(f$spec))) {
+        f$spec <- s
+        rv$fetched <- f
+        return(invisible(NULL))
+      }
       fetched <- tryCatch(
         shiny::withProgress(message = "Querying EpiServer", value = 0, {
           shiny::incProgress(0.1, detail = "events")
@@ -1176,15 +1419,19 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           stop("Standard population ", s$standard, " has no 5-year age groups.",
                call. = FALSE)
         }
-        mult    <- as.numeric(input$multiplier)
-        supp    <- suppress()
+        mult       <- as.numeric(input$multiplier)
+        supp       <- suppress()
+        events     <- .dsr_pool(f$events, s)
+        population <- .dsr_pool(f$population, s)
+        by         <- c(.dsr_time(s), "Area")
         summary <- suppressMessages(dsr_calculate(
-          f$events, f$population, standard,
-          by = c("Year", "Area"), by_sex = isTRUE(input$by_sex),
+          events, population, standard,
+          by = by, by_sex = isTRUE(input$by_sex),
           multiplier = mult, suppress = supp
         ))
-        list(spec = s, summary = summary, multiplier = mult, suppress = supp,
-             total = sum(f$events$Events), error = NULL)
+        list(spec = s, summary = summary, events = events,
+             population = population, by = by, multiplier = mult,
+             suppress = supp, total = sum(f$events$Events), error = NULL)
       }, error = function(e) list(error = conditionMessage(e)))
     })
 
@@ -1192,10 +1439,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     age_results <- shiny::reactive({
       r <- results()
       shiny::req(r, is.null(r$error))
-      f <- rv$fetched
       suppressMessages(dsr_age_specific(
-        f$events, f$population,
-        by = c("Year", "Area"), by_sex = isTRUE(input$by_sex),
+        r$events, r$population,
+        by = r$by, by_sex = isTRUE(input$by_sex),
         multiplier = r$multiplier, suppress = r$suppress
       ))
     })
@@ -1273,7 +1519,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
 
       now <- spec()
-      keys <- c("dataset", "scope", "level", "years", "codes", "diagnosis")
+      keys <- c("dataset", "scope", "level", "years", "codes", "diagnosis",
+                "pool")
       if (!is.null(now) && !identical(now[keys], s[keys])) {
         notes <- c(notes, list(shiny::p(class = "epi-warn",
           "The settings have changed: press Calculate to update the results."
@@ -1336,15 +1583,15 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # ── Map ────────────────────────────────────────────────────────────────
-    # Year and sex choices follow the results
+    # Year or period, and sex, choices follow the results
     shiny::observeEvent(results(), {
       r <- results()
       shiny::req(r, is.null(r$error))
-      years <- sort(unique(r$summary$Year), decreasing = TRUE)
+      times <- sort(unique(r$summary[[r$by[1]]]), decreasing = TRUE)
       sexes <- intersect(c("Persons", "Male", "Female"), unique(r$summary$Sex))
       shiny::updateSelectInput(
-        session, "map_year", choices = years,
-        selected = if (isTRUE(input$map_year %in% years)) input$map_year else years[1]
+        session, "map_year", label = r$by[1], choices = times,
+        selected = if (isTRUE(input$map_year %in% times)) input$map_year else times[1]
       )
       shiny::updateSelectInput(
         session, "map_sex", choices = sexes,
@@ -1355,12 +1602,12 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     # A state map of the ACT alone shows one area
     mappable <- function(s) !(s$scope == "ACT" && s$level == "state")
 
-    # Longitude and latitude limits of the map. Australian SA3 and SA2 maps
-    # open on the ACT and surrounding region. The view of Australia leaves
-    # out Christmas, Cocos (Keeling) and Norfolk Islands, which would shrink
-    # the mainland.
+    # Longitude and latitude limits of the map. The ACT, and the ACT and
+    # surrounds, show all their areas. Australian SA3 and SA2 maps open on the
+    # ACT and surrounding region. The view of Australia leaves out Christmas,
+    # Cocos (Keeling) and Norfolk Islands, which would shrink the mainland.
     map_view <- function(s) {
-      if (s$scope == "ACT") return(list())
+      if (s$scope != "AUS") return(list())
       if (s$level != "state" && !identical(input$map_extent, "all")) {
         return(list(xlim = c(147.6, 150.6), ylim = c(-37.1, -34.0)))
       }
@@ -1404,7 +1651,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       r <- results()
       shiny::req(r, is.null(r$error), input$map_year, input$map_sex,
                  input$map_value)
-      d <- r$summary[as.character(r$summary$Year) == input$map_year &
+      d <- r$summary[as.character(r$summary[[r$by[1]]]) == input$map_year &
                        r$summary$Sex == input$map_sex, ]
       list(r = r, rows = d,
            values = data.frame(Area = d$Area, Value = d[[input$map_value]],
@@ -1532,13 +1779,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     # ── Insert / copy code button ──────────────────────────────────────────
     shiny::observeEvent(input$insert_code, {
-      s <- spec()
+      st <- settings()
+      s  <- st$spec
       if (is.null(s)) {
-        shiny::showNotification(
-          if (!is.null(codes_error())) "Correct the diagnosis codes first."
-          else "Choose a year range first.",
-          duration = 3, type = "warning"
-        )
+        shiny::showNotification(st$error, duration = 6, type = "warning")
         return(invisible(NULL))
       }
       code <- .dsr_code(

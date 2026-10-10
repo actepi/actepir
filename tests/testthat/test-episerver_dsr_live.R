@@ -36,7 +36,8 @@ test_that("every events and population query runs and matches on area", {
   skip_if_no_episerver()
   db <- live_db()
 
-  grid <- expand.grid(dataset = c("ED", "APC"), scope = c("ACT", "AUS"),
+  grid <- expand.grid(dataset = c("ED", "APC"),
+                      scope = c("ACT", "SURROUNDS", "AUS"),
                       level = c("state", "sa3", "sa2"), stringsAsFactors = FALSE)
 
   for (i in seq_len(nrow(grid))) {
@@ -102,14 +103,16 @@ test_that("event date ranges and population years give a year range", {
 
   for (dataset in c("ED", "APC")) {
     dates <- db$query(.dsr_sql_dates(dataset))
-    for (level in c("state", "sa3", "sa2")) {
-      s   <- .dsr_spec(dataset, "ACT", level, 2023)
-      erp <- db$query(.dsr_sql_erp_years(s))
-      r   <- .dsr_year_range(dates$FirstDate, dates$LastDate,
-                             c(erp$FirstYear, erp$LastYear))
-      expect_false(is.null(r), label = paste(dataset, level))
-      expect_true(r$min <= r$default && r$default <= r$max,
-                  label = paste(dataset, level))
+    for (scope in c("ACT", "SURROUNDS")) {
+      for (level in c("state", "sa3", "sa2")) {
+        label <- paste(dataset, scope, level)
+        s   <- .dsr_spec(dataset, scope, level, 2023)
+        erp <- db$query(.dsr_sql_erp_years(s))
+        r   <- .dsr_year_range(dates$FirstDate, dates$LastDate,
+                               c(erp$FirstYear, erp$LastYear))
+        expect_false(is.null(r), label = label)
+        expect_true(r$min <= r$default && r$default <= r$max, label = label)
+      }
     }
   }
 
@@ -149,48 +152,79 @@ test_that("diagnosis codes select the events the R reading of the codes does", {
   skip_if_no_episerver()
   db <- live_db()
 
-  # Distinct diagnoses of 2023 events with their counts, for checking the
-  # calculator's condition against dsr_code_matches() (helper-dsr.R)
-  diagnoses <- function(dataset, fields) {
+  # Distinct diagnoses of a year's events with their counts, in the fields a
+  # principal diagnosis search covers, for checking the calculator's
+  # condition against dsr_code_matches() (helper-dsr.R)
+  diagnoses <- function(dataset, year) {
     ds <- .dsr_datasets[[dataset]]
+    fields <- if (ds$principal) ds$diagnoses[1] else ds$diagnoses
     db$query(.dsr_fill("SELECT {fields}, COUNT(*) AS n
 FROM Analysis.dbo.{table}
-WHERE {date} >= '20230101'
-  AND {date} < '20240101'
+WHERE {date} >= '{year}0101'
+  AND {date} < '{until}0101'
   AND {icd10}
 GROUP BY {fields}",
       fields = paste(fields, collapse = ", "), table = ds$table,
-      date = ds$date, icd10 = ds$icd10))
+      date = ds$date, year = year, until = year + 1L, icd10 = ds$icd10))
   }
-  counted <- function(dataset, codes, diagnosis) {
-    s <- .dsr_spec(dataset, "AUS", "state", 2023, codes = codes,
+  matched <- function(d, codes) {
+    fields <- setdiff(names(d), "n")
+    hit <- Reduce(`|`, lapply(d[fields], dsr_code_matches,
+                              codes = .dsr_parse_codes(codes)))
+    sum(d$n[hit])
+  }
+  counted <- function(dataset, year, codes = NULL, diagnosis = "all") {
+    s <- .dsr_spec(dataset, "AUS", "state", year, codes = codes,
                    diagnosis = diagnosis)
     sum(db$query(.dsr_sql_events(s))$Events)
   }
 
-  checks <- list(
-    ED  = c("J45", "S00-S09.9", "T78.3 to T78.4"),
-    APC = c("C13-C15.45", "E10-E14", "I21")
-  )
-  for (dataset in names(checks)) {
-    codes <- .dsr_parse_codes(checks[[dataset]])
-    principal <- counted(dataset, checks[[dataset]], "principal")
-    any_diag  <- counted(dataset, checks[[dataset]], "all")
+  # APC: the principal diagnosis, then any of its 100 fields
+  apc <- c("C13-C15.45", "E10-E14", "I21")
+  principal <- counted("APC", 2023L, apc, "principal")
+  expect_equal(principal, matched(diagnoses("APC", 2023L), apc))
+  expect_gt(principal, 0)
+  any_diag <- counted("APC", 2023L, apc, "all")
+  expect_gte(any_diag, principal)
+  expect_lt(any_diag, counted("APC", 2023L))
 
-    d <- diagnoses(dataset, "Diagnosis1")
-    expect_equal(principal, sum(d$n[dsr_code_matches(d$Diagnosis1, codes)]),
-                 label = paste(dataset, "principal"))
-    expect_gt(principal, 0)
-    expect_gte(any_diag, principal)
-    expect_lt(any_diag, sum(db$query(.dsr_sql_events(
-      .dsr_spec(dataset, "AUS", "state", 2023)))$Events))
+  # ED: all four fields, in 2019, when EDShortListCode and Diagnosis1 are both
+  # recorded, and in 2023, when only EDShortListCode is
+  ed <- c("J45", "S00-S09.9", "T78.3 to T78.4")
+  for (year in c(2019L, 2023L)) {
+    n <- counted("ED", year, ed)
+    expect_equal(n, matched(diagnoses("ED", year), ed),
+                 label = paste("ED", year))
+    expect_gt(n, 0)
+    expect_equal(counted("ED", year, ed, "principal"), n)
   }
 
-  # Every ED diagnosis field, checked the same way
-  d <- diagnoses("ED", paste0("Diagnosis", 1:3))
-  hit <- Reduce(`|`, lapply(d[paste0("Diagnosis", 1:3)], dsr_code_matches,
-                            codes = .dsr_parse_codes(checks$ED)))
-  expect_equal(counted("ED", checks$ED, "all"), sum(d$n[hit]))
+})
+
+test_that("the ACT and surrounds SA3s and SA2s are in the population tables", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+
+  found <- db$query(paste0(
+    "SELECT DISTINCT EntityCode FROM Analysis.dbo.ERP5_SA3_AUS ",
+    "WHERE EntityCode IN (", paste(names(.dsr_surrounds), collapse = ", "), ")"))
+  expect_setequal(as.character(found$EntityCode), names(.dsr_surrounds))
+
+  # ASGS 2021 has 18 SA2s in the four SA3s
+  pop <- function(level) {
+    db$query(.dsr_sql_population(.dsr_spec("ED", "SURROUNDS", level, 2023)))
+  }
+  sa2 <- pop("sa2")
+  expect_length(unique(sa2$Area[!startsWith(sa2$Area, "8")]), 18)
+
+  # At state level the ACT and the NSW surrounds each sum their SA3s
+  st  <- pop("state")
+  sa3 <- pop("sa3")
+  act <- startsWith(sa3$Area, "8")
+  expect_equal(sum(st$Population[st$Area == "ACT"]), sum(sa3$Population[act]))
+  expect_equal(sum(st$Population[st$Area == "NSW (surrounds)"]),
+               sum(sa3$Population[!act]))
 
 })
 
@@ -201,11 +235,13 @@ test_that("ABS boundaries cover every area in the population tables", {
   db <- live_db()
   cache <- withr::local_tempdir()
 
-  for (level in c("sa3", "sa2")) {
-    s <- .dsr_spec("ED", "ACT", level, 2023)
-    areas <- unique(db$query(.dsr_sql_population(s))$Area)
-    missing <- setdiff(areas, .dsr_boundaries(level, "ACT", cache = cache)$Area)
-    expect_equal(missing, character(0), label = level)
+  for (scope in c("ACT", "SURROUNDS")) {
+    for (level in c("sa3", "sa2")) {
+      s <- .dsr_spec("ED", scope, level, 2023)
+      areas <- unique(db$query(.dsr_sql_population(s))$Area)
+      missing <- setdiff(areas, .dsr_boundaries(level, scope, cache = cache)$Area)
+      expect_equal(missing, character(0), label = paste(scope, level))
+    }
   }
 
 })
@@ -238,6 +274,11 @@ test_that("the app calculates against EpiServer", {
     expect_null(r$error)
     expect_lt(sum(r$summary$Events, na.rm = TRUE), total)
     expect_true(all(is.na(r$summary$Events) == r$summary$Suppressed))
+
+    # Three years pooled into one period
+    session$setInputs(years = c(2021, 2023), pool = "3", calculate = 3)
+    expect_null(rv$error)
+    expect_equal(unique(results()$summary$Period), "2021-2023")
   })
 
 })

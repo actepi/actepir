@@ -12,17 +12,19 @@
 )
 
 
-# Boundaries of the areas at a level, for the ACT or Australia, as polygon
-# vertices: Area (the code the calculator uses, a state abbreviation at state
+# Boundaries of the areas at a level, for a population of the calculator, as
+# polygon vertices: Area (the code the calculator uses, or its label at state
 # level), Name, x and y (longitude and latitude), group (one per polygon) and
 # subgroup (one per ring, so holes draw as holes). Downloaded once from the
 # ABS, generalised to suit the map, and cached in `cache` when it is
-# writable.
+# writable. The states of the ACT and surrounds are drawn from their SA3s, as
+# the surrounds are only part of NSW.
 #' @noRd
 .dsr_boundaries <- function(level, scope, cache = .dsr_cache_dir()) {
 
   level <- match.arg(level, names(.dsr_boundary_layers))
-  scope <- match.arg(scope, c("ACT", "AUS"))
+  scope <- match.arg(scope, names(.dsr_scopes))
+  layer_level <- if (scope == "SURROUNDS" && level == "state") "sa3" else level
 
   file <- if (!is.null(cache)) {
     file.path(cache, sprintf("asgs2021_%s_%s_v1.rds", level, scope))
@@ -33,7 +35,7 @@
   }
 
   layer <- paste0(.dsr_abs_service, "/",
-                  .dsr_boundary_layers[[level]]$service, "/MapServer/0")
+                  .dsr_boundary_layers[[layer_level]]$service, "/MapServer/0")
 
   # Field names are read from the layer rather than assumed
   meta   <- .dsr_fetch_json(paste0(layer, "?f=json"))
@@ -47,13 +49,20 @@
     }
     hit[1]
   }
-  prefix <- .dsr_boundary_layers[[level]]$prefix
+  prefix <- .dsr_boundary_layers[[layer_level]]$prefix
   code   <- field(paste0("^", prefix, "_code(_2021|21)?$"))
   name   <- field(paste0("^", prefix, "_name(_2021|21)?$"))
-  where  <- if (scope == "ACT") {
-    paste0(field("^(state|ste)_code(_2021|21)?$"), " = '8'")
-  } else {
+  # SA2 codes start with the code of their SA3
+  where  <- if (scope == "AUS") {
     "1=1"
+  } else {
+    act <- paste0(field("^(state|ste)_code(_2021|21)?$"), " = '8'")
+    if (scope == "ACT") {
+      act
+    } else {
+      paste0(act, " OR ", paste0(code, " LIKE '", names(.dsr_surrounds), "%'",
+                                 collapse = " OR "))
+    }
   }
 
   # Object IDs first, then the features in batches: unlike result paging,
@@ -81,7 +90,13 @@
   }
 
   polys <- .dsr_geojson_polygons(features, code, name)
-  if (level == "state") polys$Area <- unname(.dsr_states[polys$Area])
+  if (level == "state" && scope == "SURROUNDS") {
+    polys$Area <- ifelse(startsWith(polys$Area, "8"), "ACT",
+                         .dsr_surrounds_label)
+    polys$Name <- polys$Area
+  } else if (level == "state") {
+    polys$Area <- unname(.dsr_states[polys$Area])
+  }
 
   if (!is.null(file)) try(saveRDS(polys, file), silent = TRUE)
   polys

@@ -68,14 +68,30 @@ fake_episerver <- function() {
   list(query = query, calls = function() calls)
 }
 
-all_specs <- function(years = 2023, codes = NULL, diagnosis = "principal") {
-  grid <- expand.grid(dataset = c("ED", "APC"), scope = c("ACT", "AUS"),
+all_specs <- function(years = 2023, codes = NULL, diagnosis = "principal",
+                      pool = 1) {
+  grid <- expand.grid(dataset = c("ED", "APC"),
+                      scope = c("ACT", "SURROUNDS", "AUS"),
                       level = c("state", "sa3", "sa2"), stringsAsFactors = FALSE)
   lapply(seq_len(nrow(grid)), function(i) {
     .dsr_spec(grid$dataset[i], grid$scope[i], grid$level[i], years,
-              codes = codes, diagnosis = diagnosis)
+              codes = codes, diagnosis = diagnosis, pool = pool)
   })
 }
+
+# The same events and populations for 2021 to 2023, a little higher each year
+fake_years <- function(df, col, step) {
+  do.call(rbind, lapply(2021:2023, function(y) {
+    df$Year  <- y
+    df[[col]] <- df[[col]] + step * (y - 2021L)
+    df
+  }))
+}
+events_3y     <- fake_years(fake_events, "Events", 1L)
+population_3y <- fake_years(fake_population, "Population", 100L)
+
+# The NSW SA3s of the ACT and surrounds, as the SQL lists them
+surrounds_sql <- "('10102', '10103', '10106', '11302')"
 
 # One-degree squares side by side from 149E 35S, one per area, as
 # .dsr_boundaries() returns them
@@ -96,8 +112,16 @@ test_that(".dsr_spec validates and normalises the settings", {
   s <- .dsr_spec("APC", "AUS", "sa2", 2023, "300")
   expect_equal(s, list(dataset = "APC", scope = "AUS", level = "sa2",
                        years = c(2023L, 2023L), standard = 300L,
-                       codes = .dsr_parse_codes(NULL), diagnosis = "principal"))
+                       codes = .dsr_parse_codes(NULL), diagnosis = "principal",
+                       pool = 1L))
   expect_equal(nrow(s$codes), 0)
+  expect_equal(.dsr_spec(scope = "SURROUNDS", years = 2023)$scope, "SURROUNDS")
+
+  # ED has no principal diagnosis field, so it always searches every field
+  expect_equal(.dsr_spec("ED", years = 2023, diagnosis = "principal")$diagnosis,
+               "all")
+  expect_equal(.dsr_spec("APC", years = 2023, diagnosis = "principal")$diagnosis,
+               "principal")
 
   s <- .dsr_spec(years = 2023, codes = c("j45", "C13-C15.45"), diagnosis = "all")
   expect_equal(s$codes$From, c("J45", "C13"))
@@ -114,6 +138,46 @@ test_that(".dsr_spec validates and normalises the settings", {
   expect_error(.dsr_spec(years = 2023, diagnosis = "secondary"))
   expect_error(.dsr_spec(years = 2023, codes = "J45' OR 1=1 --"),
                "is not an ICD-10 code")
+
+})
+
+test_that("pooled years must divide the range into equal periods", {
+
+  expect_equal(.dsr_spec(years = c(2015, 2023), pool = "3")$pool, 3L)
+  expect_equal(.dsr_spec(years = c(2019, 2023), pool = 5)$pool, 5L)
+  expect_error(.dsr_spec(years = c(2016, 2023), pool = 3),
+               paste("3-year periods need a number of years that is a multiple",
+                     "of 3: 2016 to 2023 is 8 years."), fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, pool = 2), "2023 to 2023 is 1 year.",
+               fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, pool = 0), "whole number of years")
+  expect_error(.dsr_spec(years = 2023, pool = "x"), "whole number of years")
+
+})
+
+test_that("pooled years fall into periods counted from the first year", {
+
+  expect_equal(.dsr_period(2015:2023, 2015, 3),
+               rep(c("2015-2017", "2018-2020", "2021-2023"), each = 3))
+  expect_equal(.dsr_period(2019:2023, 2019, 5), rep("2019-2023", 5))
+
+  s <- .dsr_spec(years = c(2021, 2024), pool = 2)
+  expect_equal(.dsr_time(s), "Period")
+  expect_equal(.dsr_pool(data.frame(Year = 2021:2024), s)$Period,
+               c("2021-2022", "2021-2022", "2023-2024", "2023-2024"))
+
+  s <- .dsr_spec(years = 2023)
+  expect_equal(.dsr_time(s), "Year")
+  expect_null(.dsr_pool(data.frame(Year = 2023), s)$Period)
+
+})
+
+test_that("the ACT and surrounds add the NSW SA3s on the ACT border", {
+
+  expect_equal(names(.dsr_surrounds), c("10102", "10103", "10106", "11302"))
+  expect_equal(unname(.dsr_surrounds),
+               c("Queanbeyan", "Snowy Mountains", "Young - Yass",
+                 "Tumut - Tumbarumba"))
 
 })
 
@@ -176,6 +240,14 @@ test_that(".dsr_pop_table names the ERP5 table for the settings", {
   expect_equal(.dsr_pop_table(.dsr_spec("ED", "AUS", "sa3", 2023)), "ERP5_SA3_AUS")
   expect_equal(.dsr_pop_table(.dsr_spec("APC", "ACT", "sa2", 2023)), "ERP5_SA2_ACT")
 
+  # The ACT and surrounds use the Australian tables, with states from SA3s
+  expect_equal(.dsr_pop_table(.dsr_spec("ED", "SURROUNDS", "state", 2023)),
+               "ERP5_SA3_AUS")
+  expect_equal(.dsr_pop_table(.dsr_spec("ED", "SURROUNDS", "sa3", 2023)),
+               "ERP5_SA3_AUS")
+  expect_equal(.dsr_pop_table(.dsr_spec("ED", "SURROUNDS", "sa2", 2023)),
+               "ERP5_SA2_AUS")
+
 })
 
 # ── SQL ─────────────────────────────────────────────────────────────────────
@@ -222,18 +294,44 @@ test_that("events SQL keeps ACT residents and unrecorded residence for the ACT",
 
 })
 
+test_that("events SQL keeps the ACT and surrounds, states from the SA3", {
+
+  sa3 <- .dsr_sql_events(.dsr_spec("ED", "SURROUNDS", "sa3", 2023))
+  expect_match(sa3, "geo_SA3_2021 AS Area", fixed = TRUE)
+  expect_match(sa3, paste0("(geo_SA3_2021 LIKE '8%' OR geo_SA3_2021 IN ",
+                           surrounds_sql, " OR geo_SA3_2021 IS NULL)"),
+               fixed = TRUE)
+
+  sa2 <- .dsr_sql_events(.dsr_spec("ED", "SURROUNDS", "sa2", 2023))
+  expect_match(sa2, "geo_SA2_2021 AS Area", fixed = TRUE)
+  expect_match(sa2, paste0("(geo_SA2_2021 LIKE '8%' OR LEFT(geo_SA2_2021, 5) IN ",
+                           surrounds_sql, " OR geo_SA2_2021 IS NULL)"),
+               fixed = TRUE)
+
+  st <- .dsr_sql_events(.dsr_spec("ED", "SURROUNDS", "state", 2023))
+  expect_match(st, paste0(
+    "CASE WHEN geo_SA3_2021 LIKE '8%' THEN 'ACT'\n",
+    "                WHEN geo_SA3_2021 IN ", surrounds_sql,
+    " THEN 'NSW (surrounds)'\n           END AS Area"), fixed = TRUE)
+  expect_no_match(st, "geo_STATE", fixed = TRUE)
+
+})
+
 test_that("diagnosis SQL searches the principal or every diagnosis field", {
 
-  ed <- .dsr_sql_events(.dsr_spec("ED", "ACT", "state", 2023, codes = "J45"))
+  # ED searches its four diagnosis fields even when asked for the principal
+  ed <- .dsr_sql_events(.dsr_spec("ED", "ACT", "state", 2023, codes = "J45",
+                                  diagnosis = "principal"))
   expect_match(ed, "AND COALESCE(ICD10AMEdition, 0) <> 99", fixed = TRUE)
-  expect_match(ed, "FROM (VALUES (Diagnosis1)) AS d (Code)", fixed = TRUE)
+  expect_match(ed, paste0("FROM (VALUES (EDShortListCode), (Diagnosis1), ",
+                          "(Diagnosis2), (Diagnosis3)) AS d (Code)"),
+               fixed = TRUE)
   expect_match(ed, "c.Code LIKE 'J45%'", fixed = TRUE)
   expect_match(ed, "c.Code NOT LIKE '%/%'", fixed = TRUE)
 
-  ed_all <- .dsr_sql_codes(.dsr_spec("ED", years = 2023, codes = "J45",
-                                     diagnosis = "all"))
-  fields <- regmatches(ed_all, gregexpr("\\(Diagnosis[0-9]+\\)", ed_all))[[1]]
-  expect_equal(fields, paste0("(Diagnosis", 1:3, ")"))
+  apc <- .dsr_sql_events(.dsr_spec("APC", "ACT", "state", 2023, codes = "J45",
+                                   diagnosis = "principal"))
+  expect_match(apc, "FROM (VALUES (Diagnosis1)) AS d (Code)", fixed = TRUE)
 
   apc <- .dsr_sql_codes(.dsr_spec("APC", years = 2023,
                                   codes = c("C13-C15.45", "J45"),
@@ -270,6 +368,27 @@ test_that("population SQL reads the ERP5 table for the same years", {
 
 })
 
+test_that("population SQL selects the ACT and surrounds from the Australian tables", {
+
+  code <- "CAST(EntityCode AS varchar(9))"
+  sa2 <- .dsr_sql_population(.dsr_spec("ED", "SURROUNDS", "sa2", 2023))
+  expect_match(sa2, "FROM Analysis.dbo.ERP5_SA2_AUS", fixed = TRUE)
+  expect_match(sa2, paste0("AND (", code, " LIKE '8%' OR LEFT(", code, ", 5) IN ",
+                           surrounds_sql, ")"), fixed = TRUE)
+  expect_no_match(sa2, "GROUP BY", fixed = TRUE)
+
+  # States: the ACT and the NSW surrounds, each summed from its SA3s
+  st <- .dsr_sql_population(.dsr_spec("ED", "SURROUNDS", "state", 2023))
+  area <- paste0("CASE WHEN ", code, " LIKE '8%' THEN 'ACT' ELSE ",
+                 "'NSW (surrounds)' END")
+  expect_match(st, "FROM Analysis.dbo.ERP5_SA3_AUS", fixed = TRUE)
+  expect_match(st, paste0(area, " AS Area"), fixed = TRUE)
+  expect_match(st, "SUM(ERPCount) AS Population", fixed = TRUE)
+  expect_match(st, paste0("GROUP BY ERPYear, SexCode, AgeGroup05Code, ",
+                          "AgeGroup05Name,\n         ", area), fixed = TRUE)
+
+})
+
 test_that("standard SQL selects the 5-year age groups of one standard", {
 
   sql <- .dsr_sql_standard(.dsr_spec(years = 2023, standard = 300))
@@ -280,8 +399,9 @@ test_that("standard SQL selects the 5-year age groups of one standard", {
 
 test_that("every SQL statement is complete and safe to embed in R code", {
 
-  coded <- all_specs(codes = c("C13-C15.45", "E18.3 to E18.78", "J45"),
-                     diagnosis = "all")
+  coded <- c(all_specs(codes = c("C13-C15.45", "E18.3 to E18.78", "J45"),
+                       diagnosis = "all"),
+             all_specs(codes = "J45", diagnosis = "principal"))
   sqls <- c(
     unlist(lapply(all_specs(), function(s) {
       c(.dsr_sql_events(s), .dsr_sql_population(s), .dsr_sql_standard(s),
@@ -354,6 +474,7 @@ test_that(".dsr_partial_years flags years the events only partly cover", {
 test_that("the copied code parses and embeds the calculator's SQL", {
 
   specs <- c(all_specs(c(2019, 2023)),
+             all_specs(c(2015, 2023), pool = 3),
              all_specs(2023, codes = c("C13-C15.45", "J45"), diagnosis = "all"))
   for (s in specs) {
     code <- .dsr_code(s, by_sex = TRUE, age_specific = TRUE, suppress = 5)
@@ -386,6 +507,21 @@ test_that("the copied code follows the display options", {
                                diagnosis = "all"))
   expect_match(coded, "^# DSR Calculator: APC separations, any diagnosis J45,")
 
+  pooled <- .dsr_code(.dsr_spec("ED", "SURROUNDS", "sa3", c(2015, 2023),
+                                pool = 3))
+  expect_match(pooled, paste0(
+    "^# DSR Calculator: ED presentations, residents of the ACT and surrounds, ",
+    "by SA3, 2015 to 2023 in 3-year periods"))
+  expect_match(pooled, paste0(
+    "period <- function(year) {\n",
+    "  start <- year - (year - 2015) %% 3\n",
+    "  paste0(start, \"-\", start + 2)\n",
+    "}\n",
+    "events$Period     <- period(events$Year)\n",
+    "population$Period <- period(population$Year)\n"), fixed = TRUE)
+  expect_match(pooled, "by = c(\"Period\", \"Area\")", fixed = TRUE)
+  expect_no_match(plain, "Period", fixed = TRUE)
+
 })
 
 test_that("running the copied code reproduces dsr_calculate()", {
@@ -415,6 +551,38 @@ test_that("running the copied code reproduces dsr_calculate()", {
 
 })
 
+test_that("running pooled copied code gives rates per person-year", {
+
+  query <- function(sql) {
+    if (grepl("AS Events", sql, fixed = TRUE)) return(events_3y)
+    if (grepl("AS Population", sql, fixed = TRUE)) return(population_3y)
+    fake_episerver()$query(sql)
+  }
+  code <- .dsr_code(.dsr_spec("ED", "ACT", "state", c(2021, 2023), pool = 3),
+                    by_sex = TRUE, age_specific = TRUE)
+  code <- gsub("actepir::episerver_connect", "fake_connect", code, fixed = TRUE)
+  code <- gsub("DBI::dbGetQuery", "fake_get", code, fixed = TRUE)
+  code <- gsub("DBI::dbDisconnect", "fake_disconnect", code, fixed = TRUE)
+
+  env <- new.env()
+  env$fake_connect    <- function() "conn"
+  env$fake_get        <- function(conn, sql) query(sql)
+  env$fake_disconnect <- function(conn) invisible(TRUE)
+  suppressMessages(eval(parse(text = code), envir = env))
+
+  expect_equal(env$rates$Period, rep("2021-2023", 3))
+  expect_equal(unique(env$age_rates$Period), "2021-2023")
+
+  # Each year's events meet that year's population, then events and
+  # populations are summed over the period: the same as leaving Year out
+  pooled <- suppressMessages(dsr_calculate(events_3y, population_3y,
+                                           fake_standard, by = "Area",
+                                           by_sex = TRUE))
+  expect_equal(env$rates[names(pooled)[-1]], pooled[-1], ignore_attr = TRUE)
+  expect_equal(env$rates$Population[3], sum(population_3y$Population))
+
+})
+
 # ── Display ─────────────────────────────────────────────────────────────────
 
 rates_df <- data.frame(
@@ -431,6 +599,13 @@ test_that(".dsr_describe can leave out the years", {
   expect_equal(.dsr_describe(s), "ED presentations, ACT residents, by SA3, 2019 to 2023")
   expect_equal(.dsr_describe(s, "Australia (2001)", years = FALSE),
                "ED presentations, ACT residents, by SA3, standardised to Australia (2001)")
+
+  expect_equal(
+    .dsr_describe(.dsr_spec("ED", "SURROUNDS", "sa2", c(2015, 2023), pool = 3)),
+    "ED presentations, residents of the ACT and surrounds, by SA2, 2015 to 2023 in 3-year periods"
+  )
+  expect_equal(.dsr_describe(.dsr_spec(years = c(2019, 2023), pool = 5)),
+               "ED presentations, ACT residents, by state or territory, 2019 to 2023 pooled")
 
 })
 
@@ -466,6 +641,14 @@ test_that("tables copy as tab-separated text with suppressed counts marked", {
     paste("2023", "ACT", "Male", "00\u201304", "3", "20000", "0.15", "0.03",
           "0.44", sep = "\t")
   ))
+
+  # Pooled results have a Period column, also written with an en dash
+  pooled <- data.frame(Period = "2021-2023", rates_df[-1])
+  lines <- strsplit(.dsr_tsv(pooled, "SA3", 100000, suppress = 5), "\n",
+                    fixed = TRUE)[[1]]
+  expect_match(lines[1], "^Period\tSA3\tSex\t")
+  expect_match(lines[3], "^2021\u20132023\t80103\tPersons\t1234\t")
+  expect_equal(names(.dsr_datatable(pooled, "SA3", 100000)$x$data)[1], "Period")
 
 })
 
@@ -721,6 +904,104 @@ test_that("the app explains a map it cannot draw", {
     note <- strip_html(output$map_note$html)
     expect_match(note, "could not be downloaded from the ABS")
     expect_match(note, "Could not resolve host: geo.abs.gov.au", fixed = TRUE)
+  })
+
+})
+
+test_that("the app pools years and reuses the counts when only pooling changes", {
+
+  calls <- character(0)
+  query <- function(sql) {
+    calls <<- c(calls, sql)
+    if (grepl("AS Events", sql, fixed = TRUE)) return(events_3y)
+    if (grepl("AS Population", sql, fixed = TRUE)) return(population_3y)
+    fake_episerver()$query(sql)
+  }
+  n_events <- function() sum(grepl("AS Events", calls, fixed = TRUE))
+  app <- episerver_dsr_app(query = query)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2021, 2023),
+                      multiplier = "100000", pool = "3")
+    expect_match(strip_html(output$years_note$html), "One period: 2021-2023.",
+                 fixed = TRUE)
+    session$setInputs(calculate = 1)
+
+    r <- results()
+    expect_equal(r$by, c("Period", "Area"))
+    expect_equal(r$summary$Period, "2021-2023")
+    expect_match(strip_html(output$info_bar$html), "2021 to 2023 pooled")
+    expect_equal(n_events(), 1)
+
+    # Back to single years: the same queries, so the counts are reused
+    session$setInputs(pool = "1")
+    expect_match(strip_html(output$info_bar$html), "settings have changed")
+    session$setInputs(calculate = 2)
+    expect_equal(results()$summary$Year, 2021:2023)
+    expect_equal(n_events(), 1)
+
+    # Three years do not make 2-year periods
+    session$setInputs(pool = "2")
+    expect_null(spec())
+    expect_match(strip_html(output$years_note$html),
+                 "2-year periods need a number of years that is a multiple of 2")
+    session$setInputs(calculate = 3)
+    expect_equal(results()$summary$Year, 2021:2023)
+
+    session$setInputs(pool = "all", calculate = 4)
+    expect_equal(results()$summary$Period, "2021-2023")
+    expect_equal(n_events(), 1)
+  })
+
+})
+
+test_that("the app searches every ED diagnosis field", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", codes = "J45",
+                      diagnosis = "principal")
+    expect_match(strip_html(output$codes_note$html), paste0(
+      "ED searches all its diagnosis fields (EDShortListCode, Diagnosis1, ",
+      "Diagnosis2, Diagnosis3)"), fixed = TRUE)
+    session$setInputs(calculate = 1)
+    sql <- grep("AS Events", fake$calls(), value = TRUE, fixed = TRUE)
+    expect_match(sql, "(EDShortListCode), (Diagnosis1), (Diagnosis2), (Diagnosis3)",
+                 fixed = TRUE)
+    expect_match(strip_html(output$info_bar$html), "any diagnosis J45")
+
+    session$setInputs(dataset = "APC")
+    expect_no_match(strip_html(output$codes_note$html), "ED searches")
+  })
+
+})
+
+test_that("the app maps the ACT and surrounds by state", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  requested <- NULL
+  local_mocked_bindings(.dsr_boundaries = function(level, scope, ...) {
+    requested <<- c(requested, paste(level, scope))
+    square_polys(c("ACT", "NSW (surrounds)"))
+  })
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "SURROUNDS", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5)
+    session$setInputs(calculate = 1)
+    session$setInputs(map_value = "DSR", map_year = "2023", map_sex = "Persons")
+    expect_match(strip_html(output$map_note$html), "Click an area")
+    p <- map_plot()
+    expect_equal(sort(unique(p$data$Area)), c("ACT", "NSW (surrounds)"))
+    expect_null(p$coordinates$limits$x)
+    expect_equal(requested, "state SURROUNDS")
   })
 
 })

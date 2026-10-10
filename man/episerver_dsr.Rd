@@ -76,8 +76,12 @@ Epidemiology menu in the RStudio Addins menu.
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
 of \code{SeparationDate}.
-\item \emph{Population}: ACT residents, using the ACT population tables, or
-Australian residents, using the Australian tables.
+\item \emph{Population}: ACT residents, using the ACT population tables; ACT and
+surrounds; or Australian residents, using the Australian tables. ACT and
+surrounds covers the ACT and the four NSW SA3s that border it
+(Queanbeyan, Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with
+their SA2s, and also uses the Australian tables. At state level it gives
+two areas, the ACT and NSW (surrounds), each summed from its SA3s.
 \item \emph{Geographic level}: state or territory (\code{geo_STATE}), SA3
 (\code{geo_SA3_2021}) or SA2 (\code{geo_SA2_2021}) of residence, with rates for
 each area. Populations by 5-year age group are not available below SA2,
@@ -85,9 +89,15 @@ so SA1 and mesh blocks are not offered.
 \item \emph{Standard population}: any standard with 5-year age groups in
 \code{Analysis.dbo.StandardPops}. The default is the Australian 2001 standard
 population.
-\item \emph{Calendar years}: one row of results per year. The years offered are
-those covered by both the event data and the population table, and a
-year only partly covered by the event data is flagged.
+\item \emph{Calendar years}: one row of results per year, or per period when the
+years are pooled. The years offered are those covered by both the event
+data and the population table, and a year only partly covered by the
+event data is flagged.
+\item \emph{Pool years}: pools the years into periods of 2 to 5 years, or into one
+period of all the selected years, for areas or conditions with few
+events. The number of years selected must be a multiple of the period
+length. Events and populations are summed over the years of a period, so
+the rates are per person-year.
 \item \emph{Male and female}: adds male and female rates to the rates for persons.
 \item \emph{Age-specific rates}: adds a table of rates by 5-year age group.
 \item \emph{Rate per}: 1,000, 10,000 or 100,000 population.
@@ -102,9 +112,11 @@ code that starts with the last. Dots and case do not matter. Only
 ICD-10 coded records are searched: ED records with an \code{ICD10AMEdition}
 other than 99, and APC records with an \code{ICDVersion} of 10. With no codes
 every event is counted.
-\item \emph{Search}: the principal diagnosis (\code{Diagnosis1}) or any diagnosis
-(\code{Diagnosis1} to \code{Diagnosis3} in ED, \code{Diagnosis1} to \code{Diagnosis100} in
-APC).
+\item \emph{Search}: for APC, the principal diagnosis (\code{Diagnosis1}) or any
+diagnosis (\code{Diagnosis1} to \code{Diagnosis100}). ED always searches all four
+of its diagnosis fields (\code{EDShortListCode} and \code{Diagnosis1} to
+\code{Diagnosis3}), as \code{Diagnosis1} is recorded to 2020 and \code{EDShortListCode}
+from 2013, so neither holds the principal diagnosis in every year.
 }
 
 \strong{Tables and map}
@@ -114,12 +126,12 @@ rates. \emph{Copy table} copies a table as tab-separated text that pastes into
 Excel.
 
 The \emph{Map} tab maps the age-standardised rate, crude rate or events of one
-year and sex by area. Australia-wide SA3 and SA2 maps open on the ACT and
-surrounding region; the view of Australia leaves out Christmas, Cocos
-(Keeling) and Norfolk Islands. Boundaries are the ASGS Edition 3 (2021) boundaries,
-downloaded from the ABS boundary service (\code{geo.abs.gov.au}) the first time
-a level is mapped and kept in the folder given by
-\code{tools::R_user_dir("actepir", "cache")}.
+year or period and sex by area. Australia-wide SA3 and SA2 maps open on
+the ACT and surrounding region; the view of Australia leaves out
+Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
+Edition 3 (2021) boundaries, downloaded from the ABS boundary service
+(\code{geo.abs.gov.au}) the first time a level is mapped and kept in the folder
+given by \code{tools::R_user_dir("actepir", "cache")}.
 \emph{Copy map} copies the map as an image where the browser allows it; \emph{PNG}
 and \emph{PDF} download it.
 
@@ -131,7 +143,8 @@ population tables. Populations come from the 5-year estimated resident
 population tables (\code{ERP5_STE}, \code{ERP5_SA3} and \code{ERP5_SA2}, ACT or
 Australian) for the same year as the events. Area of residence comes from
 the geocoded \code{geo_} columns, on the ASGS 2021 boundaries the population
-tables use.
+tables use; for ACT and surrounds, the state comes from the SA3
+(\code{geo_SA3_2021}).
 
 Events with no geocoded residence, events in an area missing from the
 population table and events with no recorded age are left out of the
@@ -143,7 +156,8 @@ calculated.
 
 The code button (\emph{Copy Code} in background mode, \emph{Insert Code} in
 foreground mode) gives R code containing the three SQL queries the
-calculator runs, including any diagnosis condition, and the
+calculator runs, including any diagnosis condition, the lines that assign
+each year to its period when the years are pooled, and the
 \code{\link[=dsr_calculate]{dsr_calculate()}} call, with the suppression threshold, that turns their
 results into the table shown. The code reproduces the results outside the
 calculator and can be adapted, for example by adding conditions to the
