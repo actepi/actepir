@@ -6,9 +6,10 @@
 #' separations (APC). It queries EpiServer for event counts by calendar year,
 #' sex, 5-year age group and area of residence, matches them to the estimated
 #' resident population of the same year, and standardises them to a chosen
-#' standard population. Events can be limited to ICD-10 diagnosis codes. It
-#' shows counts, crude rates and DSRs, optionally with age-specific rates,
-#' maps them by area, and copies R code that reproduces the results.
+#' standard population. Events can be limited to ICD-10 diagnosis codes and
+#' rates to an age range. It shows counts, crude rates and DSRs, optionally
+#' with age-specific rates, maps them by area, and copies R code that
+#' reproduces the results.
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
 #' default so that the console stays free, and it can be opened from the ACT
@@ -33,22 +34,33 @@
 #'   two areas, the ACT and NSW (surrounds), each summed from its SA3s.
 #' * *Geographic level*: state or territory (`geo_STATE`), SA3
 #'   (`geo_SA3_2021`) or SA2 (`geo_SA2_2021`) of residence, with rates for
-#'   each area. Populations by 5-year age group are not available below SA2,
-#'   so SA1 and mesh blocks are not offered.
+#'   each area. SA3s and SA2s are ASGS 2021 areas (see **Data**). Populations
+#'   by 5-year age group are not available below SA2, so SA1 and mesh blocks
+#'   are not offered.
 #' * *Standard population*: any standard with 5-year age groups in
 #'   `Analysis.dbo.StandardPops`. The default is the Australian 2001 standard
 #'   population.
 #' * *Calendar years*: one row of results per year, or per period when the
 #'   years are pooled. The years offered are those covered by both the event
 #'   data and the population table, and a year only partly covered by the
-#'   event data is flagged.
+#'   event data is flagged. The slider starts on three years: the latest year
+#'   offered that the event data cover in full, and the two before it.
 #' * *Pool years*: pools the years into periods of 2 to 5 years, or into one
 #'   period of all the selected years, for areas or conditions with few
 #'   events. The number of years selected must be a multiple of the period
 #'   length. Events and populations are summed over the years of a period, so
 #'   the rates are per person-year.
+#' * *Ages*: limits the rates to a range of 5-year age groups, for example
+#'   under 65 (0-4 to 60-64), under 75 or 35 to 74. The default is all ages.
+#'   Events and populations outside the range are left out, and the DSR is
+#'   standardised within the range: each age group in it is weighted by its
+#'   share of the standard population of the range, so the weights sum to 1.
+#'   The crude rate is the events in the range divided by the population in
+#'   the range. Rates are per population of those ages, and can be compared
+#'   only with rates for the same ages and standard population.
 #' * *Male and female*: adds male and female rates to the rates for persons.
-#' * *Age-specific rates*: adds a table of rates by 5-year age group.
+#' * *Age-specific rates*: adds a table of rates by 5-year age group, for the
+#'   ages chosen.
 #' * *Rate per*: 1,000, 10,000 or 100,000 population.
 #' * *Suppress counts below*: rows with fewer events than this have their
 #'   events and rates withheld (see [dsr_calculate()]). The default is 5; 0
@@ -73,8 +85,14 @@
 #' rates. *Copy table* copies a table as tab-separated text that pastes into
 #' Excel.
 #'
-#' The *Map* tab maps the age-standardised rate, crude rate or events of one
-#' year or period and sex by area. Australia-wide SA3 and SA2 maps open on
+#' The *Map* tab maps the age-standardised rate, crude rate, age-specific
+#' rate or events of one year or period and sex by area. The age-specific
+#' rate is for the age range chosen with *Ages mapped*, within the ages of
+#' the rates, for example 0 to 14 or 20 to 44: the events in the range
+#' divided by the population in the range, suppressed as in the tables. It
+#' is not age-standardised, so over a wide range it reflects differences in
+#' age structure within the range; for a standardised rate, set *Ages* and
+#' map the age-standardised rate. Australia-wide SA3 and SA2 maps open on
 #' the ACT and surrounding region; the view of Australia leaves out
 #' Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
 #' Edition 3 (2021) boundaries, downloaded from the ABS boundary service
@@ -90,9 +108,16 @@
 #' population tables. Populations come from the 5-year estimated resident
 #' population tables (`ERP5_STE`, `ERP5_SA3` and `ERP5_SA2`, ACT or
 #' Australian) for the same year as the events. Area of residence comes from
-#' the geocoded `geo_` columns, on the ASGS 2021 boundaries the population
-#' tables use; for ACT and surrounds, the state comes from the SA3
-#' (`geo_SA3_2021`).
+#' the geocoded `geo_` columns; for ACT and surrounds, the state comes from
+#' the SA3 (`geo_SA3_2021`).
+#'
+#' SA3s and SA2s are areas of the Australian Statistical Geography Standard
+#' (ASGS) Edition 3 (2021). The population tables hold areas of this
+#' edition, as do the `geo_SA3_2021` and `geo_SA2_2021` columns and the map
+#' boundaries. The tables do not record their edition, so the calculator
+#' assumes ASGS 2021 and labels SA3 and SA2 results and maps with it. Area
+#' codes and boundaries differ between editions, so populations on ASGS 2016
+#' or ASGS 2026 areas would not match these.
 #'
 #' Events with no geocoded residence, events in an area missing from the
 #' population table and events with no recorded age are left out of the
@@ -104,8 +129,9 @@
 #'
 #' The code button (*Copy Code* in background mode, *Insert Code* in
 #' foreground mode) gives R code containing the three SQL queries the
-#' calculator runs, including any diagnosis condition, the lines that assign
-#' each year to its period when the years are pooled, and the
+#' calculator runs, including any diagnosis condition, the lines that keep
+#' the age groups in range when the ages are limited and that assign each
+#' year to its period when the years are pooled, and the
 #' [dsr_calculate()] call, with the suppression threshold, that turns their
 #' results into the table shown. The code reproduces the results outside the
 #' calculator and can be adapted, for example by adding conditions to the
@@ -186,6 +212,14 @@ episerver_dsr_stop <- function() {
 
 # ── Definitions ─────────────────────────────────────────────────────────────
 
+# ASGS edition of the areas in the ERP5 tables, which the tables do not
+# record. They hold ASGS Edition 3 (2021) areas, as do the geo_..._2021
+# columns of the event tables. The geo_ column names, the map boundaries and
+# the area labels follow it; the SA3 codes in .dsr_surrounds are ASGS 2021
+# codes.
+.dsr_asgs <- list(year = 2021L, name = "ASGS Edition 3 (2021)",
+                  short = "ASGS 2021")
+
 # Event tables in Analysis.dbo: the date that sets the calendar year, the age
 # in years, the diagnosis fields, whether the first of them is a principal
 # diagnosis, and the condition that keeps ICD-10 coded records when diagnosis
@@ -229,12 +263,17 @@ episerver_dsr_stop <- function() {
 .dsr_surrounds_label <- "NSW (surrounds)"
 
 # Geographic levels: the geo_ column holding the area of residence and the
-# level of the ERP5 population table. The ERP5 tables use ASGS 2021.
+# level of the ERP5 population table
 .dsr_levels <- list(
-  state = list(column = "geo_STATE",    erp = "STE", label = "State or territory"),
-  sa3   = list(column = "geo_SA3_2021", erp = "SA3", label = "SA3"),
-  sa2   = list(column = "geo_SA2_2021", erp = "SA2", label = "SA2")
+  state = list(column = "geo_STATE", erp = "STE", label = "State or territory"),
+  sa3   = list(column = paste0("geo_SA3_", .dsr_asgs$year), erp = "SA3",
+               label = "SA3"),
+  sa2   = list(column = paste0("geo_SA2_", .dsr_asgs$year), erp = "SA2",
+               label = "SA2")
 )
+
+# 5-year age groups by AgeGroup05Code: 1 is 0-4, ..., 17 is 80-84, 18 is 85+
+.dsr_age_labels <- c(paste0(seq(0, 80, 5), "-", seq(4, 84, 5)), "85+")
 
 # geo_STATE abbreviations by ABS state code (EntityCode in ERP5_STE tables,
 # where 0 is the Australian total)
@@ -247,11 +286,12 @@ episerver_dsr_stop <- function() {
 # through here: names are matched against the definitions above, numbers are
 # coerced to integer and diagnosis codes are parsed by .dsr_parse_codes().
 # `pool` pools the years into periods of that many years, which must divide
-# the range evenly.
+# the range evenly. `ages` is the first and last age group (codes 1 to 18)
+# included in the rates.
 #' @noRd
 .dsr_spec <- function(dataset = "ED", scope = "ACT", level = "state",
                       years, standard = 101L, codes = NULL,
-                      diagnosis = "principal", pool = 1L) {
+                      diagnosis = "principal", pool = 1L, ages = c(1L, 18L)) {
 
   dataset   <- match.arg(dataset, names(.dsr_datasets))
   scope     <- match.arg(scope, names(.dsr_scopes))
@@ -285,8 +325,16 @@ episerver_dsr_stop <- function() {
          if (n == 1) " year." else " years.", call. = FALSE)
   }
 
+  ages <- suppressWarnings(as.integer(ages))
+  if (length(ages) != 2 || anyNA(ages) || ages[1] > ages[2] || ages[1] < 1 ||
+      ages[2] > length(.dsr_age_labels)) {
+    stop("'ages' must be two age group codes from 1 (0-4) to 18 (85+), ",
+         "lowest first.", call. = FALSE)
+  }
+
   list(dataset = dataset, scope = scope, level = level, years = years,
-       standard = standard, codes = codes, diagnosis = diagnosis, pool = pool)
+       standard = standard, codes = codes, diagnosis = diagnosis, pool = pool,
+       ages = ages)
 
 }
 
@@ -387,6 +435,38 @@ episerver_dsr_stop <- function() {
 .dsr_pool <- function(df, spec) {
   if (spec$pool > 1) df$Period <- .dsr_period(df$Year, spec$years[1], spec$pool)
   df
+}
+
+
+# Keeps the age groups from ages[1] to ages[2] of fetched events or
+# population. Events with no recorded age stay in, so that they are still
+# reported as left out of the rates. With fewer age groups in the population,
+# dsr_calculate() takes the standard's weights over those groups only.
+#' @noRd
+.dsr_truncate <- function(df, ages) {
+  if (ages[1] == 1L && ages[2] == length(.dsr_age_labels)) return(df)
+  keep <- is.na(df$AgeGroup) | df$AgeGroup %in% seq(ages[1], ages[2])
+  df[keep, , drop = FALSE]
+}
+
+# The ages of a range of age groups in words, e.g. "under 65", "35 to 74" or
+# "85 and over"; NULL for all ages
+#' @noRd
+.dsr_ages_text <- function(ages) {
+  last <- length(.dsr_age_labels)
+  from <- 5L * (ages[1] - 1L)
+  to   <- 5L * ages[2] - 1L
+  if (ages[1] == 1L && ages[2] == last) return(NULL)
+  if (ages[2] == last) return(paste(from, "and over"))
+  if (ages[1] == 1L) return(paste("under", to + 1L))
+  paste(from, "to", to)
+}
+
+# Label of the areas of a level, with the ASGS edition for SA3 and SA2
+#' @noRd
+.dsr_area_label <- function(level) {
+  label <- .dsr_levels[[level]]$label
+  if (level == "state") label else paste0(label, " (", .dsr_asgs$short, ")")
 }
 
 
@@ -664,6 +744,13 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   y[y < range$complete[1] | y > range$complete[2]]
 }
 
+# Years the slider selects to begin with: the default year and the two
+# before it, within the years offered, so that both ends can be seen
+#' @noRd
+.dsr_default_years <- function(range) {
+  c(max(range$min, range$default - 2L), range$default)
+}
+
 
 # ── Descriptions and code ───────────────────────────────────────────────────
 
@@ -682,8 +769,9 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
              paste0(" in ", spec$pool, "-year periods")
            })
   }
-  level <- .dsr_levels[[spec$level]]$label
+  level <- .dsr_area_label(spec$level)
   if (spec$level == "state") level <- tolower(level)
+  ages  <- .dsr_ages_text(spec$ages)
   codes <- spec$codes$Label
   diagnosis <- if (length(codes)) {
     paste0(", ", if (spec$diagnosis == "all") "any" else "principal",
@@ -698,6 +786,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   paste0(
     .dsr_datasets[[spec$dataset]]$label, diagnosis, ", ",
     .dsr_scopes[[spec$scope]]$describe,
+    if (!is.null(ages)) paste0(" aged ", ages),
     ", by ", level, years,
     if (!is.null(standard_name)) paste0(", standardised to ", standard_name)
   )
@@ -717,6 +806,23 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     if (suppress > 0) paste0(", suppress = ", format(suppress, scientific = FALSE)),
     "\n"
   )
+
+  # Same rows as .dsr_truncate()
+  truncation <- if (!is.null(.dsr_ages_text(spec$ages))) {
+    groups <- if (spec$ages[1] == spec$ages[2]) {
+      spec$ages[1]
+    } else {
+      paste0(spec$ages[1], ":", spec$ages[2])
+    }
+    paste0(
+      "# Ages ", .dsr_ages_text(spec$ages), ", age groups ", groups,
+      ". Events with no recorded age\n",
+      "# stay in, to be reported as left out of the rates.\n",
+      "events     <- events[is.na(events$AgeGroup) | events$AgeGroup %in% ",
+      groups, ", ]\n",
+      "population <- population[population$AgeGroup %in% ", groups, ", ]\n\n"
+    )
+  }
 
   # Same periods as .dsr_period()
   pooling <- if (spec$pool > 1) {
@@ -742,6 +848,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     "# Standard population\n",
     "standard <- DBI::dbGetQuery(conn, \"\n", .dsr_sql_standard(spec), "\n\")\n\n",
     "DBI::dbDisconnect(conn)\n\n",
+    truncation,
     pooling,
     "rates <- actepir::dsr_calculate(\n",
     "  events, population, standard,\n",
@@ -1021,6 +1128,33 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       # Clipboard handler for the code and table copy buttons
       .epi_copy_script(),
 
+      # Slider labels stay within their slider, clear of the one beside it,
+      # and the age sliders, which hold age group codes (1 to 18), show the
+      # age groups. Shiny starts each slider when it binds the input, and puts
+      # number labels back each time the server updates it, just after this
+      # event.
+      shiny::tags$script(shiny::HTML(sprintf("
+        (function() {
+          var labels = %s;
+          function setUp(el) {
+            var slider = $(el).data('ionRangeSlider');
+            if (!slider || ['years', 'ages', 'map_ages'].indexOf(el.id) < 0) {
+              return;
+            }
+            var options = {force_edges: true};
+            if (el.id !== 'years') {
+              options.prettify_enabled = true;
+              options.prettify = function(n) { return labels[n - 1]; };
+            }
+            slider.update(options);
+          }
+          $(document).on('shiny:bound', function(e) { setUp(e.target); });
+          $(document).on('shiny:updateinput', function(e) {
+            setTimeout(function() { setUp(e.target); }, 0);
+          });
+        })();
+      ", jsonlite::toJSON(.dsr_age_labels)))),
+
       # A dataset without a principal diagnosis field (ED) searches every
       # field: the principal option is disabled for it, and the last choice
       # made for the other dataset comes back with that dataset
@@ -1097,7 +1231,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "level", "Geographic level",
           choices = stats::setNames(
             names(.dsr_levels),
-            vapply(.dsr_levels, `[[`, character(1), "label")
+            vapply(names(.dsr_levels), .dsr_area_label, character(1))
           ),
           width = "100%"
         ),
@@ -1112,14 +1246,27 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       shiny::div(
         class = "selector-row dsr-row",
         shiny::div(
-          style = "flex: 3 1 0;",
+          style = "flex: 1 1 0;",
           shiny::sliderInput(
             "years", "Calendar years",
             min = init$min, max = init$max,
-            value = c(init$default, init$default),
+            value = .dsr_default_years(init),
             step = 1, sep = "", ticks = FALSE, width = "100%"
           )
         ),
+        shiny::div(
+          style = "flex: 1 1 0;",
+          shiny::sliderInput(
+            "ages", "Ages",
+            min = 1, max = length(.dsr_age_labels),
+            value = c(1, length(.dsr_age_labels)),
+            step = 1, ticks = FALSE, width = "100%"
+          )
+        )
+      ),
+
+      shiny::div(
+        class = "selector-row dsr-row",
         shiny::div(
           style = "flex: 1 1 0;",
           shiny::selectInput(
@@ -1238,7 +1385,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             shiny::selectInput(
               "map_value", "Show",
               choices = c("Age-standardised rate" = "DSR",
-                          "Crude rate" = "Crude", "Events" = "Events"),
+                          "Crude rate" = "Crude",
+                          "Age-specific rate" = "AgeRate",
+                          "Events" = "Events"),
               width = "100%"
             ),
             shiny::selectInput("map_year", "Year", choices = NULL,
@@ -1246,6 +1395,15 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             shiny::selectInput("map_sex", "Sex", choices = "Persons",
                                width = "100%"),
             shiny::uiOutput("map_extent_ui")
+          ),
+          shiny::conditionalPanel(
+            "input.map_value == 'AgeRate'",
+            shiny::sliderInput(
+              "map_ages", "Ages mapped",
+              min = 1, max = length(.dsr_age_labels),
+              value = c(1, length(.dsr_age_labels)),
+              step = 1, ticks = FALSE, width = "100%"
+            )
           ),
           shiny::div(
             class = "options-row",
@@ -1298,7 +1456,12 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                               } else {
                                 input$diagnosis
                               },
-                              pool = pool()),
+                              pool = pool(),
+                              ages = if (is.null(input$ages)) {
+                                c(1L, length(.dsr_age_labels))
+                              } else {
+                                input$ages
+                              }),
              error = NULL),
         error = function(e) list(spec = NULL, error = conditionMessage(e))
       )
@@ -1324,7 +1487,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       shiny::req(r)
       sel <- input$years
       if (is.null(sel) || sel[2] < r$min || sel[1] > r$max) {
-        sel <- c(r$default, r$default)
+        sel <- .dsr_default_years(r)
       }
       sel <- pmin(pmax(sel, r$min), r$max)
       shiny::updateSliderInput(session, "years",
@@ -1421,8 +1584,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         }
         mult       <- as.numeric(input$multiplier)
         supp       <- suppress()
-        events     <- .dsr_pool(f$events, s)
-        population <- .dsr_pool(f$population, s)
+        events     <- .dsr_pool(.dsr_truncate(f$events, s$ages), s)
+        population <- .dsr_pool(.dsr_truncate(f$population, s$ages), s)
         by         <- c(.dsr_time(s), "Area")
         summary <- suppressMessages(dsr_calculate(
           events, population, standard,
@@ -1430,8 +1593,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           multiplier = mult, suppress = supp
         ))
         list(spec = s, summary = summary, events = events,
-             population = population, by = by, multiplier = mult,
-             suppress = supp, total = sum(f$events$Events), error = NULL)
+             population = population, standard = standard, by = by,
+             multiplier = mult, suppress = supp,
+             total = sum(events$Events), error = NULL)
       }, error = function(e) list(error = conditionMessage(e)))
     })
 
@@ -1466,9 +1630,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       s  <- r$spec
       ex <- attr(r$summary, "excluded")
+      ages <- .dsr_ages_text(s$ages)
       notes <- list(shiny::p(
         shiny::strong(.dsr_describe(s, std_name(s$standard)), .noWS = "after"),
-        paste0(". Rates per ", .fmt_count(r$multiplier), ".")
+        paste0(". Rates per ", .fmt_count(r$multiplier),
+               if (!is.null(ages)) paste0(" population aged ", ages), ".")
       ))
 
       if (nrow(ex)) {
@@ -1520,7 +1686,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       now <- spec()
       keys <- c("dataset", "scope", "level", "years", "codes", "diagnosis",
-                "pool")
+                "pool", "ages")
       if (!is.null(now) && !identical(now[keys], s[keys])) {
         notes <- c(notes, list(shiny::p(class = "epi-warn",
           "The settings have changed: press Calculate to update the results."
@@ -1536,15 +1702,15 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     output$summary_table <- DT::renderDataTable({
       r <- results()
       shiny::req(r, is.null(r$error))
-      .dsr_datatable(r$summary, area_label(r$spec), r$multiplier,
+      .dsr_datatable(r$summary, .dsr_area_label(r$spec$level), r$multiplier,
                      suppress = r$suppress)
     })
 
     output$age_table <- DT::renderDataTable({
       r <- results()
       shiny::req(r, is.null(r$error), isTRUE(input$age_specific))
-      .dsr_datatable(age_results(), area_label(r$spec), r$multiplier,
-                     age = TRUE, suppress = r$suppress)
+      .dsr_datatable(age_results(), .dsr_area_label(r$spec$level),
+                     r$multiplier, age = TRUE, suppress = r$suppress)
     })
 
     output$footnote <- shiny::renderUI({
@@ -1570,7 +1736,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       shiny::req(is.null(r$error))
       .epi_copy_text(
         session,
-        .dsr_tsv(df(), area_label(r$spec), r$multiplier, age = age,
+        .dsr_tsv(df(), .dsr_area_label(r$spec$level), r$multiplier, age = age,
                  suppress = r$suppress),
         "Table copied to the clipboard"
       )
@@ -1583,7 +1749,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # ── Map ────────────────────────────────────────────────────────────────
-    # Year or period, and sex, choices follow the results
+    # Ages mapped, kept within the ages calculated
+    within_ages <- function(a, ages) {
+      a <- if (is.null(a)) ages else as.integer(a)
+      c(max(a[1], ages[1]), min(a[2], ages[2]))
+    }
+
+    # Year or period, sex and ages mapped follow the results
     shiny::observeEvent(results(), {
       r <- results()
       shiny::req(r, is.null(r$error))
@@ -1597,6 +1769,37 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         session, "map_sex", choices = sexes,
         selected = if (isTRUE(input$map_sex %in% sexes)) input$map_sex else "Persons"
       )
+      ages <- r$spec$ages
+      now  <- within_ages(input$map_ages, ages)
+      if (now[1] > now[2]) now <- ages
+      shiny::updateSliderInput(session, "map_ages", min = ages[1],
+                               max = ages[2], value = now)
+    })
+
+    # Ages of the age-specific map, and in words for titles
+    map_ages <- shiny::reactive({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      a <- within_ages(input$map_ages, r$spec$ages)
+      shiny::req(a[1] <= a[2])
+      a
+    })
+    ages_words <- function(ages) {
+      words <- .dsr_ages_text(ages)
+      if (is.null(words)) "all ages" else paste("aged", words)
+    }
+
+    # Age-specific rates for the map: the events and population of the ages
+    # mapped give the rate for that age range, suppressed as in the tables
+    map_band <- shiny::reactive({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      ages <- map_ages()
+      suppressMessages(dsr_calculate(
+        .dsr_truncate(r$events, ages), .dsr_truncate(r$population, ages),
+        r$standard, by = r$by, by_sex = isTRUE(input$by_sex),
+        multiplier = r$multiplier, suppress = r$suppress
+      ))
     })
 
     # A state map of the ACT alone shows one area
@@ -1651,10 +1854,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       r <- results()
       shiny::req(r, is.null(r$error), input$map_year, input$map_sex,
                  input$map_value)
-      d <- r$summary[as.character(r$summary[[r$by[1]]]) == input$map_year &
-                       r$summary$Sex == input$map_sex, ]
-      list(r = r, rows = d,
-           values = data.frame(Area = d$Area, Value = d[[input$map_value]],
+      band  <- input$map_value == "AgeRate"
+      rates <- if (band) map_band() else r$summary
+      d <- rates[as.character(rates[[r$by[1]]]) == input$map_year &
+                   rates$Sex == input$map_sex, ]
+      value <- if (band) "Crude" else input$map_value
+      list(r = r, rows = d, band = band,
+           values = data.frame(Area = d$Area, Value = d[[value]],
                                stringsAsFactors = FALSE))
     })
 
@@ -1667,14 +1873,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       value <- input$map_value
       per <- paste0(" per ", .fmt_count(r$multiplier))
       label <- switch(value,
-                      DSR    = paste0("Age-standardised rate", per),
-                      Crude  = paste0("Crude rate", per),
-                      Events = "Events")
+                      DSR     = paste0("Age-standardised rate", per),
+                      Crude   = paste0("Crude rate", per),
+                      AgeRate = paste0("Age-specific rate", per, ", ",
+                                       ages_words(map_ages())),
+                      Events  = "Events")
       view <- map_view(s)
       .dsr_map_plot(
         b$polys, m$values,
         legend   = switch(value, DSR = "DSR", Crude = "Crude rate",
-                          Events = "Events"),
+                          AgeRate = "Rate", Events = "Events"),
         title    = paste0(label, ", ", input$map_year, ", ",
                           tolower(input$map_sex)),
         subtitle = .dsr_describe(s, if (value == "DSR") std_name(s$standard),
@@ -1685,7 +1893,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             paste0("fewer than ", .fmt_count(r$suppress),
                    " events (suppressed) or ")
           },
-          "no value. Boundaries: ABS ASGS Edition 3 (2021), CC BY 4.0."
+          "no value. Boundaries: ABS ", .dsr_asgs$name, ", CC BY 4.0."
         ),
         xlim = view$xlim,
         ylim = view$ylim
@@ -1726,7 +1934,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       row <- m$rows[m$rows$Area == area, ]
       name <- b$polys$Name[match(area, b$polys$Area)]
       head <- paste0(area_label(m$r$spec), " ", area,
-                     if (!is.na(name) && name != area) paste0(" ", name), ": ")
+                     if (!is.na(name) && name != area) paste0(" ", name),
+                     if (m$band) paste0(", ", ages_words(map_ages())), ": ")
       digits <- if (m$r$multiplier >= 100000) 1 else 2
       num <- function(v) formatC(v, format = "f", digits = digits, big.mark = ",")
       text <- if (!nrow(row)) {
@@ -1735,6 +1944,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         paste0("fewer than ", .fmt_count(m$r$suppress),
                " events (suppressed); population ",
                .fmt_count(row$Population[1]), ".")
+      } else if (m$band) {
+        paste0(.fmt_count(row$Events[1]), " events, population ",
+               .fmt_count(row$Population[1]), ", rate ",
+               if (is.na(row$Crude[1])) "not calculated" else paste0(
+                 num(row$Crude[1]), " (95% CI ", num(row$CrudeLower[1]),
+                 " to ", num(row$CrudeUpper[1]), ")"),
+               ".")
       } else {
         paste0(.fmt_count(row$Events[1]), " events, population ",
                .fmt_count(row$Population[1]), ", crude rate ",
@@ -1755,8 +1971,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     map_file <- function(ext) {
       function() {
-        paste0("dsr-map-", tolower(input$map_value), "-", input$map_year, "-",
-               tolower(input$map_sex), ".", ext)
+        ages <- if (input$map_value == "AgeRate") {
+          paste0("-", gsub(" ", "-", ages_words(map_ages())))
+        }
+        paste0("dsr-map-", tolower(input$map_value), ages, "-", input$map_year,
+               "-", tolower(input$map_sex), ".", ext)
       }
     }
     # A saved map takes the shape of the area in view

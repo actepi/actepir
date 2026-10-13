@@ -16,7 +16,7 @@ abs_reachable <- local({
 
     withr::local_options(timeout = 10)
     ok <- tryCatch({
-      meta <- .dsr_fetch_json(paste0(.dsr_abs_service, "/STE/MapServer/0?f=json"))
+      meta <- .dsr_fetch_json(paste0(.dsr_abs_layer("state"), "?f=json"))
       length(meta$fields) > 0
     }, error = function(e) FALSE)
 

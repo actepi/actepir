@@ -1,15 +1,24 @@
-# Maps for the DSR Calculator: ASGS 2021 boundaries from the ABS and a
-# ggplot2 choropleth of the calculator's results.
+# Maps for the DSR Calculator: ASGS boundaries from the ABS, of the edition
+# the population tables use (.dsr_asgs), and a ggplot2 choropleth of the
+# calculator's results.
 
-# ABS ArcGIS REST services holding the ASGS Edition 3 (2021) boundaries, and
-# the service and field prefix for each geographic level of the calculator
-.dsr_abs_service <- "https://geo.abs.gov.au/arcgis/rest/services/ASGS2021"
+# ABS ArcGIS REST services, where the boundaries of the edition in .dsr_asgs
+# are under ASGS<year> (ASGS2021), and the service and field prefix for each
+# geographic level of the calculator
+.dsr_abs_service <- "https://geo.abs.gov.au/arcgis/rest/services"
 
 .dsr_boundary_layers <- list(
   state = list(service = "STE", prefix = "(state|ste)"),
   sa3   = list(service = "SA3", prefix = "sa3"),
   sa2   = list(service = "SA2", prefix = "sa2")
 )
+
+# The boundary layer of a level, e.g. .../ASGS2021/SA3/MapServer/0
+#' @noRd
+.dsr_abs_layer <- function(level) {
+  paste0(.dsr_abs_service, "/ASGS", .dsr_asgs$year, "/",
+         .dsr_boundary_layers[[level]]$service, "/MapServer/0")
+}
 
 
 # Boundaries of the areas at a level, for a population of the calculator, as
@@ -27,15 +36,15 @@
   layer_level <- if (scope == "SURROUNDS" && level == "state") "sa3" else level
 
   file <- if (!is.null(cache)) {
-    file.path(cache, sprintf("asgs2021_%s_%s_v1.rds", level, scope))
+    file.path(cache, sprintf("asgs%d_%s_%s_v1.rds", .dsr_asgs$year, level,
+                             scope))
   }
   if (!is.null(file) && file.exists(file)) {
     polys <- tryCatch(readRDS(file), error = function(e) NULL)
     if (is.data.frame(polys) && nrow(polys)) return(polys)
   }
 
-  layer <- paste0(.dsr_abs_service, "/",
-                  .dsr_boundary_layers[[layer_level]]$service, "/MapServer/0")
+  layer <- .dsr_abs_layer(layer_level)
 
   # Field names are read from the layer rather than assumed
   meta   <- .dsr_fetch_json(paste0(layer, "?f=json"))
@@ -49,14 +58,16 @@
     }
     hit[1]
   }
+  # e.g. sa3_code_2021 or SA3_CODE21
+  year   <- paste0("(_", .dsr_asgs$year, "|", .dsr_asgs$year %% 100, ")?$")
   prefix <- .dsr_boundary_layers[[layer_level]]$prefix
-  code   <- field(paste0("^", prefix, "_code(_2021|21)?$"))
-  name   <- field(paste0("^", prefix, "_name(_2021|21)?$"))
+  code   <- field(paste0("^", prefix, "_code", year))
+  name   <- field(paste0("^", prefix, "_name", year))
   # SA2 codes start with the code of their SA3
   where  <- if (scope == "AUS") {
     "1=1"
   } else {
-    act <- paste0(field("^(state|ste)_code(_2021|21)?$"), " = '8'")
+    act <- paste0(field(paste0("^(state|ste)_code", year)), " = '8'")
     if (scope == "ACT") {
       act
     } else {

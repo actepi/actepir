@@ -69,13 +69,13 @@ fake_episerver <- function() {
 }
 
 all_specs <- function(years = 2023, codes = NULL, diagnosis = "principal",
-                      pool = 1) {
+                      pool = 1, ages = c(1, 18)) {
   grid <- expand.grid(dataset = c("ED", "APC"),
                       scope = c("ACT", "SURROUNDS", "AUS"),
                       level = c("state", "sa3", "sa2"), stringsAsFactors = FALSE)
   lapply(seq_len(nrow(grid)), function(i) {
     .dsr_spec(grid$dataset[i], grid$scope[i], grid$level[i], years,
-              codes = codes, diagnosis = diagnosis, pool = pool)
+              codes = codes, diagnosis = diagnosis, pool = pool, ages = ages)
   })
 }
 
@@ -113,7 +113,7 @@ test_that(".dsr_spec validates and normalises the settings", {
   expect_equal(s, list(dataset = "APC", scope = "AUS", level = "sa2",
                        years = c(2023L, 2023L), standard = 300L,
                        codes = .dsr_parse_codes(NULL), diagnosis = "principal",
-                       pool = 1L))
+                       pool = 1L, ages = c(1L, 18L)))
   expect_equal(nrow(s$codes), 0)
   expect_equal(.dsr_spec(scope = "SURROUNDS", years = 2023)$scope, "SURROUNDS")
 
@@ -178,6 +178,78 @@ test_that("the ACT and surrounds add the NSW SA3s on the ACT border", {
   expect_equal(unname(.dsr_surrounds),
                c("Queanbeyan", "Snowy Mountains", "Young - Yass",
                  "Tumut - Tumbarumba"))
+
+})
+
+test_that("SA3s and SA2s are labelled with the ASGS edition of the tables", {
+
+  expect_equal(.dsr_asgs$year, 2021L)
+  expect_equal(.dsr_levels$sa3$column, "geo_SA3_2021")
+  expect_equal(.dsr_levels$sa2$column, "geo_SA2_2021")
+  expect_equal(.dsr_area_label("state"), "State or territory")
+  expect_equal(.dsr_area_label("sa3"), "SA3 (ASGS 2021)")
+  expect_equal(.dsr_area_label("sa2"), "SA2 (ASGS 2021)")
+
+})
+
+# ── Ages ────────────────────────────────────────────────────────────────────
+
+test_that("ages are a range of 5-year age groups, all ages by default", {
+
+  expect_equal(.dsr_spec(years = 2023)$ages, c(1L, 18L))
+  expect_equal(.dsr_spec(years = 2023, ages = c("8", "15"))$ages, c(8L, 15L))
+  expect_equal(.dsr_spec(years = 2023, ages = c(18, 18))$ages, c(18L, 18L))
+
+  msg <- "'ages' must be two age group codes from 1 (0-4) to 18 (85+), lowest first."
+  expect_error(.dsr_spec(years = 2023, ages = c(15, 8)), msg, fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, ages = c(0, 18)), msg, fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, ages = c(1, 19)), msg, fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, ages = 8), msg, fixed = TRUE)
+  expect_error(.dsr_spec(years = 2023, ages = c("x", "18")), msg, fixed = TRUE)
+
+})
+
+test_that("an age range keeps its age groups and events of unknown age", {
+
+  df <- data.frame(AgeGroup = c(1:18, NA), Events = 1)
+  expect_identical(.dsr_truncate(df, c(1L, 18L)), df)
+  expect_equal(.dsr_truncate(df, c(8L, 15L))$AgeGroup, c(8:15, NA))
+  expect_equal(.dsr_truncate(df, c(18L, 18L))$AgeGroup, c(18L, NA))
+
+  expect_null(.dsr_ages_text(c(1L, 18L)))
+  expect_equal(.dsr_ages_text(c(1L, 13L)), "under 65")
+  expect_equal(.dsr_ages_text(c(1L, 15L)), "under 75")
+  expect_equal(.dsr_ages_text(c(1L, 1L)), "under 5")
+  expect_equal(.dsr_ages_text(c(8L, 15L)), "35 to 74")
+  expect_equal(.dsr_ages_text(c(5L, 9L)), "20 to 44")
+  expect_equal(.dsr_ages_text(c(14L, 18L)), "65 and over")
+  expect_equal(.dsr_ages_text(c(18L, 18L)), "85 and over")
+
+})
+
+test_that("rates for an age range are standardised within the range", {
+
+  s <- .dsr_spec(years = 2023, ages = c(8, 15))
+  r <- suppressMessages(dsr_calculate(
+    .dsr_truncate(fake_events, s$ages), .dsr_truncate(fake_population, s$ages),
+    fake_standard, by = c("Year", "Area")
+  ))
+
+  # Each age group from 35-39 to 70-74 is weighted by its share of the
+  # standard population of those ages, so the weights sum to 1
+  g   <- 8:15
+  w   <- fake_standard$StdPopValue[g] / sum(fake_standard$StdPopValue[g])
+  ev  <- fake_events[!is.na(fake_events$Area) & fake_events$AgeGroup %in% g, ]
+  pop <- fake_population[fake_population$AgeGroup %in% g, ]
+  events     <- tapply(ev$Events, ev$AgeGroup, sum)
+  population <- tapply(pop$Population, pop$AgeGroup, sum)
+
+  expect_equal(r$DSR, sum(w * events / population) * 100000)
+  expect_equal(r$Crude, sum(events) / sum(population) * 100000)
+  expect_equal(r$Population, sum(population))
+
+  # Events of unknown age are still reported as left out
+  expect_true("Missing AgeGroup" %in% attr(r, "excluded")$Reason)
 
 })
 
@@ -469,13 +541,25 @@ test_that(".dsr_partial_years flags years the events only partly cover", {
 
 })
 
+test_that("the year slider starts on the default year and the two before it", {
+
+  expect_equal(.dsr_default_years(list(min = 2004L, default = 2024L)),
+               c(2022L, 2024L))
+  expect_equal(.dsr_default_years(list(min = 2023L, default = 2024L)),
+               c(2023L, 2024L))
+  expect_equal(.dsr_default_years(list(min = 2024L, default = 2024L)),
+               c(2024L, 2024L))
+
+})
+
 # ── Copied code ─────────────────────────────────────────────────────────────
 
 test_that("the copied code parses and embeds the calculator's SQL", {
 
   specs <- c(all_specs(c(2019, 2023)),
-             all_specs(c(2015, 2023), pool = 3),
-             all_specs(2023, codes = c("C13-C15.45", "J45"), diagnosis = "all"))
+             all_specs(c(2015, 2023), pool = 3, ages = c(8, 15)),
+             all_specs(2023, codes = c("C13-C15.45", "J45"), diagnosis = "all",
+                       ages = c(18, 18)))
   for (s in specs) {
     code <- .dsr_code(s, by_sex = TRUE, age_specific = TRUE, suppress = 5)
     expect_no_error(parse(text = code))
@@ -511,7 +595,7 @@ test_that("the copied code follows the display options", {
                                 pool = 3))
   expect_match(pooled, paste0(
     "^# DSR Calculator: ED presentations, residents of the ACT and surrounds, ",
-    "by SA3, 2015 to 2023 in 3-year periods"))
+    "by SA3 \\(ASGS 2021\\), 2015 to 2023 in 3-year periods"))
   expect_match(pooled, paste0(
     "period <- function(year) {\n",
     "  start <- year - (year - 2015) %% 3\n",
@@ -583,6 +667,39 @@ test_that("running pooled copied code gives rates per person-year", {
 
 })
 
+test_that("running copied code for an age range gives the rates for those ages", {
+
+  fake <- fake_episerver()
+  s <- .dsr_spec("ED", "ACT", "state", 2023, ages = c(8, 15))
+  code <- .dsr_code(s, by_sex = TRUE, age_specific = TRUE)
+  expect_match(code, paste0(
+    "# Ages 35 to 74, age groups 8:15. Events with no recorded age\n",
+    "# stay in, to be reported as left out of the rates.\n",
+    "events     <- events[is.na(events$AgeGroup) | events$AgeGroup %in% 8:15, ]\n",
+    "population <- population[population$AgeGroup %in% 8:15, ]\n"), fixed = TRUE)
+  expect_no_match(.dsr_code(.dsr_spec(years = 2023)), "# Ages", fixed = TRUE)
+  expect_match(.dsr_code(.dsr_spec(years = 2023, ages = c(18, 18))),
+               "events$AgeGroup %in% 18, ]", fixed = TRUE)
+
+  code <- gsub("actepir::episerver_connect", "fake_connect", code, fixed = TRUE)
+  code <- gsub("DBI::dbGetQuery", "fake_get", code, fixed = TRUE)
+  code <- gsub("DBI::dbDisconnect", "fake_disconnect", code, fixed = TRUE)
+
+  env <- new.env()
+  env$fake_connect    <- function() "conn"
+  env$fake_get        <- function(conn, sql) fake$query(sql)
+  env$fake_disconnect <- function(conn) invisible(TRUE)
+  suppressMessages(eval(parse(text = code), envir = env))
+
+  expected <- suppressMessages(dsr_calculate(
+    .dsr_truncate(fake_events, s$ages), .dsr_truncate(fake_population, s$ages),
+    fake_standard, by = c("Year", "Area"), by_sex = TRUE
+  ))
+  expect_equal(env$rates, expected)
+  expect_equal(unique(env$age_rates$AgeGroup), 8:15)
+
+})
+
 # ── Display ─────────────────────────────────────────────────────────────────
 
 rates_df <- data.frame(
@@ -596,16 +713,21 @@ rates_df <- data.frame(
 test_that(".dsr_describe can leave out the years", {
 
   s <- .dsr_spec("ED", "ACT", "sa3", c(2019, 2023))
-  expect_equal(.dsr_describe(s), "ED presentations, ACT residents, by SA3, 2019 to 2023")
+  expect_equal(.dsr_describe(s),
+               "ED presentations, ACT residents, by SA3 (ASGS 2021), 2019 to 2023")
   expect_equal(.dsr_describe(s, "Australia (2001)", years = FALSE),
-               "ED presentations, ACT residents, by SA3, standardised to Australia (2001)")
+               "ED presentations, ACT residents, by SA3 (ASGS 2021), standardised to Australia (2001)")
 
   expect_equal(
     .dsr_describe(.dsr_spec("ED", "SURROUNDS", "sa2", c(2015, 2023), pool = 3)),
-    "ED presentations, residents of the ACT and surrounds, by SA2, 2015 to 2023 in 3-year periods"
+    "ED presentations, residents of the ACT and surrounds, by SA2 (ASGS 2021), 2015 to 2023 in 3-year periods"
   )
   expect_equal(.dsr_describe(.dsr_spec(years = c(2019, 2023), pool = 5)),
                "ED presentations, ACT residents, by state or territory, 2019 to 2023 pooled")
+  expect_equal(
+    .dsr_describe(.dsr_spec("APC", "AUS", "state", 2023, ages = c(1, 15))),
+    "APC separations, Australian residents aged under 75, by state or territory, 2023"
+  )
 
 })
 
@@ -1002,6 +1124,152 @@ test_that("the app maps the ACT and surrounds by state", {
     expect_equal(sort(unique(p$data$Area)), c("ACT", "NSW (surrounds)"))
     expect_null(p$coordinates$limits$x)
     expect_equal(requested, "state SURROUNDS")
+  })
+
+})
+
+test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
+
+  app  <- episerver_dsr_app(query = fake_episerver()$query)
+  page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
+                               QUERY_STRING = ""))$content
+  slider <- function(id) {
+    regmatches(page, regexpr(paste0("<input[^>]*id=\"", id, "\"[^>]*>"), page))
+  }
+
+  # The fake event data cover 2024 in full and the population ends in 2024
+  expect_match(slider("years"), "data-from=\"2022\" data-to=\"2024\"",
+               fixed = TRUE)
+  expect_match(slider("ages"),
+               "data-min=\"1\" data-max=\"18\" data-from=\"1\" data-to=\"18\"",
+               fixed = TRUE)
+  expect_match(page, "<option value=\"sa3\">SA3 (ASGS 2021)</option>",
+               fixed = TRUE)
+
+})
+
+test_that("the app limits the rates to an age range and reuses the counts", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  n_events <- function() sum(grepl("AS Events", fake$calls(), fixed = TRUE))
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", by_sex = FALSE,
+                      age_specific = TRUE, ages = c(1, 18))
+    session$setInputs(calculate = 1)
+    all_ages <- results()$summary
+
+    # Ages 35 to 74 leave the queries unchanged, so the counts are reused
+    session$setInputs(ages = c(8, 15))
+    expect_match(strip_html(output$info_bar$html), "settings have changed")
+    session$setInputs(calculate = 2)
+    expect_equal(n_events(), 1)
+
+    r <- results()
+    events <- .dsr_truncate(fake_events, c(8L, 15L))
+    expected <- suppressMessages(dsr_calculate(
+      events, .dsr_truncate(fake_population, c(8L, 15L)), fake_standard,
+      by = c("Year", "Area")
+    ))
+    expect_equal(r$summary, expected)
+    expect_false(isTRUE(all.equal(r$summary$DSR, all_ages$DSR)))
+    expect_equal(unique(age_results()$AgeGroup), 8:15)
+
+    info <- strip_html(output$info_bar$html)
+    expect_match(info, "ACT residents aged 35 to 74, by state or territory",
+                 fixed = TRUE)
+    expect_match(info, "Rates per 100,000 population aged 35 to 74.",
+                 fixed = TRUE)
+    expect_no_match(info, "settings have changed")
+
+    # Events left out are a share of the events of those ages
+    ex <- attr(r$summary, "excluded")
+    n  <- ex$Events[ex$Reason == "Missing AgeGroup"]
+    expect_match(info, paste0("age not recorded ", .fmt_count(n),
+                              sprintf(" (%.1f%%)", 100 * n / sum(events$Events))),
+                 fixed = TRUE)
+  })
+
+})
+
+test_that("the app maps age-specific rates for the ages chosen", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  local_mocked_bindings(.dsr_boundaries = function(level, scope, ...) {
+    square_polys(c("ACT", "NSW"))
+  })
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "AUS", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5, by_sex = FALSE,
+                      ages = c(5, 15))
+    session$setInputs(calculate = 1)
+    session$setInputs(map_value = "AgeRate", map_year = "2023",
+                      map_sex = "Persons", map_ages = c(5, 9))
+
+    # Ages 20 to 44: the events of those ages over their population
+    band <- suppressMessages(dsr_calculate(
+      .dsr_truncate(fake_events, c(5L, 9L)),
+      .dsr_truncate(fake_population, c(5L, 9L)),
+      fake_standard, by = c("Year", "Area")
+    ))
+    p <- map_plot()
+    expect_equal(unique(p$data$Value[p$data$Area == "ACT"]), band$Crude)
+    expect_equal(p$labels$title,
+                 "Age-specific rate per 100,000, aged 20 to 44, 2023, persons")
+    expect_match(gsub("\n", " ", p$labels$subtitle),
+                 "Australian residents aged 20 to 74, by state or territory")
+    expect_equal(map_file("png")(),
+                 "dsr-map-agerate-aged-20-to-44-2023-persons.png")
+
+    session$setInputs(map_click = list(x = 149.5, y = -34.5))
+    info <- strip_html(output$map_click_info$html)
+    expect_match(info, "State or territory ACT Area ACT, aged 20 to 44:",
+                 fixed = TRUE)
+    expect_match(info, paste0(.fmt_count(band$Events), " events, population ",
+                              .fmt_count(band$Population), ", rate "),
+                 fixed = TRUE)
+
+    # The ages mapped stay within the ages of the rates
+    session$setInputs(map_ages = c(1, 18))
+    expect_equal(map_ages(), c(5L, 15L))
+    expect_equal(map_plot()$labels$title,
+                 "Age-specific rate per 100,000, aged 20 to 74, 2023, persons")
+  })
+
+})
+
+test_that("the app labels SA3 tables, descriptions and maps with ASGS 2021", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  copied <- NULL
+  local_mocked_bindings(
+    .epi_copy_text = function(session, text, message) copied <<- text,
+    .dsr_boundaries = function(level, scope, ...) square_polys("ACT")
+  )
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000")
+    session$setInputs(calculate = 1)
+    session$setInputs(copy_summary = 1)
+    expect_match(copied, "^Year\tSA3 \\(ASGS 2021\\)\tSex\t")
+    expect_match(strip_html(output$info_bar$html),
+                 "ACT residents, by SA3 (ASGS 2021), 2023", fixed = TRUE)
+
+    session$setInputs(map_value = "DSR", map_year = "2023", map_sex = "Persons")
+    p <- map_plot()
+    expect_match(gsub("\n", " ", p$labels$subtitle), "by SA3 (ASGS 2021)",
+                 fixed = TRUE)
+    expect_match(gsub("\n", " ", p$labels$caption),
+                 "Boundaries: ABS ASGS Edition 3 (2021), CC BY 4.0.", fixed = TRUE)
   })
 
 })
