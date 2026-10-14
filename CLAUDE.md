@@ -65,3 +65,4 @@ Run all three before pushing whenever R code, roxygen comments or tests change.
 
 - Quarto styling uses the Sass theme files in `inst/quarto/themes/`, referenced from the document's `theme:` key. `use_epi_analysis()`, `use_epi_document()` and `use_epi_themes()` copy them next to the document. A Quarto format extension (`_extensions/`) was tried and abandoned because two extensions in one project collided on the title banner. Do not reintroduce it.
 - Optional sections of `inst/quarto/skeleton/analysis.qmd` are wrapped in `BEGIN:<tag>` and `END:<tag>` markers and kept or dropped by `.strip_block()`. Add a new optional section the same way, with a matching argument in both scaffolding functions and a widget in `inst/rstudio/templates/project/epi_analysis.dcf`.
+- Brand colours, fonts and logo rules are in `dev/reference/act-brand.md`. Use those values for any theme, palette or template work.
