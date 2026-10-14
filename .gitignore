@@ -6,4 +6,5 @@
 .xlsx
 .xls
 .csv
-dev/
+dev/*
+!dev/reference/
