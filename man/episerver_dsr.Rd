@@ -62,9 +62,10 @@ Opens the DSR Calculator, which calculates directly age-standardised rates
 separations (APC). It queries EpiServer for event counts by calendar year,
 sex, 5-year age group and area of residence, matches them to the estimated
 resident population of the same year, and standardises them to a chosen
-standard population. Events can be limited to ICD-10 diagnosis codes. It
-shows counts, crude rates and DSRs, optionally with age-specific rates,
-maps them by area, and copies R code that reproduces the results.
+standard population. Events can be limited to ICD-10 diagnosis codes and
+rates to an age range. It shows counts, crude rates and DSRs, optionally
+with age-specific rates, maps them by area, and copies R code that
+reproduces the results.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
@@ -84,22 +85,33 @@ their SA2s, and also uses the Australian tables. At state level it gives
 two areas, the ACT and NSW (surrounds), each summed from its SA3s.
 \item \emph{Geographic level}: state or territory (\code{geo_STATE}), SA3
 (\code{geo_SA3_2021}) or SA2 (\code{geo_SA2_2021}) of residence, with rates for
-each area. Populations by 5-year age group are not available below SA2,
-so SA1 and mesh blocks are not offered.
+each area. SA3s and SA2s are ASGS 2021 areas (see \strong{Data}). Populations
+by 5-year age group are not available below SA2, so SA1 and mesh blocks
+are not offered.
 \item \emph{Standard population}: any standard with 5-year age groups in
 \code{Analysis.dbo.StandardPops}. The default is the Australian 2001 standard
 population.
 \item \emph{Calendar years}: one row of results per year, or per period when the
 years are pooled. The years offered are those covered by both the event
 data and the population table, and a year only partly covered by the
-event data is flagged.
+event data is flagged. The slider starts on three years: the latest year
+offered that the event data cover in full, and the two before it.
 \item \emph{Pool years}: pools the years into periods of 2 to 5 years, or into one
 period of all the selected years, for areas or conditions with few
 events. The number of years selected must be a multiple of the period
 length. Events and populations are summed over the years of a period, so
 the rates are per person-year.
+\item \emph{Ages}: limits the rates to a range of 5-year age groups, for example
+under 65 (0-4 to 60-64), under 75 or 35 to 74. The default is all ages.
+Events and populations outside the range are left out, and the DSR is
+standardised within the range: each age group in it is weighted by its
+share of the standard population of the range, so the weights sum to 1.
+The crude rate is the events in the range divided by the population in
+the range. Rates are per population of those ages, and can be compared
+only with rates for the same ages and standard population.
 \item \emph{Male and female}: adds male and female rates to the rates for persons.
-\item \emph{Age-specific rates}: adds a table of rates by 5-year age group.
+\item \emph{Age-specific rates}: adds a table of rates by 5-year age group, for the
+ages chosen.
 \item \emph{Rate per}: 1,000, 10,000 or 100,000 population.
 \item \emph{Suppress counts below}: rows with fewer events than this have their
 events and rates withheld (see \code{\link[=dsr_calculate]{dsr_calculate()}}). The default is 5; 0
@@ -125,8 +137,14 @@ The \emph{Tables} tab shows the rates and, when chosen, the age-specific
 rates. \emph{Copy table} copies a table as tab-separated text that pastes into
 Excel.
 
-The \emph{Map} tab maps the age-standardised rate, crude rate or events of one
-year or period and sex by area. Australia-wide SA3 and SA2 maps open on
+The \emph{Map} tab maps the age-standardised rate, crude rate, age-specific
+rate or events of one year or period and sex by area. The age-specific
+rate is for the age range chosen with \emph{Ages mapped}, within the ages of
+the rates, for example 0 to 14 or 20 to 44: the events in the range
+divided by the population in the range, suppressed as in the tables. It
+is not age-standardised, so over a wide range it reflects differences in
+age structure within the range; for a standardised rate, set \emph{Ages} and
+map the age-standardised rate. Australia-wide SA3 and SA2 maps open on
 the ACT and surrounding region; the view of Australia leaves out
 Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
 Edition 3 (2021) boundaries, downloaded from the ABS boundary service
@@ -142,9 +160,16 @@ Age groups (0-4, 5-9, ..., 80-84, 85+) are formed from age in years
 population tables. Populations come from the 5-year estimated resident
 population tables (\code{ERP5_STE}, \code{ERP5_SA3} and \code{ERP5_SA2}, ACT or
 Australian) for the same year as the events. Area of residence comes from
-the geocoded \code{geo_} columns, on the ASGS 2021 boundaries the population
-tables use; for ACT and surrounds, the state comes from the SA3
-(\code{geo_SA3_2021}).
+the geocoded \code{geo_} columns; for ACT and surrounds, the state comes from
+the SA3 (\code{geo_SA3_2021}).
+
+SA3s and SA2s are areas of the Australian Statistical Geography Standard
+(ASGS) Edition 3 (2021). The population tables hold areas of this
+edition, as do the \code{geo_SA3_2021} and \code{geo_SA2_2021} columns and the map
+boundaries. The tables do not record their edition, so the calculator
+assumes ASGS 2021 and labels SA3 and SA2 results and maps with it. Area
+codes and boundaries differ between editions, so populations on ASGS 2016
+or ASGS 2026 areas would not match these.
 
 Events with no geocoded residence, events in an area missing from the
 population table and events with no recorded age are left out of the
@@ -156,8 +181,9 @@ calculated.
 
 The code button (\emph{Copy Code} in background mode, \emph{Insert Code} in
 foreground mode) gives R code containing the three SQL queries the
-calculator runs, including any diagnosis condition, the lines that assign
-each year to its period when the years are pooled, and the
+calculator runs, including any diagnosis condition, the lines that keep
+the age groups in range when the ages are limited and that assign each
+year to its period when the years are pooled, and the
 \code{\link[=dsr_calculate]{dsr_calculate()}} call, with the suppression threshold, that turns their
 results into the table shown. The code reproduces the results outside the
 calculator and can be adapted, for example by adding conditions to the

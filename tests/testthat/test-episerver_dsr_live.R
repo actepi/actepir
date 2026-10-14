@@ -279,6 +279,13 @@ test_that("the app calculates against EpiServer", {
     session$setInputs(years = c(2021, 2023), pool = "3", calculate = 3)
     expect_null(rv$error)
     expect_equal(unique(results()$summary$Period), "2021-2023")
+
+    # Ages 35 to 74, from the same counts
+    total <- sum(results()$summary$Events, na.rm = TRUE)
+    session$setInputs(ages = c(8, 15), calculate = 4)
+    expect_null(rv$error)
+    expect_lt(sum(results()$summary$Events, na.rm = TRUE), total)
+    expect_equal(sort(unique(age_results()$AgeGroup)), 8:15)
   })
 
 })
