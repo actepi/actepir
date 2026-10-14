@@ -8,8 +8,9 @@
 #' resident population of the same year, and standardises them to a chosen
 #' standard population. Events can be limited to ICD-10 diagnosis codes and
 #' rates to an age range. It shows counts, crude rates and DSRs, optionally
-#' with age-specific rates, maps them by area, and copies R code that
-#' reproduces the results.
+#' with age-specific rates, maps them by area, compares areas in an
+#' interactive map and funnel plot, and copies R code that reproduces the
+#' results.
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
 #' default so that the console stays free, and it can be opened from the ACT
@@ -79,7 +80,7 @@
 #'   `Diagnosis3`), as `Diagnosis1` is recorded to 2020 and `EDShortListCode`
 #'   from 2013, so neither holds the principal diagnosis in every year.
 #'
-#' **Tables and map**
+#' **Tables, maps and funnel plot**
 #'
 #' The *Tables* tab shows the rates and, when chosen, the age-specific
 #' rates. *Copy table* copies a table as tab-separated text that pastes into
@@ -100,6 +101,41 @@
 #' given by `tools::R_user_dir("actepir", "cache")`.
 #' *Copy map* copies the map as an image where the browser allows it; *PNG*
 #' and *PDF* download it.
+#'
+#' The *Explore* tab shows an interactive map and a funnel plot side by
+#' side, with the same settings as the *Map* tab. Pointing at an area or a
+#' point shows its figures. Clicking areas or points, or drawing round them
+#' with the lasso in a plot's toolbar, selects them in both plots and lists
+#' them below; *Zoom to selected* zooms the map to them, and the magnifier in
+#' the toolbar zooms and pans. The map can be coloured by value or by each
+#' area's position in the funnel plot.
+#'
+#' The funnel plot compares each area with the average of the areas plotted,
+#' allowing for the size of its population, so that areas can be compared
+#' without being misled by the chance variation of small numbers:
+#' * Crude and age-specific rates are plotted against the population.
+#' * DSRs are plotted against the population that would give the DSR as a
+#'   crude rate from the area's events (events / DSR), as in the funnel plots
+#'   of the Office for Health Improvement and Disparities (OHID). The average
+#'   is the events of all the areas over their derived populations. DSRs from
+#'   fewer than 10 events are not plotted.
+#' * Events are divided by the events expected from the age-specific rates of
+#'   all the areas plotted (indirect standardisation) and plotted against the
+#'   expected events, as counts alone cannot be compared between areas of
+#'   different sizes.
+#'
+#' The curves are 95% and 99.8% control limits from exact Poisson tests of
+#' each area's events against the events expected at the average: an area
+#' outside them differs from the average by more than chance. When areas
+#' vary more than chance alone would explain (overdispersion), as large
+#' counts such as all ED presentations often do, most areas fall outside
+#' these limits. *Allow for overdispersion* then widens the limits by
+#' Spiegelhalter's additive random effects method, estimated from z-scores on
+#' the square root scale winsorised at the 10th and 90th percentiles, so that
+#' areas outside them stand out from the usual variation between areas. The
+#' tab reports the overdispersion ratio and its chi-squared test; with fewer
+#' than 10 areas the estimate is unreliable. Suppressed areas are neither
+#' plotted nor included in the average.
 #'
 #' **Data**
 #'
@@ -136,6 +172,16 @@
 #' results into the table shown. The code reproduces the results outside the
 #' calculator and can be adapted, for example by adding conditions to the
 #' events query.
+#'
+#' @references
+#' Spiegelhalter DJ (2005). Funnel plots for comparing institutional
+#' performance. *Statistics in Medicine*, 24(8), 1185-1202.
+#'
+#' Spiegelhalter DJ (2005). Handling over-dispersion of performance
+#' indicators. *Quality and Safety in Health Care*, 14(5), 347-351.
+#'
+#' Public Health England (2017). *Technical guide: funnel plots*. Public
+#' Health Data Science. Implemented in the R package PHEindicatormethods.
 #'
 #' @seealso
 #' [dsr_calculate()] and [dsr_age_specific()] for the calculations,
@@ -995,6 +1041,73 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 }
 
 
+# Settings of a map: what to show, the year or period, sex, the extent of
+# Australian SA3 and SA2 maps and the ages of age-specific rates. The Map and
+# Explore tabs each have a set, with input IDs that start with id.
+#' @noRd
+.dsr_map_controls <- function(id) {
+  name <- function(x) paste0(id, "_", x)
+  shiny::tagList(
+    shiny::div(
+      class = "selector-row dsr-row",
+      shiny::selectInput(
+        name("value"), "Show",
+        choices = c("Age-standardised rate" = "DSR",
+                    "Crude rate" = "Crude",
+                    "Age-specific rate" = "AgeRate",
+                    "Events" = "Events"),
+        width = "100%"
+      ),
+      shiny::selectInput(name("year"), "Year", choices = NULL,
+                         width = "100%"),
+      shiny::selectInput(name("sex"), "Sex", choices = "Persons",
+                         width = "100%"),
+      shiny::uiOutput(name("extent_ui"))
+    ),
+    shiny::conditionalPanel(
+      sprintf("input.%s == 'AgeRate'", name("value")),
+      shiny::sliderInput(
+        name("ages"), "Ages mapped",
+        min = 1, max = length(.dsr_age_labels),
+        value = c(1, length(.dsr_age_labels)),
+        step = 1, ticks = FALSE, width = "100%"
+      )
+    )
+  )
+}
+
+
+# An area's figures in words, from its row of the results, or of the rates
+# for an age range when band is TRUE
+#' @noRd
+.dsr_area_text <- function(row, band, suppress, multiplier) {
+  digits <- if (multiplier >= 100000) 1 else 2
+  num <- function(v) formatC(v, format = "f", digits = digits, big.mark = ",")
+  if (!nrow(row)) {
+    "no results."
+  } else if (isTRUE(row$Suppressed[1])) {
+    paste0("fewer than ", .fmt_count(suppress),
+           " events (suppressed); population ",
+           .fmt_count(row$Population[1]), ".")
+  } else if (band) {
+    paste0(.fmt_count(row$Events[1]), " events, population ",
+           .fmt_count(row$Population[1]), ", rate ",
+           if (is.na(row$Crude[1])) "not calculated" else paste0(
+             num(row$Crude[1]), " (95% CI ", num(row$CrudeLower[1]),
+             " to ", num(row$CrudeUpper[1]), ")"),
+           ".")
+  } else {
+    paste0(.fmt_count(row$Events[1]), " events, population ",
+           .fmt_count(row$Population[1]), ", crude rate ",
+           num(row$Crude[1]), ", DSR ",
+           if (is.na(row$DSR[1])) "not calculated" else paste0(
+             num(row$DSR[1]), " (95% CI ", num(row$DSRLower[1]), " to ",
+             num(row$DSRUpper[1]), ")"),
+           ".")
+  }
+}
+
+
 # ── App ─────────────────────────────────────────────────────────────────────
 
 # Internal factory that builds the Shiny app. Runs in the current session for
@@ -1123,6 +1236,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .map-click { font-size: 12px; color: #333; min-height: 1.6em;
                      margin-top: 4px; }
         .radio.disabled label { color: #999; }
+        .explore-row { display: flex; flex-wrap: wrap; gap: 12px; }
+        .explore-panel { flex: 1 1 400px; min-width: 0; }
+        .explore-panel .ex-linked { stroke: #320557 !important;
+                                    stroke-width: 2px !important; }
+        .ex-table { font-size: 12px; border-collapse: collapse;
+                    margin: 6px 0 10px 0; }
+        .ex-table th, .ex-table td { padding: 3px 8px;
+                                     border-bottom: 1px solid #e6e5e5; }
+        .ex-table th { color: var(--epi-primary); font-weight: 600;
+                       text-align: left; }
+        .ex-table td.num { text-align: right; }
       ")),
 
       # Clipboard handler for the code and table copy buttons
@@ -1138,7 +1262,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           var labels = %s;
           function setUp(el) {
             var slider = $(el).data('ionRangeSlider');
-            if (!slider || ['years', 'ages', 'map_ages'].indexOf(el.id) < 0) {
+            var ids = ['years', 'ages', 'map_ages', 'ex_ages'];
+            if (!slider || ids.indexOf(el.id) < 0) {
               return;
             }
             var options = {force_edges: true};
@@ -1154,6 +1279,23 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           });
         })();
       ", jsonlite::toJSON(.dsr_age_labels)))),
+
+      # Pointing at an area in the Explore tab's map or funnel plot outlines
+      # it in both, matched on the data-id that ggiraph gives each area
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          var marks = '#ex_map [data-id], #ex_funnel [data-id]';
+          $(document).on('mouseover', marks, function() {
+            var id = this.getAttribute('data-id');
+            $(marks).filter(function() {
+              return this.getAttribute('data-id') === id;
+            }).addClass('ex-linked');
+          });
+          $(document).on('mouseout', marks, function() {
+            $('.ex-linked').removeClass('ex-linked');
+          });
+        })();
+      ")),
 
       # A dataset without a principal diagnosis field (ED) searches every
       # field: the principal option is disabled for it, and the last choice
@@ -1380,31 +1522,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
         shiny::tabPanel(
           "Map", value = "map",
-          shiny::div(
-            class = "selector-row dsr-row",
-            shiny::selectInput(
-              "map_value", "Show",
-              choices = c("Age-standardised rate" = "DSR",
-                          "Crude rate" = "Crude",
-                          "Age-specific rate" = "AgeRate",
-                          "Events" = "Events"),
-              width = "100%"
-            ),
-            shiny::selectInput("map_year", "Year", choices = NULL,
-                               width = "100%"),
-            shiny::selectInput("map_sex", "Sex", choices = "Persons",
-                               width = "100%"),
-            shiny::uiOutput("map_extent_ui")
-          ),
-          shiny::conditionalPanel(
-            "input.map_value == 'AgeRate'",
-            shiny::sliderInput(
-              "map_ages", "Ages mapped",
-              min = 1, max = length(.dsr_age_labels),
-              value = c(1, length(.dsr_age_labels)),
-              step = 1, ticks = FALSE, width = "100%"
-            )
-          ),
+          .dsr_map_controls("map"),
           shiny::div(
             class = "options-row",
             shiny::actionButton("copy_map", "Copy map",
@@ -1418,6 +1536,43 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           shiny::uiOutput("map_note"),
           shiny::plotOutput("map", height = "560px", click = "map_click"),
           shiny::uiOutput("map_click_info")
+        ),
+
+        shiny::tabPanel(
+          "Explore", value = "explore",
+          .dsr_map_controls("ex"),
+          shiny::div(
+            class = "options-row",
+            shiny::selectInput(
+              "ex_colour", "Colour the map by",
+              choices = c("Value" = "value",
+                          "Position in the funnel plot" = "position"),
+              width = "220px"
+            ),
+            shiny::checkboxInput("ex_overdispersion",
+                                 "Allow for overdispersion", value = FALSE,
+                                 width = "auto"),
+            shiny::actionButton("ex_zoom", "Zoom to selected",
+                                icon = shiny::icon("magnifying-glass-plus"),
+                                class = "btn-sm btn-primary"),
+            shiny::actionButton("ex_reset", "Show all",
+                                icon = shiny::icon("expand"),
+                                class = "btn-sm btn-primary"),
+            shiny::actionButton("ex_clear", "Clear selection",
+                                icon = shiny::icon("xmark"),
+                                class = "btn-sm btn-primary")
+          ),
+          shiny::uiOutput("ex_note"),
+          shiny::uiOutput("ex_heading"),
+          shiny::div(
+            class = "explore-row",
+            shiny::div(class = "explore-panel",
+                       ggiraph::girafeOutput("ex_map")),
+            shiny::div(class = "explore-panel",
+                       ggiraph::girafeOutput("ex_funnel"))
+          ),
+          shiny::uiOutput("ex_method"),
+          shiny::uiOutput("ex_selected")
         )
       )
 
@@ -1748,86 +1903,22 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       copy_table(age_results, age = TRUE)
     })
 
-    # ── Map ────────────────────────────────────────────────────────────────
+    # ── Map and Explore ────────────────────────────────────────────────────
+    # Both tabs have the same settings (.dsr_map_controls()): inputs map_* on
+    # the Map tab and ex_* on the Explore tab
+
     # Ages mapped, kept within the ages calculated
     within_ages <- function(a, ages) {
       a <- if (is.null(a)) ages else as.integer(a)
       c(max(a[1], ages[1]), min(a[2], ages[2]))
     }
-
-    # Year or period, sex and ages mapped follow the results
-    shiny::observeEvent(results(), {
-      r <- results()
-      shiny::req(r, is.null(r$error))
-      times <- sort(unique(r$summary[[r$by[1]]]), decreasing = TRUE)
-      sexes <- intersect(c("Persons", "Male", "Female"), unique(r$summary$Sex))
-      shiny::updateSelectInput(
-        session, "map_year", label = r$by[1], choices = times,
-        selected = if (isTRUE(input$map_year %in% times)) input$map_year else times[1]
-      )
-      shiny::updateSelectInput(
-        session, "map_sex", choices = sexes,
-        selected = if (isTRUE(input$map_sex %in% sexes)) input$map_sex else "Persons"
-      )
-      ages <- r$spec$ages
-      now  <- within_ages(input$map_ages, ages)
-      if (now[1] > now[2]) now <- ages
-      shiny::updateSliderInput(session, "map_ages", min = ages[1],
-                               max = ages[2], value = now)
-    })
-
-    # Ages of the age-specific map, and in words for titles
-    map_ages <- shiny::reactive({
-      r <- results()
-      shiny::req(r, is.null(r$error))
-      a <- within_ages(input$map_ages, r$spec$ages)
-      shiny::req(a[1] <= a[2])
-      a
-    })
     ages_words <- function(ages) {
       words <- .dsr_ages_text(ages)
       if (is.null(words)) "all ages" else paste("aged", words)
     }
 
-    # Age-specific rates for the map: the events and population of the ages
-    # mapped give the rate for that age range, suppressed as in the tables
-    map_band <- shiny::reactive({
-      r <- results()
-      shiny::req(r, is.null(r$error))
-      ages <- map_ages()
-      suppressMessages(dsr_calculate(
-        .dsr_truncate(r$events, ages), .dsr_truncate(r$population, ages),
-        r$standard, by = r$by, by_sex = isTRUE(input$by_sex),
-        multiplier = r$multiplier, suppress = r$suppress
-      ))
-    })
-
     # A state map of the ACT alone shows one area
     mappable <- function(s) !(s$scope == "ACT" && s$level == "state")
-
-    # Longitude and latitude limits of the map. The ACT, and the ACT and
-    # surrounds, show all their areas. Australian SA3 and SA2 maps open on the
-    # ACT and surrounding region. The view of Australia leaves out Christmas,
-    # Cocos (Keeling) and Norfolk Islands, which would shrink the mainland.
-    map_view <- function(s) {
-      if (s$scope != "AUS") return(list())
-      if (s$level != "state" && !identical(input$map_extent, "all")) {
-        return(list(xlim = c(147.6, 150.6), ylim = c(-37.1, -34.0)))
-      }
-      list(xlim = c(112.5, 154), ylim = c(-44, -9.5))
-    }
-
-    output$map_extent_ui <- shiny::renderUI({
-      r <- results()
-      shiny::req(r, is.null(r$error), r$spec$scope == "AUS",
-                 r$spec$level != "state")
-      shiny::selectInput(
-        "map_extent", "Extent",
-        choices = c("ACT and surrounding region" = "region",
-                    "Australia" = "all"),
-        width = "100%"
-      )
-    })
 
     # Boundaries are downloaded when the map is first shown for a level and
     # population, then kept for the session (and on disk by .dsr_boundaries)
@@ -1850,19 +1941,138 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       cache[[key]]
     })
 
-    map_values <- shiny::reactive({
-      r <- results()
-      shiny::req(r, is.null(r$error), input$map_year, input$map_sex,
-                 input$map_value)
-      band  <- input$map_value == "AgeRate"
-      rates <- if (band) map_band() else r$summary
-      d <- rates[as.character(rates[[r$by[1]]]) == input$map_year &
-                   rates$Sex == input$map_sex, ]
-      value <- if (band) "Crude" else input$map_value
-      list(r = r, rows = d, band = band,
-           values = data.frame(Area = d$Area, Value = d[[value]],
-                               stringsAsFactors = FALSE))
-    })
+    # The settings of one tab: the rows of the results to show, the ages and
+    # rates of age-specific maps, the measure's label and the extent
+    map_settings <- function(id) {
+
+      name <- function(x) paste0(id, "_", x)
+      get  <- function(x) input[[name(x)]]
+
+      # Year or period, sex and ages mapped follow the results
+      shiny::observeEvent(results(), {
+        r <- results()
+        shiny::req(r, is.null(r$error))
+        times <- sort(unique(r$summary[[r$by[1]]]), decreasing = TRUE)
+        sexes <- intersect(c("Persons", "Male", "Female"),
+                           unique(r$summary$Sex))
+        year <- get("year")
+        sex  <- get("sex")
+        shiny::updateSelectInput(
+          session, name("year"), label = r$by[1], choices = times,
+          selected = if (isTRUE(year %in% times)) year else times[1]
+        )
+        shiny::updateSelectInput(
+          session, name("sex"), choices = sexes,
+          selected = if (isTRUE(sex %in% sexes)) sex else "Persons"
+        )
+        ages <- r$spec$ages
+        now  <- within_ages(get("ages"), ages)
+        if (now[1] > now[2]) now <- ages
+        shiny::updateSliderInput(session, name("ages"), min = ages[1],
+                                 max = ages[2], value = now)
+      })
+
+      # Ages of age-specific rates
+      ages <- shiny::reactive({
+        r <- results()
+        shiny::req(r, is.null(r$error))
+        a <- within_ages(get("ages"), r$spec$ages)
+        shiny::req(a[1] <= a[2])
+        a
+      })
+
+      # Age-specific rates: the events and population of the ages mapped give
+      # the rate for that age range, suppressed as in the tables
+      band <- shiny::reactive({
+        r <- results()
+        shiny::req(r, is.null(r$error))
+        a <- ages()
+        suppressMessages(dsr_calculate(
+          .dsr_truncate(r$events, a), .dsr_truncate(r$population, a),
+          r$standard, by = r$by, by_sex = isTRUE(input$by_sex),
+          multiplier = r$multiplier, suppress = r$suppress
+        ))
+      })
+
+      # The rows of one year or period and sex, and the value shown
+      values <- shiny::reactive({
+        r <- results()
+        shiny::req(r, is.null(r$error), get("year"), get("sex"), get("value"))
+        is_band <- get("value") == "AgeRate"
+        rates <- if (is_band) band() else r$summary
+        d <- rates[as.character(rates[[r$by[1]]]) == get("year") &
+                     rates$Sex == get("sex"), ]
+        value <- if (is_band) "Crude" else get("value")
+        list(r = r, rows = d, band = is_band,
+             values = data.frame(Area = d$Area, Value = d[[value]],
+                                 stringsAsFactors = FALSE))
+      })
+
+      # The measure shown, e.g. "Age-specific rate per 100,000, aged 20 to 44"
+      label <- function(r) {
+        per <- paste0(" per ", .fmt_count(r$multiplier))
+        switch(get("value"),
+               DSR     = paste0("Age-standardised rate", per),
+               Crude   = paste0("Crude rate", per),
+               AgeRate = paste0("Age-specific rate", per, ", ",
+                                ages_words(ages())),
+               Events  = "Events")
+      }
+
+      # Longitude and latitude limits of the map. The ACT, and the ACT and
+      # surrounds, show all their areas. Australian SA3 and SA2 maps open on
+      # the ACT and surrounding region. The view of Australia leaves out
+      # Christmas, Cocos (Keeling) and Norfolk Islands, which would shrink the
+      # mainland.
+      view <- function(s) {
+        if (s$scope != "AUS") return(list())
+        if (s$level != "state" && !identical(get("extent"), "all")) {
+          return(list(xlim = c(147.6, 150.6), ylim = c(-37.1, -34.0)))
+        }
+        list(xlim = c(112.5, 154), ylim = c(-44, -9.5))
+      }
+
+      output[[name("extent_ui")]] <- shiny::renderUI({
+        r <- results()
+        shiny::req(r, is.null(r$error), r$spec$scope == "AUS",
+                   r$spec$level != "state")
+        shiny::selectInput(
+          name("extent"), "Extent",
+          choices = c("ACT and surrounding region" = "region",
+                      "Australia" = "all"),
+          width = "100%"
+        )
+      })
+
+      title  <- function(r) {
+        paste0(label(r), ", ", get("year"), ", ", tolower(get("sex")))
+      }
+      legend <- function() {
+        switch(get("value"), DSR = "DSR", Crude = "Crude rate",
+               AgeRate = "Rate", Events = "Events")
+      }
+
+      list(get = get, ages = ages, band = band, values = values,
+           label = label, title = title, legend = legend, view = view)
+    }
+
+    # The note under a map on what grey areas are, and the boundaries' credit
+    map_caption <- function(r) {
+      paste0(
+        "Grey: ",
+        if (r$suppress > 0) {
+          paste0("fewer than ", .fmt_count(r$suppress),
+                 " events (suppressed) or ")
+        },
+        "no value. Boundaries: ABS ", .dsr_asgs$name, ", CC BY 4.0."
+      )
+    }
+
+    ms <- map_settings("map")
+    map_ages   <- ms$ages
+    map_band   <- ms$band
+    map_values <- ms$values
+    map_view   <- ms$view
 
     map_plot <- shiny::reactive({
       b <- boundaries()
@@ -1870,31 +2080,15 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       m <- map_values()
       r <- m$r
       s <- r$spec
-      value <- input$map_value
-      per <- paste0(" per ", .fmt_count(r$multiplier))
-      label <- switch(value,
-                      DSR     = paste0("Age-standardised rate", per),
-                      Crude   = paste0("Crude rate", per),
-                      AgeRate = paste0("Age-specific rate", per, ", ",
-                                       ages_words(map_ages())),
-                      Events  = "Events")
       view <- map_view(s)
       .dsr_map_plot(
         b$polys, m$values,
-        legend   = switch(value, DSR = "DSR", Crude = "Crude rate",
-                          AgeRate = "Rate", Events = "Events"),
-        title    = paste0(label, ", ", input$map_year, ", ",
-                          tolower(input$map_sex)),
-        subtitle = .dsr_describe(s, if (value == "DSR") std_name(s$standard),
-                                 years = FALSE),
-        caption  = paste0(
-          "Grey: ",
-          if (r$suppress > 0) {
-            paste0("fewer than ", .fmt_count(r$suppress),
-                   " events (suppressed) or ")
-          },
-          "no value. Boundaries: ABS ", .dsr_asgs$name, ", CC BY 4.0."
-        ),
+        legend   = ms$legend(),
+        title    = ms$title(r),
+        subtitle = .dsr_describe(s, if (input$map_value == "DSR") {
+                                   std_name(s$standard)
+                                 }, years = FALSE),
+        caption  = map_caption(r),
         xlim = view$xlim,
         ylim = view$ylim
       )
@@ -1936,30 +2130,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       head <- paste0(area_label(m$r$spec), " ", area,
                      if (!is.na(name) && name != area) paste0(" ", name),
                      if (m$band) paste0(", ", ages_words(map_ages())), ": ")
-      digits <- if (m$r$multiplier >= 100000) 1 else 2
-      num <- function(v) formatC(v, format = "f", digits = digits, big.mark = ",")
-      text <- if (!nrow(row)) {
-        "no results."
-      } else if (isTRUE(row$Suppressed[1])) {
-        paste0("fewer than ", .fmt_count(m$r$suppress),
-               " events (suppressed); population ",
-               .fmt_count(row$Population[1]), ".")
-      } else if (m$band) {
-        paste0(.fmt_count(row$Events[1]), " events, population ",
-               .fmt_count(row$Population[1]), ", rate ",
-               if (is.na(row$Crude[1])) "not calculated" else paste0(
-                 num(row$Crude[1]), " (95% CI ", num(row$CrudeLower[1]),
-                 " to ", num(row$CrudeUpper[1]), ")"),
-               ".")
-      } else {
-        paste0(.fmt_count(row$Events[1]), " events, population ",
-               .fmt_count(row$Population[1]), ", crude rate ",
-               num(row$Crude[1]), ", DSR ",
-               if (is.na(row$DSR[1])) "not calculated" else paste0(
-                 num(row$DSR[1]), " (95% CI ", num(row$DSRLower[1]), " to ",
-                 num(row$DSRUpper[1]), ")"),
-               ".")
-      }
+      text <- .dsr_area_text(row, m$band, m$r$suppress, m$r$multiplier)
       shiny::div(class = "map-click", shiny::strong(head), text)
     })
 
@@ -1995,6 +2166,372 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       filename = map_file("pdf"),
       content  = function(file) save_map(file, "pdf")
     )
+
+    # ── Explore: interactive map and funnel plot ───────────────────────────
+    ex <- map_settings("ex")
+
+    # Areas selected in either plot, shown selected in both, and the extent
+    # the map is zoomed to (NULL for the tab's extent)
+    ex_selected <- shiny::reactiveVal(character(0))
+    ex_zoom     <- shiny::reactiveVal(NULL)
+    shiny::observeEvent(results(), ex_zoom(NULL))
+
+    # Funnel plot data for the tab's settings. Events are compared with those
+    # expected from the age-specific rates of the areas not suppressed.
+    ex_funnel <- shiny::reactive({
+      m <- ex$values()
+      r <- m$r
+      value <- ex$get("value")
+      expected <- if (value == "Events") {
+        st <- .dsr_strata(r$events, r$population, r$by, by_sex = TRUE)$data
+        st <- st[as.character(st[[r$by[1]]]) == ex$get("year") &
+                   st$Sex == ex$get("sex"), , drop = FALSE]
+        .dsr_funnel_expected(st, m$rows$Area[!m$rows$Suppressed])
+      }
+      .dsr_funnel(m$rows, value, multiplier = r$multiplier,
+                  years = r$spec$pool, expected = expected,
+                  overdispersion = isTRUE(input$ex_overdispersion))
+    })
+
+    # Area names from the boundaries, when they could be downloaded
+    ex_names <- shiny::reactive({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      if (!mappable(r$spec)) return(NULL)
+      b <- boundaries()
+      if (!is.null(b$error)) return(NULL)
+      stats::setNames(b$polys$Name, b$polys$Area)[!duplicated(b$polys$Area)]
+    })
+
+    # Tooltip of each area: its name, figures and position in the funnel plot
+    ex_tooltips <- shiny::reactive({
+      m <- ex$values()
+      f <- ex_funnel()
+      nm <- ex_names()
+      areas <- unique(c(names(nm), m$rows$Area))
+      digits <- if (m$r$multiplier >= 100000) 1 else 2
+      vapply(areas, function(a) {
+        row  <- m$rows[m$rows$Area %in% a, , drop = FALSE]
+        name <- if (a %in% names(nm)) nm[[a]] else NA
+        i    <- match(a, f$points$Area)
+        head <- paste0(area_label(m$r$spec), " ", a,
+                       if (!is.na(name) && name != a) paste0(" ", name),
+                       if (m$band) paste0(", ", ages_words(ex$ages())))
+        lines <- c(
+          paste0("<b>", htmltools::htmlEscape(head), "</b>"),
+          htmltools::htmlEscape(
+            .dsr_area_text(row, m$band, m$r$suppress, m$r$multiplier)
+          ),
+          if (f$measure == "Events" && !is.na(i)) {
+            paste0("Expected events ",
+                   formatC(f$points$Expected[i], format = "f", digits = 1,
+                           big.mark = ","),
+                   ", observed / expected ",
+                   formatC(f$points$Value[i], format = "f", digits = 2))
+          },
+          if (!is.na(i)) paste0("Funnel plot: ", f$points$Position[i])
+        )
+        paste(lines, collapse = "<br>")
+      }, character(1))
+    })
+
+    # Both plots are SVG drawn by ggiraph, with the same selection, hover
+    # and zoom behaviour
+    ex_girafe <- function(p) {
+      p <- p + ggplot2::theme(plot.margin = ggplot2::margin(26, 12, 8, 8))
+      ggiraph::girafe(
+        ggobj = p, width_svg = 6.5, height_svg = 6,
+        options = list(
+          ggiraph::opts_selection(
+            type = "multiple", selected = shiny::isolate(ex_selected()),
+            css = "stroke:#320557;stroke-width:2.5px;"
+          ),
+          ggiraph::opts_selection_inv(css = "opacity:0.35;"),
+          ggiraph::opts_hover(css = "stroke:#320557;stroke-width:2px;"),
+          ggiraph::opts_zoom(min = 1, max = 10),
+          ggiraph::opts_toolbar(position = "topright", saveaspng = FALSE),
+          ggiraph::opts_tooltip(
+            css = paste0("background:#ffffff;color:#333740;",
+                         "border:1px solid #c8c3dd;border-radius:4px;",
+                         "padding:6px 8px;font-size:12px;"),
+            opacity = 1
+          ),
+          ggiraph::opts_sizing(rescale = TRUE)
+        )
+      )
+    }
+
+    output$ex_map <- ggiraph::renderGirafe({
+      b <- boundaries()
+      shiny::req(is.null(b$error))
+      m <- ex$values()
+      r <- m$r
+      s <- r$spec
+      f <- ex_funnel()
+      by_position <- identical(input$ex_colour, "position")
+      values <- if (by_position) {
+        data.frame(
+          Area  = if (is.null(f$points)) character(0) else f$points$Area,
+          Value = if (is.null(f$points)) {
+            factor(character(0), levels = .dsr_funnel_positions)
+          } else {
+            f$points$Position
+          },
+          stringsAsFactors = FALSE
+        )
+      } else {
+        m$values
+      }
+      view <- ex_zoom()
+      if (is.null(view)) view <- ex$view(s)
+      p <- .dsr_map_plot(
+        b$polys, values,
+        legend   = if (by_position) "Funnel plot" else ex$legend(),
+        caption  = if (by_position) {
+          paste0("Grey: not in the funnel plot. Boundaries: ABS ",
+                 .dsr_asgs$name, ", CC BY 4.0.")
+        } else {
+          map_caption(r)
+        },
+        xlim = view$xlim, ylim = view$ylim,
+        tooltips = ex_tooltips()
+      )
+      ex_girafe(p)
+    })
+
+    # The measure, year and sex, and the settings, over both plots
+    output$ex_heading <- shiny::renderUI({
+      m <- ex$values()
+      s <- m$r$spec
+      shiny::div(
+        class = "epi-table-head", style = "display: block;",
+        shiny::h5(ex$title(m$r)),
+        shiny::div(class = "epi-note", style = "margin: 2px 0 0 0;",
+                   .dsr_describe(s, if (ex$get("value") == "DSR") {
+                     std_name(s$standard)
+                   }, years = FALSE))
+      )
+    })
+
+    # Axis titles of the funnel plot for the measure
+    ex_axes <- function(f) {
+      a <- if (f$measure == "AgeRate") .dsr_ages_text(ex$ages())
+      year <- if (f$years > 1) " a year"
+      per <- paste0(" per ", .fmt_count(f$multiplier))
+      switch(
+        f$measure,
+        DSR     = list(x = paste0("Population derived from events and DSR",
+                                  year),
+                       y = paste0("Age-standardised rate", per)),
+        Crude   = list(x = paste0("Population", year),
+                       y = paste0("Crude rate", per)),
+        AgeRate = list(x = paste0("Population", if (!is.null(a)) {
+                                    paste0(" aged ", a)
+                                  }, year),
+                       y = paste0("Age-specific rate", per,
+                                  if (!is.null(a)) paste0(", aged ", a))),
+        Events  = list(x = "Expected events",
+                       y = "Observed / expected events")
+      )
+    }
+
+    output$ex_funnel <- ggiraph::renderGirafe({
+      f <- ex_funnel()
+      shiny::req(!is.null(f$points), nrow(f$points) >= 2)
+      tips <- ex_tooltips()
+      f$points$Tooltip <- unname(tips[f$points$Area])
+      ax <- ex_axes(f)
+      p <- .dsr_funnel_plot(
+        f, xlab = ax$x, ylab = ax$y,
+        caption  = paste0(
+          "Line: average of the areas plotted. Curves: 95% and 99.8% ",
+          "control limits", if (f$adjusted) ", allowing for overdispersion",
+          "."
+        )
+      )
+      ex_girafe(p)
+    })
+
+    # A selection in either plot is made in the other too
+    ex_select <- function(ids) {
+      if (is.null(ids)) ids <- character(0)
+      if (setequal(ids, ex_selected())) return(invisible(NULL))
+      ex_selected(ids)
+      session$sendCustomMessage("ex_map_set", ids)
+      session$sendCustomMessage("ex_funnel_set", ids)
+    }
+    shiny::observeEvent(input$ex_map_selected,
+                        ex_select(input$ex_map_selected), ignoreNULL = FALSE)
+    shiny::observeEvent(input$ex_funnel_selected,
+                        ex_select(input$ex_funnel_selected), ignoreNULL = FALSE)
+    shiny::observeEvent(input$ex_clear, ex_select(character(0)))
+
+    # Zoom the map to the selected areas, or back to the tab's extent
+    shiny::observeEvent(input$ex_zoom, {
+      b <- boundaries()
+      p <- b$polys[b$polys$Area %in% ex_selected(), , drop = FALSE]
+      if (!nrow(p)) {
+        shiny::showNotification(
+          "Select areas in the map or the funnel plot first.",
+          duration = 4, type = "message"
+        )
+        return(invisible(NULL))
+      }
+      pad <- 0.1 * max(diff(range(p$x)), diff(range(p$y)), 0.05)
+      ex_zoom(list(xlim = range(p$x) + c(-pad, pad),
+                   ylim = range(p$y) + c(-pad, pad)))
+    })
+    shiny::observeEvent(input$ex_reset, ex_zoom(NULL))
+
+    output$ex_note <- shiny::renderUI({
+      note <- function(...) shiny::div(class = "epi-note", ...)
+      if (is.null(rv$fetched)) {
+        return(note("Press Calculate, then the map and funnel plot show ",
+                    "the results."))
+      }
+      if (!mappable(rv$fetched$spec)) {
+        return(note("Choose SA3 or SA2 to compare areas within the ACT."))
+      }
+      b <- boundaries()
+      if (!is.null(b$error)) {
+        return(shiny::div(
+          class = "epi-note epi-error",
+          "The boundaries could not be downloaded from the ABS ",
+          "(geo.abs.gov.au), so only the funnel plot is shown: ", b$error
+        ))
+      }
+      note("Point at an area or a point for its figures. Click areas or ",
+           "points, or draw round them with the lasso in a plot's toolbar, ",
+           "to select them in both plots. The magnifier in the toolbar ",
+           "zooms and pans.")
+    })
+
+    # How the funnel plot is made, and how much the areas vary
+    output$ex_method <- shiny::renderUI({
+      f <- ex_funnel()
+      shiny::req(!is.null(f$points), nrow(f$points) >= 2)
+      digits <- if (f$measure == "Events") 2 else
+        if (f$multiplier >= 100000) 1 else 2
+      centre <- formatC(f$centre, format = "f", digits = digits,
+                        big.mark = ",")
+      what <- switch(
+        f$measure,
+        DSR     = paste0("Each area's DSR is plotted against the population ",
+                         "that would give it as a crude rate from the area's ",
+                         "events (events / DSR), as in OHID's funnel plots"),
+        Crude   = "Each area's crude rate is plotted against its population",
+        AgeRate = paste0("Each area's rate is plotted against its ",
+                         "population of those ages"),
+        Events  = paste0("Each area's events are divided by the events ",
+                         "expected from the age-specific rates of all the ",
+                         "areas plotted, and plotted against the expected ",
+                         "events")
+      )
+      left_out <- c(
+        if (f$suppressed) paste0(f$suppressed, " suppressed"),
+        if (f$no_value) paste0(f$no_value, " with no value"),
+        if (f$few_events) {
+          paste0(f$few_events, " with a DSR from fewer than ",
+                 .dsr_funnel_min_dsr, " events")
+        }
+      )
+      od <- f$od
+      spread <- if (!is.null(od)) {
+        over <- od$p < 0.05
+        paste0(
+          if (over) {
+            paste0("The areas vary more than chance alone would explain ",
+                   "(overdispersion ratio ")
+          } else {
+            paste0("The areas vary no more than chance would explain ",
+                   "(overdispersion ratio ")
+          },
+          formatC(od$phi, format = "f", digits = 1), ", p ",
+          if (od$p < 0.001) "< 0.001" else paste0("= ", signif(od$p, 2)), "). ",
+          if (f$adjusted) {
+            paste0("The limits allow for this, so areas outside them stand ",
+                   "out from the usual variation between areas.")
+          } else if (isTRUE(input$ex_overdispersion)) {
+            "So there is nothing to allow for, and the limits are unchanged."
+          } else if (over) {
+            paste0("Areas outside the limits differ from the average by more ",
+                   "than chance; tick Allow for overdispersion to see which ",
+                   "also stand out from the usual variation between areas.")
+          },
+          if (od$n < 10) {
+            " With fewer than 10 areas this estimate is unreliable."
+          }
+        )
+      }
+      shiny::div(
+        class = "epi-note",
+        style = "margin-top: 8px;",
+        paste0(
+          what, ". The line is the average of the areas plotted (", centre,
+          "), and the curves are 95% and 99.8% control limits",
+          if (f$adjusted) ", allowing for overdispersion" else
+            ", from exact Poisson tests",
+          ". ", nrow(f$points), " areas are plotted",
+          if (length(left_out)) {
+            n <- length(left_out)
+            paste0("; not plotted: ", if (n > 1) {
+              paste(paste(left_out[-n], collapse = ", "), "and", left_out[n])
+            } else {
+              left_out
+            })
+          },
+          ". ", spread
+        )
+      )
+    })
+
+    # The selected areas' figures
+    output$ex_selected <- shiny::renderUI({
+      ids <- ex_selected()
+      shiny::req(length(ids))
+      m <- ex$values()
+      f <- ex_funnel()
+      nm <- ex_names()
+      digits <- if (m$r$multiplier >= 100000) 1 else 2
+      num <- function(v, d = digits) {
+        ifelse(is.na(v), "", formatC(v, format = "f", digits = d,
+                                     big.mark = ","))
+      }
+      # Events are shown as observed / expected, as in the funnel plot
+      ratio <- f$measure == "Events"
+      rows <- lapply(ids, function(a) {
+        row <- m$rows[m$rows$Area %in% a, , drop = FALSE]
+        i <- match(a, f$points$Area)
+        val <- if (ratio) f$points$Value[i] else
+          m$values$Value[match(a, m$values$Area)]
+        shiny::tags$tr(
+          shiny::tags$td(a),
+          shiny::tags$td(if (a %in% names(nm)) nm[[a]] else ""),
+          shiny::tags$td(class = "num", if (nrow(row)) {
+            if (isTRUE(row$Suppressed[1])) {
+              paste0("<", .fmt_count(m$r$suppress))
+            } else {
+              .fmt_count(row$Events[1])
+            }
+          }),
+          shiny::tags$td(class = "num",
+                         if (nrow(row)) .fmt_count(row$Population[1])),
+          shiny::tags$td(class = "num", num(val, if (ratio) 2 else digits)),
+          shiny::tags$td(if (is.na(i)) "Not plotted" else
+            as.character(f$points$Position[i]))
+        )
+      })
+      shiny::tags$table(
+        class = "ex-table",
+        shiny::tags$thead(shiny::tags$tr(
+          shiny::tags$th(area_label(m$r$spec)), shiny::tags$th("Name"),
+          shiny::tags$th("Events"), shiny::tags$th("Population"),
+          shiny::tags$th(if (ratio) "Observed / expected" else ex$legend()),
+          shiny::tags$th("Funnel plot")
+        )),
+        shiny::tags$tbody(rows)
+      )
+    })
 
     # ── Insert / copy code button ──────────────────────────────────────────
     shiny::observeEvent(input$insert_code, {

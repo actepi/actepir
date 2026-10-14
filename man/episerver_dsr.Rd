@@ -64,8 +64,9 @@ sex, 5-year age group and area of residence, matches them to the estimated
 resident population of the same year, and standardises them to a chosen
 standard population. Events can be limited to ICD-10 diagnosis codes and
 rates to an age range. It shows counts, crude rates and DSRs, optionally
-with age-specific rates, maps them by area, and copies R code that
-reproduces the results.
+with age-specific rates, maps them by area, compares areas in an
+interactive map and funnel plot, and copies R code that reproduces the
+results.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
@@ -131,7 +132,7 @@ of its diagnosis fields (\code{EDShortListCode} and \code{Diagnosis1} to
 from 2013, so neither holds the principal diagnosis in every year.
 }
 
-\strong{Tables and map}
+\strong{Tables, maps and funnel plot}
 
 The \emph{Tables} tab shows the rates and, when chosen, the age-specific
 rates. \emph{Copy table} copies a table as tab-separated text that pastes into
@@ -152,6 +153,43 @@ Edition 3 (2021) boundaries, downloaded from the ABS boundary service
 given by \code{tools::R_user_dir("actepir", "cache")}.
 \emph{Copy map} copies the map as an image where the browser allows it; \emph{PNG}
 and \emph{PDF} download it.
+
+The \emph{Explore} tab shows an interactive map and a funnel plot side by
+side, with the same settings as the \emph{Map} tab. Pointing at an area or a
+point shows its figures. Clicking areas or points, or drawing round them
+with the lasso in a plot's toolbar, selects them in both plots and lists
+them below; \emph{Zoom to selected} zooms the map to them, and the magnifier in
+the toolbar zooms and pans. The map can be coloured by value or by each
+area's position in the funnel plot.
+
+The funnel plot compares each area with the average of the areas plotted,
+allowing for the size of its population, so that areas can be compared
+without being misled by the chance variation of small numbers:
+\itemize{
+\item Crude and age-specific rates are plotted against the population.
+\item DSRs are plotted against the population that would give the DSR as a
+crude rate from the area's events (events / DSR), as in the funnel plots
+of the Office for Health Improvement and Disparities (OHID). The average
+is the events of all the areas over their derived populations. DSRs from
+fewer than 10 events are not plotted.
+\item Events are divided by the events expected from the age-specific rates of
+all the areas plotted (indirect standardisation) and plotted against the
+expected events, as counts alone cannot be compared between areas of
+different sizes.
+}
+
+The curves are 95\% and 99.8\% control limits from exact Poisson tests of
+each area's events against the events expected at the average: an area
+outside them differs from the average by more than chance. When areas
+vary more than chance alone would explain (overdispersion), as large
+counts such as all ED presentations often do, most areas fall outside
+these limits. \emph{Allow for overdispersion} then widens the limits by
+Spiegelhalter's additive random effects method, estimated from z-scores on
+the square root scale winsorised at the 10th and 90th percentiles, so that
+areas outside them stand out from the usual variation between areas. The
+tab reports the overdispersion ratio and its chi-squared test; with fewer
+than 10 areas the estimate is unreliable. Suppressed areas are neither
+plotted nor included in the average.
 
 \strong{Data}
 
@@ -201,6 +239,16 @@ episerver_dsr(display = "browser")
 episerver_dsr_stop()
 }
 
+}
+\references{
+Spiegelhalter DJ (2005). Funnel plots for comparing institutional
+performance. \emph{Statistics in Medicine}, 24(8), 1185-1202.
+
+Spiegelhalter DJ (2005). Handling over-dispersion of performance
+indicators. \emph{Quality and Safety in Health Care}, 14(5), 347-351.
+
+Public Health England (2017). \emph{Technical guide: funnel plots}. Public
+Health Data Science. Implemented in the R package PHEindicatormethods.
 }
 \seealso{
 \code{\link[=dsr_calculate]{dsr_calculate()}} and \code{\link[=dsr_age_specific]{dsr_age_specific()}} for the calculations,
