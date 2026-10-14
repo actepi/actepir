@@ -13,6 +13,11 @@
   sa2   = list(service = "SA2", prefix = "sa2")
 )
 
+# How far the server may simplify the boundaries of a population, in degrees:
+# about 20 m for the ACT and 200 m for wider areas
+#' @noRd
+.dsr_boundary_offset <- function(scope) if (scope == "ACT") 0.0002 else 0.002
+
 # The boundary layer of a level, e.g. .../ASGS2021/SA3/MapServer/0
 #' @noRd
 .dsr_abs_layer <- function(level) {
@@ -93,7 +98,8 @@
       outFields          = paste(code, name, sep = ","),
       returnGeometry     = "true",
       outSR              = "4326",
-      maxAllowableOffset = if (scope == "ACT") "0.0002" else "0.002",
+      maxAllowableOffset = format(.dsr_boundary_offset(scope),
+                                  scientific = FALSE),
       geometryPrecision  = "5",
       f                  = "geojson"
     ))))
@@ -238,11 +244,13 @@
 # Choropleth of one value per area: polys from .dsr_boundaries() and values
 # with Area and Value. Areas with no value (suppressed or not calculated) are
 # grey. xlim and ylim crop the view, and only polygons that reach into it are
-# drawn and set the colour scale.
+# drawn and set the colour scale. A factor Value holds funnel plot positions.
+# With tooltips, named by area, the areas are interactive for ggiraph and
+# identified by Area.
 #' @noRd
 .dsr_map_plot <- function(polys, values, legend, title = NULL,
                           subtitle = NULL, caption = NULL,
-                          xlim = NULL, ylim = NULL) {
+                          xlim = NULL, ylim = NULL, tooltips = NULL) {
 
   if (!is.null(xlim) && !is.null(ylim)) {
     g  <- polys$group
@@ -257,14 +265,31 @@
   wrap  <- function(s, width) {
     if (!is.null(s)) paste(strwrap(s, width = width), collapse = "\n")
   }
+  areas <- if (is.null(tooltips)) {
+    ggplot2::geom_polygon(colour = "white", linewidth = 0.25)
+  } else {
+    polys$Tooltip <- unname(tooltips[polys$Area])
+    ggiraph::geom_polygon_interactive(
+      ggplot2::aes(tooltip = .data$Tooltip, data_id = .data$Area),
+      colour = "white", linewidth = 0.25, show.legend = TRUE
+    )
+  }
+  fill <- if (is.factor(polys$Value)) {
+    ggplot2::scale_fill_manual(
+      values = .dsr_funnel_colours, drop = FALSE, na.value = "#efefec",
+      name = legend, labels = function(x) ifelse(is.na(x), "Not plotted", x)
+    )
+  } else {
+    acthd_ggplot_fill("web_purples", discrete = FALSE, reverse = TRUE,
+                      na.value = "#d9d9d9", name = legend, labels = comma)
+  }
 
   ggplot2::ggplot(polys, ggplot2::aes(x = .data$x, y = .data$y,
                                       group = .data$group,
                                       subgroup = .data$subgroup,
                                       fill = .data$Value)) +
-    ggplot2::geom_polygon(colour = "white", linewidth = 0.25) +
-    acthd_ggplot_fill("web_purples", discrete = FALSE, reverse = TRUE,
-                      na.value = "#d9d9d9", name = legend, labels = comma) +
+    areas +
+    fill +
     ggplot2::coord_quickmap(xlim = xlim, ylim = ylim, expand = FALSE) +
     ggplot2::labs(title = title, subtitle = wrap(subtitle, 70),
                   caption = wrap(caption, 90)) +

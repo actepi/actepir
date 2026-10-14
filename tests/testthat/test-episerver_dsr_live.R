@@ -286,6 +286,18 @@ test_that("the app calculates against EpiServer", {
     expect_null(rv$error)
     expect_lt(sum(results()$summary$Events, na.rm = TRUE), total)
     expect_equal(sort(unique(age_results()$AgeGroup)), 8:15)
+
+    # The Explore tab's funnel plots of the same results
+    session$setInputs(ex_value = "DSR", ex_year = "2021-2023",
+                      ex_sex = "Persons")
+    f <- ex_funnel()
+    expect_gt(nrow(f$points), 0)
+    expect_true(is.finite(f$centre))
+    expect_true(all(f$points$Position %in% .dsr_funnel_positions))
+    session$setInputs(ex_value = "Events")
+    f <- ex_funnel()
+    expect_equal(f$centre, 1)
+    expect_equal(sum(f$points$Expected), sum(f$points$Events))
   })
 
 })

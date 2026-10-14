@@ -1146,6 +1146,17 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
   expect_match(page, "<option value=\"sa3\">SA3 (ASGS 2021)</option>",
                fixed = TRUE)
 
+  # The Map and Explore tabs each have the map settings
+  for (id in c("map", "ex")) {
+    for (input in c("value", "year", "sex", "ages")) {
+      expect_match(page, paste0("id=\"", id, "_", input, "\""), fixed = TRUE)
+    }
+  }
+  expect_match(page, "data-value=\"explore\"", fixed = TRUE)
+  expect_match(page, "id=\"ex_funnel\"", fixed = TRUE)
+  expect_match(page, "id=\"ex_overdispersion\"[^>]*checked")
+  expect_match(page, "data-value=\"help\"", fixed = TRUE)
+
 })
 
 test_that("the app limits the rates to an age range and reuses the counts", {
@@ -1270,6 +1281,153 @@ test_that("the app labels SA3 tables, descriptions and maps with ASGS 2021", {
                  fixed = TRUE)
     expect_match(gsub("\n", " ", p$labels$caption),
                  "Boundaries: ABS ASGS Edition 3 (2021), CC BY 4.0.", fixed = TRUE)
+  })
+
+})
+
+# ── Explore tab ─────────────────────────────────────────────────────────────
+
+# Six SA3s of different sizes; 80105 has twice the event rates of the others
+explore_query <- local({
+  codes <- c("80101", "80103", "80104", "80105", "80106", "80107")
+  size  <- c(1, 0.05, 0.8, 0.6, 0.3, 0.9)
+  rate  <- c(1, 1, 1, 2, 1, 1)
+  pop <- do.call(rbind, lapply(seq_along(codes), function(i) {
+    p <- fake_population
+    p$Area <- codes[i]
+    p$Population <- round(p$Population * size[i])
+    p
+  }))
+  ev <- do.call(rbind, lapply(seq_along(codes), function(i) {
+    e <- fake_events[!is.na(fake_events$Area), ]
+    e$Area <- codes[i]
+    e$Events <- round(e$Events * size[i] * rate[i] * 10)
+    e
+  }))
+  function(sql) {
+    if (grepl("AS Events", sql, fixed = TRUE)) return(ev)
+    if (grepl("AS Population", sql, fixed = TRUE)) return(pop)
+    fake_episerver()$query(sql)
+  }
+})
+explore_polys <- function(level, scope, ...) {
+  square_polys(c("80101", "80103", "80104", "80105", "80106", "80107"))
+}
+
+test_that("the Explore tab plots the areas in a funnel plot of the measure", {
+
+  app <- episerver_dsr_app(query = explore_query)
+  local_mocked_bindings(.dsr_boundaries = explore_polys)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5)
+    expect_match(strip_html(output$ex_note$html), "Press Calculate")
+    session$setInputs(calculate = 1)
+    session$setInputs(ex_value = "DSR", ex_year = "2023", ex_sex = "Persons")
+
+    # DSRs against the population derived from their events, with the
+    # average over all the areas
+    r <- results()
+    f <- ex_funnel()
+    expect_equal(f$measure, "DSR")
+    expect_setequal(f$points$Area, r$summary$Area)
+    derived <- r$summary$Events * 1e5 / r$summary$DSR
+    expect_equal(f$centre, sum(r$summary$Events) / sum(derived) * 1e5)
+    expect_equal(as.character(f$points$Position[f$points$Area == "80105"]),
+                 "Above 99.8% limit")
+    method <- strip_html(output$ex_method$html)
+    expect_match(method, "events / DSR")
+    expect_match(method, "6 areas are plotted")
+    expect_match(method, "overdispersion ratio")
+
+    # The measure changes both plots
+    session$setInputs(ex_value = "Crude")
+    expect_equal(ex_funnel()$measure, "Crude")
+    expect_equal(sort(ex_funnel()$points$X), sort(r$summary$Population))
+    session$setInputs(ex_value = "Events")
+    f <- ex_funnel()
+    expect_equal(f$centre, 1)
+    expect_equal(sum(f$points$Expected), sum(f$points$Events))
+    session$setInputs(ex_value = "AgeRate", ex_ages = c(15, 18))
+    f <- ex_funnel()
+    band <- ex$band()
+    expect_equal(sort(f$points$X), sort(band$Population))
+    expect_match(ex$title(r), "aged 70 and over", fixed = TRUE)
+
+    # The map shows each area with its tooltip, by value or by position
+    session$setInputs(ex_value = "DSR", ex_colour = "position")
+    html <- output$ex_map
+    for (a in r$summary$Area) {
+      expect_match(html, paste0("data-id='", a, "'"), fixed = TRUE)
+    }
+    expect_match(html, "Funnel plot: Above 99.8% limit", fixed = TRUE)
+    expect_match(output$ex_funnel, "data-id='80105'", fixed = TRUE)
+  })
+
+})
+
+test_that("the Explore tab selects areas in both plots and zooms to them", {
+
+  app <- episerver_dsr_app(query = explore_query)
+  local_mocked_bindings(.dsr_boundaries = explore_polys)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5)
+    session$setInputs(calculate = 1)
+    session$setInputs(ex_value = "DSR", ex_year = "2023", ex_sex = "Persons")
+
+    # A point selected in the funnel plot is the area selected in the map
+    session$setInputs(ex_funnel_selected = c("80105", "80101"))
+    expect_setequal(ex_selected(), c("80105", "80101"))
+    table <- strip_html(output$ex_selected$html)
+    expect_match(table, "80105")
+    expect_match(table, "Above 99.8% limit")
+    session$setInputs(ex_map_selected = "80105")
+    expect_equal(ex_selected(), "80105")
+
+    # Zoom to the selected area's square, then back
+    session$setInputs(ex_zoom = 1)
+    z <- ex_zoom()
+    expect_true(z$xlim[1] < 152 && z$xlim[2] > 153)
+    expect_true(z$ylim[1] < -35 && z$ylim[2] > -34)
+    session$setInputs(ex_reset = 1)
+    expect_null(ex_zoom())
+
+    session$setInputs(ex_clear = 1)
+    expect_equal(ex_selected(), character(0))
+  })
+
+})
+
+test_that("the Explore tab allows for overdispersion unless it is unticked", {
+
+  app <- episerver_dsr_app(query = explore_query)
+  local_mocked_bindings(.dsr_boundaries = explore_polys)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5)
+    session$setInputs(calculate = 1)
+    session$setInputs(ex_value = "Crude", ex_year = "2023", ex_sex = "Persons")
+
+    # Ticked by default
+    wide <- ex_funnel()
+    expect_true(wide$adjusted)
+    expect_gt(wide$od$phi, 1)
+    expect_match(strip_html(output$ex_method$html), "allow for this")
+
+    session$setInputs(ex_overdispersion = FALSE)
+    plain <- ex_funnel()
+    expect_false(plain$adjusted)
+    expect_match(strip_html(output$ex_method$html),
+                 "tick Allow for overdispersion")
+    expect_lte(sum(wide$points$Position != "Within 95% limits"),
+               sum(plain$points$Position != "Within 95% limits"))
   })
 
 })
