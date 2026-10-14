@@ -10,7 +10,7 @@
 #' rates to an age range. It shows counts, crude rates and DSRs, optionally
 #' with age-specific rates, maps them by area, compares areas in an
 #' interactive map and funnel plot, and copies R code that reproduces the
-#' results.
+#' results. Its *Help* tab sets out the data, formulas and sources.
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
 #' default so that the console stays free, and it can be opened from the ACT
@@ -129,13 +129,19 @@
 #' outside them differs from the average by more than chance. When areas
 #' vary more than chance alone would explain (overdispersion), as large
 #' counts such as all ED presentations often do, most areas fall outside
-#' these limits. *Allow for overdispersion* then widens the limits by
-#' Spiegelhalter's additive random effects method, estimated from z-scores on
-#' the square root scale winsorised at the 10th and 90th percentiles, so that
-#' areas outside them stand out from the usual variation between areas. The
-#' tab reports the overdispersion ratio and its chi-squared test; with fewer
-#' than 10 areas the estimate is unreliable. Suppressed areas are neither
-#' plotted nor included in the average.
+#' these limits. *Allow for overdispersion*, ticked by default, then widens
+#' the limits by Spiegelhalter's additive random effects method, estimated
+#' from z-scores on the square root scale winsorised at the 10th and 90th
+#' percentiles, so that areas outside them stand out from the usual variation
+#' between areas. The tab reports the overdispersion ratio and its
+#' chi-squared test; with fewer than 10 areas the estimate is unreliable.
+#' Suppressed areas are neither plotted nor included in the average. Areas
+#' above the limits are coral (99.8%) and yellow (95%), and areas below them
+#' teal (99.8%) and blue (95%), from the ACT Government's regional colours.
+#'
+#' The *Help* tab gives the formulas for each rate, confidence interval and
+#' funnel plot limit, the tables and fields used, the boundary services and
+#' references.
 #'
 #' **Data**
 #'
@@ -1247,6 +1253,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .ex-table th { color: var(--epi-primary); font-weight: 600;
                        text-align: left; }
         .ex-table td.num { text-align: right; }
+        .help { max-width: 900px; font-size: 13px; color: #333740; }
+        .help h5 { color: var(--epi-primary); font-weight: 600;
+                   margin: 18px 0 6px 0; }
+        .help h5:first-child { margin-top: 4px; }
+        .help-scroll { overflow-x: auto; }
+        .help-table td, .help-table th { vertical-align: top; }
+        .help-table code { white-space: normal; overflow-wrap: anywhere; }
+        .help-formula { background: #f7f4fd; border-left: 3px solid #DCC8FA;
+                        padding: 4px 10px; margin: 4px 0 8px 0;
+                        font-family: Georgia, 'Times New Roman', serif; }
+        .help-refs li { margin-bottom: 4px; }
       ")),
 
       # Clipboard handler for the code and table copy buttons
@@ -1550,7 +1567,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               width = "220px"
             ),
             shiny::checkboxInput("ex_overdispersion",
-                                 "Allow for overdispersion", value = FALSE,
+                                 "Allow for overdispersion", value = TRUE,
                                  width = "auto"),
             shiny::actionButton("ex_zoom", "Zoom to selected",
                                 icon = shiny::icon("magnifying-glass-plus"),
@@ -1573,7 +1590,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           ),
           shiny::uiOutput("ex_method"),
           shiny::uiOutput("ex_selected")
-        )
+        ),
+
+        shiny::tabPanel("Help", value = "help", .dsr_help())
       )
 
     )
@@ -2190,7 +2209,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       .dsr_funnel(m$rows, value, multiplier = r$multiplier,
                   years = r$spec$pool, expected = expected,
-                  overdispersion = isTRUE(input$ex_overdispersion))
+                  overdispersion = !isFALSE(input$ex_overdispersion))
     })
 
     # Area names from the boundaries, when they could be downloaded
@@ -2447,11 +2466,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                    "(overdispersion ratio ")
           },
           formatC(od$phi, format = "f", digits = 1), ", p ",
-          if (od$p < 0.001) "< 0.001" else paste0("= ", signif(od$p, 2)), "). ",
+          if (od$p < 0.001) {
+            "< 0.001"
+          } else if (od$p > 0.99) {
+            "> 0.99"
+          } else {
+            paste0("= ", signif(od$p, 2))
+          }, "). ",
           if (f$adjusted) {
             paste0("The limits allow for this, so areas outside them stand ",
                    "out from the usual variation between areas.")
-          } else if (isTRUE(input$ex_overdispersion)) {
+          } else if (!isFALSE(input$ex_overdispersion)) {
             "So there is nothing to allow for, and the limits are unchanged."
           } else if (over) {
             paste0("Areas outside the limits differ from the average by more ",

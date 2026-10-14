@@ -13,6 +13,11 @@
   sa2   = list(service = "SA2", prefix = "sa2")
 )
 
+# How far the server may simplify the boundaries of a population, in degrees:
+# about 20 m for the ACT and 200 m for wider areas
+#' @noRd
+.dsr_boundary_offset <- function(scope) if (scope == "ACT") 0.0002 else 0.002
+
 # The boundary layer of a level, e.g. .../ASGS2021/SA3/MapServer/0
 #' @noRd
 .dsr_abs_layer <- function(level) {
@@ -93,7 +98,8 @@
       outFields          = paste(code, name, sep = ","),
       returnGeometry     = "true",
       outSR              = "4326",
-      maxAllowableOffset = if (scope == "ACT") "0.0002" else "0.002",
+      maxAllowableOffset = format(.dsr_boundary_offset(scope),
+                                  scientific = FALSE),
       geometryPrecision  = "5",
       f                  = "geojson"
     ))))

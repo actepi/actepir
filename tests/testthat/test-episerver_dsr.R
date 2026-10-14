@@ -1154,6 +1154,8 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
   }
   expect_match(page, "data-value=\"explore\"", fixed = TRUE)
   expect_match(page, "id=\"ex_funnel\"", fixed = TRUE)
+  expect_match(page, "id=\"ex_overdispersion\"[^>]*checked")
+  expect_match(page, "data-value=\"help\"", fixed = TRUE)
 
 })
 
@@ -1401,7 +1403,7 @@ test_that("the Explore tab selects areas in both plots and zooms to them", {
 
 })
 
-test_that("the Explore tab can allow for overdispersion", {
+test_that("the Explore tab allows for overdispersion unless it is unticked", {
 
   app <- episerver_dsr_app(query = explore_query)
   local_mocked_bindings(.dsr_boundaries = explore_polys)
@@ -1412,14 +1414,18 @@ test_that("the Explore tab can allow for overdispersion", {
                       multiplier = "100000", suppress = 5)
     session$setInputs(calculate = 1)
     session$setInputs(ex_value = "Crude", ex_year = "2023", ex_sex = "Persons")
-    plain <- ex_funnel()
-    expect_false(plain$adjusted)
-    expect_gt(plain$od$phi, 1)
 
-    session$setInputs(ex_overdispersion = TRUE)
+    # Ticked by default
     wide <- ex_funnel()
     expect_true(wide$adjusted)
+    expect_gt(wide$od$phi, 1)
     expect_match(strip_html(output$ex_method$html), "allow for this")
+
+    session$setInputs(ex_overdispersion = FALSE)
+    plain <- ex_funnel()
+    expect_false(plain$adjusted)
+    expect_match(strip_html(output$ex_method$html),
+                 "tick Allow for overdispersion")
     expect_lte(sum(wide$points$Position != "Within 95% limits"),
                sum(plain$points$Position != "Within 95% limits"))
   })

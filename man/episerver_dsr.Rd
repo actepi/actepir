@@ -66,7 +66,7 @@ standard population. Events can be limited to ICD-10 diagnosis codes and
 rates to an age range. It shows counts, crude rates and DSRs, optionally
 with age-specific rates, maps them by area, compares areas in an
 interactive map and funnel plot, and copies R code that reproduces the
-results.
+results. Its \emph{Help} tab sets out the data, formulas and sources.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
@@ -183,13 +183,19 @@ each area's events against the events expected at the average: an area
 outside them differs from the average by more than chance. When areas
 vary more than chance alone would explain (overdispersion), as large
 counts such as all ED presentations often do, most areas fall outside
-these limits. \emph{Allow for overdispersion} then widens the limits by
-Spiegelhalter's additive random effects method, estimated from z-scores on
-the square root scale winsorised at the 10th and 90th percentiles, so that
-areas outside them stand out from the usual variation between areas. The
-tab reports the overdispersion ratio and its chi-squared test; with fewer
-than 10 areas the estimate is unreliable. Suppressed areas are neither
-plotted nor included in the average.
+these limits. \emph{Allow for overdispersion}, ticked by default, then widens
+the limits by Spiegelhalter's additive random effects method, estimated
+from z-scores on the square root scale winsorised at the 10th and 90th
+percentiles, so that areas outside them stand out from the usual variation
+between areas. The tab reports the overdispersion ratio and its
+chi-squared test; with fewer than 10 areas the estimate is unreliable.
+Suppressed areas are neither plotted nor included in the average. Areas
+above the limits are coral (99.8\%) and yellow (95\%), and areas below them
+teal (99.8\%) and blue (95\%), from the ACT Government's regional colours.
+
+The \emph{Help} tab gives the formulas for each rate, confidence interval and
+funnel plot limit, the tables and fields used, the boundary services and
+references.
 
 \strong{Data}
 

@@ -20,16 +20,22 @@
 # DSRs from fewer events are not plotted (OHID)
 .dsr_funnel_min_dsr <- 10
 
-# Position of an area relative to the limits, and its colour and shape
+# Position of an area relative to the limits, and its colour, shape and size.
+# Outside the limits the colours are four of the ACT Government's regional
+# colours (dev/reference/act-brand.md), warm above and cool below, darker
+# beyond the 99.8% limits; within them, grey. Shape and size repeat the
+# position for readers who cannot tell the colours apart.
 .dsr_funnel_positions <- c("Above 99.8% limit", "Above 95% limit",
                            "Within 95% limits", "Below 95% limit",
                            "Below 99.8% limit")
 .dsr_funnel_colours <- stats::setNames(
-  c("#b2410d", "#ec8a52", "#cbcbc6", "#7f9bd6", "#2b4a9a"),
+  c("#F15F50", "#C6B30B", "#CBCBC6", "#008FC5", "#077F7A"),
   .dsr_funnel_positions
 )
 .dsr_funnel_shapes <- stats::setNames(c(24, 24, 21, 25, 25),
                                       .dsr_funnel_positions)
+.dsr_funnel_sizes <- stats::setNames(c(3.8, 3, 2.6, 3, 3.8),
+                                     .dsr_funnel_positions)
 
 
 # Positions of areas with observed events O and expected events E: exact
@@ -242,15 +248,18 @@
     ggiraph::geom_point_interactive(
       data = pts,
       ggplot2::aes(x = .data$X, y = .data$Value, fill = .data$Position,
-                   shape = .data$Position, tooltip = .data$Tooltip,
-                   data_id = .data$Area),
-      size = 3, colour = "white", stroke = 0.5, hover_nearest = TRUE,
-      show.legend = c(fill = TRUE, shape = TRUE, linetype = FALSE)
+                   shape = .data$Position, size = .data$Position,
+                   tooltip = .data$Tooltip, data_id = .data$Area),
+      colour = "white", stroke = 0.5, hover_nearest = TRUE,
+      show.legend = c(fill = TRUE, shape = TRUE, size = TRUE,
+                      linetype = FALSE)
     ) +
     ggplot2::scale_fill_manual(values = .dsr_funnel_colours, drop = FALSE,
                                name = NULL) +
     ggplot2::scale_shape_manual(values = .dsr_funnel_shapes, drop = FALSE,
                                 name = NULL) +
+    ggplot2::scale_size_manual(values = .dsr_funnel_sizes, drop = FALSE,
+                               name = NULL) +
     ggplot2::scale_linetype_manual(values = c("95%" = "22", "99.8%" = "solid"),
                                    name = "Limits") +
     ggplot2::scale_x_continuous(labels = comma) +
@@ -259,6 +268,7 @@
     ggplot2::guides(
       fill = ggplot2::guide_legend(nrow = 2, order = 1),
       shape = ggplot2::guide_legend(nrow = 2, order = 1),
+      size = ggplot2::guide_legend(nrow = 2, order = 1),
       linetype = ggplot2::guide_legend(order = 2)
     ) +
     ggplot2::labs(x = xlab, y = ylab, title = title,
