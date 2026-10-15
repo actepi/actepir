@@ -6,7 +6,7 @@
 \usage{
 episerver_dsr(
   background = TRUE,
-  display = c("viewer", "window", "browser"),
+  display = c("browser", "viewer", "window"),
   port = NULL,
   driver = NULL,
   max_attempts = NULL,
@@ -18,10 +18,10 @@ episerver_dsr(
 background R process and the console remains free. If \code{FALSE}, the
 app runs as a blocking gadget in the current session.}
 
-\item{display}{Character. Where to open the app: \code{"viewer"} (the
-RStudio Viewer pane, default), \code{"window"} (a standalone RStudio
-dialog window), or \code{"browser"} (the system web browser). Outside
-RStudio the system browser is always used.}
+\item{display}{Character. Where to open the calculator: \code{"browser"} (the
+system web browser, default), \code{"viewer"} (the RStudio Viewer pane) or
+\code{"window"} (a standalone RStudio dialog window). Outside RStudio the
+system browser is always used.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port
@@ -70,10 +70,19 @@ results. Its \emph{Help} tab sets out the data, formulas and sources.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
-Epidemiology menu in the RStudio Addins menu.
+Epidemiology menu in the RStudio Addins menu. It opens in the system web
+browser by default, so that it has the whole window: the settings are in a
+sidebar on the left, in sections that open and close, and the results in
+tabs on the top bar. The arrow at the top of the sidebar hides it.
 }
 \details{
 \strong{Options}
+
+The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis
+codes and search), \emph{Population} (population and geographic level), \emph{Years
+and ages} (calendar years, pooling and ages) and \emph{Rates} (standard
+population, rate per, suppression, male and female, and age-specific
+rates).
 \itemize{
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
@@ -235,11 +244,12 @@ events query.
 }
 \examples{
 \dontrun{
-# Launch in a background process; console stays free
+# Launch in a background process and open it in the web browser; the
+# console stays free
 episerver_dsr()
 
-# Open in the system web browser
-episerver_dsr(display = "browser")
+# Open in the RStudio Viewer pane
+episerver_dsr(display = "viewer")
 
 # Stop the background app
 episerver_dsr_stop()

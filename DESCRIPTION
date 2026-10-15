@@ -32,6 +32,7 @@ Imports:
     DT,
     htmltools,
     miniUI,
+    bslib (>= 0.10.0),
     shiny,
     rstudioapi,
     callr,

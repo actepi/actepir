@@ -1130,6 +1130,9 @@ test_that("the app maps the ACT and surrounds by state", {
 
 test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
 
+  # Rendering compiles the theme; keep sass from caching it in the user's
+  # cache folder
+  withr::local_options(sass.cache = FALSE)
   app  <- episerver_dsr_app(query = fake_episerver()$query)
   page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
                                QUERY_STRING = ""))$content
@@ -1156,6 +1159,59 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
   expect_match(page, "id=\"ex_funnel\"", fixed = TRUE)
   expect_match(page, "id=\"ex_overdispersion\"[^>]*checked")
   expect_match(page, "data-value=\"help\"", fixed = TRUE)
+
+})
+
+test_that("the settings are in a sidebar and the results in tabs on the top bar", {
+
+  withr::local_options(sass.cache = FALSE)
+  app  <- episerver_dsr_app(query = fake_episerver()$query)
+  page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
+                               QUERY_STRING = ""))$content
+  part <- function(pattern) {
+    regmatches(page, regexpr(pattern, page, perl = TRUE))
+  }
+  has_id <- function(html, id) grepl(paste0("id=\"", id, "\""), html, fixed = TRUE)
+
+  expect_match(page, "<title>DSR Calculator</title>", fixed = TRUE)
+
+  # The top bar holds the logo, the name, the tabs and Done
+  navbar <- part("(?s)<nav .*?</nav>")
+  expect_length(navbar, 1)
+  expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
+  expect_match(navbar, "class=\"epi-logo\"", fixed = TRUE)
+  expect_match(navbar, "DSR Calculator", fixed = TRUE)
+  for (tab in c("tables", "map", "explore", "help")) {
+    expect_match(navbar, paste0("data-value=\"", tab, "\""), fixed = TRUE)
+  }
+  expect_true(has_id(navbar, "done"))
+
+  # The sidebar holds every setting, in four sections that start open, and
+  # Calculate and the code button; the results are outside it
+  sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
+  expect_length(sidebar, 1)
+  for (id in c("dataset", "codes", "diagnosis", "scope", "level", "years",
+               "pool", "ages", "standard", "multiplier", "suppress",
+               "by_sex", "age_specific", "calculate", "insert_code")) {
+    expect_true(has_id(sidebar, id), label = id)
+  }
+  for (section in c("events", "population", "years", "rates")) {
+    expect_match(sidebar, paste0("class=\"accordion-item\" data-value=\"",
+                                 section, "\""), fixed = TRUE)
+  }
+  expect_equal(lengths(regmatches(sidebar, gregexpr("aria-expanded=\"true\"",
+                                                    sidebar))), 4)
+  for (id in c("info_bar", "summary_table", "map", "ex_funnel", "done")) {
+    expect_false(has_id(sidebar, id), label = id)
+  }
+
+  # The logo is shown at the brand's minimum size with its clear space, and
+  # the page explains itself once Done has stopped the app
+  expect_match(page, ".epi-logo { height: 60px; }", fixed = TRUE)
+  expect_match(page, "The DSR Calculator has stopped.", fixed = TRUE)
+
+  # The calculator opens in the web browser unless asked otherwise
+  expect_identical(eval(formals(episerver_dsr)$display)[1], "browser")
 
 })
 

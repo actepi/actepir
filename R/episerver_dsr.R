@@ -14,9 +14,16 @@
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
 #' default so that the console stays free, and it can be opened from the ACT
-#' Epidemiology menu in the RStudio Addins menu.
+#' Epidemiology menu in the RStudio Addins menu. It opens in the system web
+#' browser by default, so that it has the whole window: the settings are in a
+#' sidebar on the left, in sections that open and close, and the results in
+#' tabs on the top bar. The arrow at the top of the sidebar hides it.
 #'
 #' @inheritParams episerver_browse
+#' @param display Character. Where to open the calculator: `"browser"` (the
+#'   system web browser, default), `"viewer"` (the RStudio Viewer pane) or
+#'   `"window"` (a standalone RStudio dialog window). Outside RStudio the
+#'   system browser is always used.
 #' @inheritDotParams episerver_connect encrypt trust_certificate
 #'
 #' @return In background mode, invisibly returns the `callr` process handle.
@@ -24,6 +31,12 @@
 #'
 #' @details
 #' **Options**
+#'
+#' The sidebar's sections hold the options: *Events* (dataset, diagnosis
+#' codes and search), *Population* (population and geographic level), *Years
+#' and ages* (calendar years, pooling and ages) and *Rates* (standard
+#' population, rate per, suppression, male and female, and age-specific
+#' rates).
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
@@ -199,11 +212,12 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Launch in a background process; console stays free
+#' # Launch in a background process and open it in the web browser; the
+#' # console stays free
 #' episerver_dsr()
 #'
-#' # Open in the system web browser
-#' episerver_dsr(display = "browser")
+#' # Open in the RStudio Viewer pane
+#' episerver_dsr(display = "viewer")
 #'
 #' # Stop the background app
 #' episerver_dsr_stop()
@@ -212,7 +226,7 @@
 #' @author Warren Holroyd
 #'
 episerver_dsr <- function(background = TRUE,
-                          display = c("viewer", "window", "browser"),
+                          display = c("browser", "viewer", "window"),
                           port = NULL,
                           driver = NULL, max_attempts = NULL, ...) {
 
@@ -984,7 +998,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     rownames  = FALSE,
     selection = "none",
     class     = "compact stripe hover",
-    style     = "bootstrap",
+    style     = "bootstrap5",
     options   = list(
       dom        = if (long) "ftip" else "ft",
       paging     = long,
@@ -1127,11 +1141,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
   # ── Check dependencies ────────────────────────────────────────────────────
   if (!requireNamespace("shiny", quietly = TRUE) ||
-      !requireNamespace("miniUI", quietly = TRUE) ||
+      !requireNamespace("bslib", quietly = TRUE) ||
       !requireNamespace("DT", quietly = TRUE)) {
     stop(
-      "The 'shiny', 'miniUI', and 'DT' packages are required for episerver_dsr().\n",
-      "Install them with: install.packages(c('shiny', 'miniUI', 'DT'))",
+      "The 'shiny', 'bslib', and 'DT' packages are required for episerver_dsr().\n",
+      "Install them with: install.packages(c('shiny', 'bslib', 'DT'))",
       call. = FALSE
     )
   }
@@ -1199,25 +1213,48 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   code_button_label <- if (in_rstudio) "Insert Code" else "Copy Code"
 
   # ── UI ────────────────────────────────────────────────────────────────────
-  ui <- miniUI::miniPage(
+  # The settings are in a sidebar, in sections that open and close, and the
+  # results in tabs on the top bar, so that the results have the rest of the
+  # window
+  ui <- bslib::page_navbar(
 
-    miniUI::gadgetTitleBar(
-      "DSR Calculator",
-      left  = NULL,
-      right = miniUI::miniTitleBarButton("done", "Done", primary = TRUE)
-    ),
+    title        = shiny::span(class = "epi-brand",
+                               .epi_logo(class = "epi-logo"), "DSR Calculator"),
+    window_title = "DSR Calculator",
+    id           = "view",
+    theme        = .epi_theme(),
+    fillable     = FALSE,
 
-    miniUI::miniContentPanel(
+    header = shiny::tagList(
 
       .epi_app_style(),
 
-      # Calculator-only rules: wrapping selector rows for the Viewer pane,
-      # slider spacing, notes, the error bar, table headings, tabs and the
-      # diagnosis code tags
+      # Calculator-only rules: the top bar, the sidebar, wrapping selector
+      # rows, notes, the error bar, table headings and the diagnosis code tags
       shiny::tags$style(shiny::HTML("
+        /* Top bar: the logo at the brand's minimum size, a crest 60px
+           across, with clear space equal to the height of its ACT
+           lettering, 22px */
+        .navbar { --bs-navbar-padding-y: 0; }
+        .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
+        .navbar-brand { display: flex; padding: 22px 0; margin-right: 22px; }
+        .epi-brand { display: flex; align-items: center; gap: 22px; }
+        .epi-logo { height: 60px; }
+        /* Sidebar: Lavender tint, with Calculate and Copy Code in view at
+           its foot across its full width */
+        :root { --bslib-sidebar-bg: #f7f4fd; }
+        .sidebar .accordion { --bs-accordion-bg: transparent; }
+        .dsr-actions {
+          --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
+          position: sticky; bottom: 0; z-index: 1;
+          display: flex; gap: 8px;
+          margin: 0 calc(-1 * var(--dsr-pad));
+          padding: 10px var(--dsr-pad);
+          background-color: var(--bslib-sidebar-bg);
+          border-top: 1px solid #e6e5e5;
+        }
         .dsr-row { flex-wrap: wrap; }
         .dsr-row > * { min-width: 200px; }
-        .selector-row .irs { margin-top: -4px; }
         .info-bar p { margin: 0 0 4px 0; }
         .info-bar p:last-child { margin-bottom: 0; }
         .info-bar .epi-warn { color: #8a5300; }
@@ -1229,12 +1266,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .epi-table-head h5 { color: var(--epi-primary); font-weight: 600;
                              margin: 0; }
         .tab-pane .epi-table-head + div { margin-bottom: 14px; }
-        .nav-tabs { margin: 6px 0 12px 0; }
-        .nav-tabs > li > a { color: var(--epi-accent); }
-        .nav-tabs > li > a:hover { background-color: var(--epi-info-bg); }
-        .nav-tabs > li.active > a, .nav-tabs > li.active > a:hover,
-        .nav-tabs > li.active > a:focus { color: var(--epi-primary);
-                                          font-weight: 600; }
         .selectize-control.multi .selectize-input > div {
           background: var(--epi-info-bg); color: var(--epi-primary);
           border-radius: 3px;
@@ -1259,11 +1290,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .help h5:first-child { margin-top: 4px; }
         .help-scroll { overflow-x: auto; }
         .help-table td, .help-table th { vertical-align: top; }
-        .help-table code { white-space: normal; overflow-wrap: anywhere; }
+        .help-table code { white-space: normal; overflow-wrap: break-word; }
         .help-formula { background: #f7f4fd; border-left: 3px solid #DCC8FA;
                         padding: 4px 10px; margin: 4px 0 8px 0;
                         font-family: Georgia, 'Times New Roman', serif; }
         .help-refs li { margin-bottom: 4px; }
+        /* Shown in place of Shiny's grey overlay once Done stops the app */
+        .epi-stopped { position: fixed; inset: 0; z-index: 100000;
+                       display: flex; flex-direction: column;
+                       align-items: center; justify-content: center;
+                       background: #fff; color: var(--epi-primary); }
       ")),
 
       # Clipboard handler for the code and table copy buttons
@@ -1371,95 +1407,38 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         });
       ")),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::selectInput(
-          "dataset", "Dataset",
-          choices = c("ED presentations" = "ED", "APC separations" = "APC"),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "scope", "Population",
-          choices = stats::setNames(
-            names(.dsr_scopes),
-            vapply(.dsr_scopes, `[[`, character(1), "label")
-          ),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "level", "Geographic level",
-          choices = stats::setNames(
-            names(.dsr_levels),
-            vapply(names(.dsr_levels), .dsr_area_label, character(1))
-          ),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "standard", "Standard population",
-          choices  = std_choices,
-          selected = if ("101" %in% std_choices) "101" else std_choices[1],
-          width = "100%"
-        )
-      ),
+      # Done stops the app. A browser tab stays open afterwards, so it says
+      # so instead of greying out.
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          var stopping = false;
+          $(document).on('click', '#done', function() { stopping = true; });
+          $(document).on('shiny:disconnected', function() {
+            if (!stopping) return;
+            $('<div class=\"epi-stopped\">')
+              .append('<h4>The DSR Calculator has stopped.</h4>')
+              .append('<p>Start it again with actepir::episerver_dsr().</p>')
+              .appendTo('body');
+          });
+        })();
+      ")),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::sliderInput(
-            "years", "Calendar years",
-            min = init$min, max = init$max,
-            value = .dsr_default_years(init),
-            step = 1, sep = "", ticks = FALSE, width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::sliderInput(
-            "ages", "Ages",
-            min = 1, max = length(.dsr_age_labels),
-            value = c(1, length(.dsr_age_labels)),
-            step = 1, ticks = FALSE, width = "100%"
-          )
-        )
-      ),
+      # Info bar: what is shown, what was left out, and any warnings
+      shiny::conditionalPanel("input.view !== 'help'",
+                              shiny::uiOutput("info_bar"))
+    ),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 1 1 0;",
+    sidebar = bslib::sidebar(
+      id = "settings", width = 340, open = "desktop",
+      bslib::accordion(
+        id = "settings_sections", open = TRUE, multiple = TRUE,
+        bslib::accordion_panel(
+          "Events", value = "events",
           shiny::selectInput(
-            "pool", "Pool years",
-            choices = c("None" = "1", "2 years" = "2", "3 years" = "3",
-                        "4 years" = "4", "5 years" = "5",
-                        "All selected years" = "all"),
+            "dataset", "Dataset",
+            choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::selectInput(
-            "multiplier", "Rate per",
-            choices  = c("1,000" = "1000", "10,000" = "10000",
-                         "100,000" = "100000"),
-            selected = "100000",
-            width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::numericInput(
-            "suppress", "Suppress counts below",
-            value = 5, min = 0, step = 1, width = "100%"
-          )
-        )
-      ),
-      shiny::uiOutput("years_note"),
-
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 3 1 0;",
+          ),
           shiny::selectizeInput(
             "codes", "Diagnosis codes",
             choices = NULL, multiple = TRUE, width = "100%",
@@ -1470,28 +1449,84 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               delimiter    = ",",
               splitOn      = I("/\\s*[,;]+\\s*/"),
               plugins      = list("remove_button"),
-              placeholder  = paste("All events. Type a code or range,",
-                                   "e.g. J45 or C13-C15.45, then Enter")
+              placeholder  = "All events. Type a code, then Enter"
             )
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
+          ),
+          shiny::uiOutput("codes_note"),
           shiny::radioButtons(
             "diagnosis", "Search",
             choices = c("Principal diagnosis" = "principal",
                         "Any diagnosis" = "all")
           )
+        ),
+        bslib::accordion_panel(
+          "Population", value = "population",
+          shiny::selectInput(
+            "scope", "Population",
+            choices = stats::setNames(
+              names(.dsr_scopes),
+              vapply(.dsr_scopes, `[[`, character(1), "label")
+            ),
+            width = "100%"
+          ),
+          shiny::selectInput(
+            "level", "Geographic level",
+            choices = stats::setNames(
+              names(.dsr_levels),
+              vapply(names(.dsr_levels), .dsr_area_label, character(1))
+            ),
+            width = "100%"
+          )
+        ),
+        bslib::accordion_panel(
+          "Years and ages", value = "years",
+          shiny::sliderInput(
+            "years", "Calendar years",
+            min = init$min, max = init$max,
+            value = .dsr_default_years(init),
+            step = 1, sep = "", ticks = FALSE, width = "100%"
+          ),
+          shiny::selectInput(
+            "pool", "Pool years",
+            choices = c("None" = "1", "2 years" = "2", "3 years" = "3",
+                        "4 years" = "4", "5 years" = "5",
+                        "All selected years" = "all"),
+            width = "100%"
+          ),
+          shiny::uiOutput("years_note"),
+          shiny::sliderInput(
+            "ages", "Ages",
+            min = 1, max = length(.dsr_age_labels),
+            value = c(1, length(.dsr_age_labels)),
+            step = 1, ticks = FALSE, width = "100%"
+          )
+        ),
+        bslib::accordion_panel(
+          "Rates", value = "rates",
+          shiny::selectInput(
+            "standard", "Standard population",
+            choices  = std_choices,
+            selected = if ("101" %in% std_choices) "101" else std_choices[1],
+            width = "100%"
+          ),
+          shiny::selectInput(
+            "multiplier", "Rate per",
+            choices  = c("1,000" = "1000", "10,000" = "10000",
+                         "100,000" = "100000"),
+            selected = "100000",
+            width = "100%"
+          ),
+          shiny::numericInput(
+            "suppress", "Suppress counts below",
+            value = 5, min = 0, step = 1, width = "100%"
+          ),
+          shiny::checkboxInput("by_sex", "Male and female", value = FALSE),
+          shiny::checkboxInput("age_specific", "Age-specific rates",
+                               value = FALSE)
         )
       ),
-      shiny::uiOutput("codes_note"),
-
-      # Info bar: what is shown, what was left out, and any warnings
-      shiny::uiOutput("info_bar"),
-
-      # Options row
       shiny::div(
-        class = "options-row",
+        class = "dsr-actions",
         shiny::actionButton(
           "calculate", "Calculate",
           icon  = shiny::icon("calculator"),
@@ -1501,100 +1536,94 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "insert_code", code_button_label,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
-        ),
-        # Spacer pushes the display options to the right of the row
-        shiny::div(style = "flex: 1 1 auto;"),
-        shiny::checkboxInput("by_sex", "Male and female", value = FALSE,
-                             width = "auto"),
-        shiny::checkboxInput("age_specific", "Age-specific rates", value = FALSE,
-                             width = "auto")
-      ),
-
-      shiny::tabsetPanel(
-        id = "view",
-
-        shiny::tabPanel(
-          "Tables", value = "tables",
-          shiny::div(
-            class = "epi-table-head",
-            shiny::h5("Rates"),
-            shiny::actionButton("copy_summary", "Copy table",
-                                icon = shiny::icon("copy"),
-                                class = "btn-sm btn-primary")
-          ),
-          DT::dataTableOutput("summary_table"),
-          shiny::conditionalPanel(
-            "input.age_specific",
-            shiny::div(
-              class = "epi-table-head",
-              shiny::h5("Age-specific rates"),
-              shiny::actionButton("copy_age", "Copy table",
-                                  icon = shiny::icon("copy"),
-                                  class = "btn-sm btn-primary")
-            ),
-            DT::dataTableOutput("age_table")
-          ),
-          shiny::uiOutput("footnote")
-        ),
-
-        shiny::tabPanel(
-          "Map", value = "map",
-          .dsr_map_controls("map"),
-          shiny::div(
-            class = "options-row",
-            shiny::actionButton("copy_map", "Copy map",
-                                icon = shiny::icon("copy"),
-                                class = "btn-sm btn-primary"),
-            shiny::downloadButton("map_png", "PNG",
-                                  class = "btn-sm btn-primary"),
-            shiny::downloadButton("map_pdf", "PDF",
-                                  class = "btn-sm btn-primary")
-          ),
-          shiny::uiOutput("map_note"),
-          shiny::plotOutput("map", height = "560px", click = "map_click"),
-          shiny::uiOutput("map_click_info")
-        ),
-
-        shiny::tabPanel(
-          "Explore", value = "explore",
-          .dsr_map_controls("ex"),
-          shiny::div(
-            class = "options-row",
-            shiny::selectInput(
-              "ex_colour", "Colour the map by",
-              choices = c("Value" = "value",
-                          "Position in the funnel plot" = "position"),
-              width = "220px"
-            ),
-            shiny::checkboxInput("ex_overdispersion",
-                                 "Allow for overdispersion", value = TRUE,
-                                 width = "auto"),
-            shiny::actionButton("ex_zoom", "Zoom to selected",
-                                icon = shiny::icon("magnifying-glass-plus"),
-                                class = "btn-sm btn-primary"),
-            shiny::actionButton("ex_reset", "Show all",
-                                icon = shiny::icon("expand"),
-                                class = "btn-sm btn-primary"),
-            shiny::actionButton("ex_clear", "Clear selection",
-                                icon = shiny::icon("xmark"),
-                                class = "btn-sm btn-primary")
-          ),
-          shiny::uiOutput("ex_note"),
-          shiny::uiOutput("ex_heading"),
-          shiny::div(
-            class = "explore-row",
-            shiny::div(class = "explore-panel",
-                       ggiraph::girafeOutput("ex_map")),
-            shiny::div(class = "explore-panel",
-                       ggiraph::girafeOutput("ex_funnel"))
-          ),
-          shiny::uiOutput("ex_method"),
-          shiny::uiOutput("ex_selected")
-        ),
-
-        shiny::tabPanel("Help", value = "help", .dsr_help())
+        )
       )
+    ),
 
+    bslib::nav_panel(
+      "Tables", value = "tables",
+      shiny::div(
+        class = "epi-table-head",
+        shiny::h5("Rates"),
+        shiny::actionButton("copy_summary", "Copy table",
+                            icon = shiny::icon("copy"),
+                            class = "btn-sm btn-primary")
+      ),
+      DT::dataTableOutput("summary_table"),
+      shiny::conditionalPanel(
+        "input.age_specific",
+        shiny::div(
+          class = "epi-table-head",
+          shiny::h5("Age-specific rates"),
+          shiny::actionButton("copy_age", "Copy table",
+                              icon = shiny::icon("copy"),
+                              class = "btn-sm btn-primary")
+        ),
+        DT::dataTableOutput("age_table")
+      ),
+      shiny::uiOutput("footnote")
+    ),
+
+    bslib::nav_panel(
+      "Map", value = "map",
+      .dsr_map_controls("map"),
+      shiny::div(
+        class = "options-row",
+        shiny::actionButton("copy_map", "Copy map",
+                            icon = shiny::icon("copy"),
+                            class = "btn-sm btn-primary"),
+        shiny::downloadButton("map_png", "PNG",
+                              class = "btn-sm btn-primary"),
+        shiny::downloadButton("map_pdf", "PDF",
+                              class = "btn-sm btn-primary")
+      ),
+      shiny::uiOutput("map_note"),
+      shiny::plotOutput("map", height = "560px", click = "map_click"),
+      shiny::uiOutput("map_click_info")
+    ),
+
+    bslib::nav_panel(
+      "Explore", value = "explore",
+      .dsr_map_controls("ex"),
+      shiny::div(
+        class = "options-row",
+        shiny::selectInput(
+          "ex_colour", "Colour the map by",
+          choices = c("Value" = "value",
+                      "Position in the funnel plot" = "position"),
+          width = "220px"
+        ),
+        shiny::checkboxInput("ex_overdispersion",
+                             "Allow for overdispersion", value = TRUE,
+                             width = "auto"),
+        shiny::actionButton("ex_zoom", "Zoom to selected",
+                            icon = shiny::icon("magnifying-glass-plus"),
+                            class = "btn-sm btn-primary"),
+        shiny::actionButton("ex_reset", "Show all",
+                            icon = shiny::icon("expand"),
+                            class = "btn-sm btn-primary"),
+        shiny::actionButton("ex_clear", "Clear selection",
+                            icon = shiny::icon("xmark"),
+                            class = "btn-sm btn-primary")
+      ),
+      shiny::uiOutput("ex_note"),
+      shiny::uiOutput("ex_heading"),
+      shiny::div(
+        class = "explore-row",
+        shiny::div(class = "explore-panel",
+                   ggiraph::girafeOutput("ex_map")),
+        shiny::div(class = "explore-panel",
+                   ggiraph::girafeOutput("ex_funnel"))
+      ),
+      shiny::uiOutput("ex_method"),
+      shiny::uiOutput("ex_selected")
+    ),
+
+    bslib::nav_panel("Help", value = "help", .dsr_help()),
+
+    bslib::nav_spacer(),
+    bslib::nav_item(
+      shiny::actionButton("done", "Done", class = "btn-sm btn-primary")
     )
   )
 

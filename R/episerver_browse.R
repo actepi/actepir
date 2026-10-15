@@ -857,28 +857,13 @@ episerver_display_dialog <- function() {
     return(if (nzchar(picked)) list(tool = tools[[tool]], display = picked) else NULL)
   }
 
-  # Build a data-URI <img> for the header logo, or NULL if the file is not
-  # installed. Embedding as base64 avoids addResourcePath(), so it behaves
-  # identically in foreground and background contexts.
-  logo_tag <- local({
-    logo_path <- system.file("www", "ACTGov_inline_rev.png",
-                             package = "actepir")
-    if (!nzchar(logo_path) || !file.exists(logo_path)) {
-      return(NULL)
-    }
-    raw_png <- readBin(logo_path, "raw", file.info(logo_path)$size)
-    b64 <- jsonlite::base64_enc(raw_png)
-    shiny::tags$img(
-      src   = paste0("data:image/png;base64,", b64),
-      style = "height: 34px; vertical-align: middle;",
-      alt   = "ACT Government"
-    )
-  })
+  logo_tag <- .epi_logo(style = "height: 34px; vertical-align: middle;")
 
   ui <- miniUI::miniPage(
     shiny::tags$style(shiny::HTML("
       :root {
         --epi-primary: #320557;
+        --epi-accent:  #562C8C;
       }
       .epi-dialog-bar {
         background-color: var(--epi-primary);
@@ -890,7 +875,7 @@ episerver_display_dialog <- function() {
       .epi-dialog-bar .epi-bar-title { flex: 2 1 0; text-align: center; }
       .epi-dialog-bar .epi-bar-action { flex: 1 1 0; text-align: right; }
       .epi-dialog-bar h4 { margin: 0; font-size: 15px; color: #fff; }
-      /* Done button in the bar: white outline, lilac on hover */
+      /* Done button in the bar: white outline, Iris on hover */
       .epi-dialog-bar .epi-done {
         background-color: var(--epi-primary) !important;
         border: 1px solid #fff !important;
@@ -899,9 +884,7 @@ episerver_display_dialog <- function() {
       .epi-dialog-bar .epi-done:hover,
       .epi-dialog-bar .epi-done:focus,
       .epi-dialog-bar .epi-done:active {
-        border-color: #DCC8FA !important;
-        color: #DCC8FA !important;
-        background-color: var(--epi-primary) !important;
+        background-color: var(--epi-accent) !important;
       }
       .epi-dialog-body { padding: 15px; }
       .epi-group {
@@ -915,7 +898,7 @@ episerver_display_dialog <- function() {
         border: 0;
       }
       /* All options share one style: white with nightshade border/text,
-         filling nightshade on hover */
+         filling Iris on hover */
       .epi-dialog-body .epi-option {
         background-color: #fff !important;
         border: 1px solid var(--epi-primary) !important;
@@ -924,7 +907,8 @@ episerver_display_dialog <- function() {
       .epi-dialog-body .epi-option:hover,
       .epi-dialog-body .epi-option:focus,
       .epi-dialog-body .epi-option:active {
-        background-color: var(--epi-primary) !important;
+        background-color: var(--epi-accent) !important;
+        border-color: var(--epi-accent) !important;
         color: #fff !important;
       }
     ")),
