@@ -13,6 +13,45 @@ test_that("primary buttons and Done go to Iris on hover", {
 
 })
 
+test_that("a click leaves no highlight, but the keyboard's focus shows", {
+
+  css <- as.character(.epi_app_style())
+  rule <- function(selector) {
+    regmatches(css, regexpr(paste0(selector, "[^{]*\\{[^}]*\\}"), css))
+  }
+
+  # Buttons are Iris for the keyboard's focus only, not after a click
+  expect_match(rule("\\.btn-primary:hover"), ":focus-visible")
+  expect_no_match(rule("\\.btn-primary:hover"), ":focus[,\\s{]")
+  expect_no_match(rule("#done\\.btn-primary:hover"), ":focus[,\\s{]")
+  # Focus rings go after a click on buttons, section headings, ticks and
+  # radio buttons, and a closed dropdown is plain
+  ring <- rule("\\.btn:focus:not\\(:focus-visible\\)")
+  for (target in c("\\.accordion-button:focus:not\\(:focus-visible\\)",
+                   "\\.checkbox input:focus:not\\(:focus-visible\\)",
+                   "\\.radio input:focus:not\\(:focus-visible\\)")) {
+    expect_match(ring, target)
+  }
+  expect_match(ring, "box-shadow: none")
+  expect_match(rule(paste0("\\.selectize-control\\.single \\.selectize-input",
+                           "\\.focus:not\\(\\.dropdown-active\\)")),
+               "box-shadow: none !important")
+
+})
+
+test_that("table sort arrows have a fixed size, so they cannot overlap", {
+
+  css <- as.character(.epi_app_style())
+  arrows <- regmatches(css, regexpr(
+    "th\\[class\\*='sorting'\\]:before[^{]*\\{[^}]*\\}", css
+  ))
+
+  expect_match(arrows, "th\\[class\\*='sorting'\\]:after")
+  expect_match(arrows, "font-size: 9px !important")
+  expect_match(arrows, "line-height: 9px !important")
+
+})
+
 test_that("the bslib theme uses the brand purples and fonts", {
 
   # Reading the variables compiles Sass; keep sass from caching it in the

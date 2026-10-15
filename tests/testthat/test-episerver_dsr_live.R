@@ -256,7 +256,7 @@ test_that("the app calculates against EpiServer", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", by_sex = TRUE,
-                      age_specific = TRUE)
+                      table = "age")
     session$setInputs(calculate = 1)
 
     expect_null(rv$error)

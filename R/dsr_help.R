@@ -267,8 +267,8 @@
       "overdispersion, by more than the usual variation between areas). ",
       "Among many areas, about 1 in 20 falls outside the 95% limits by chance ",
       "alone, and about 1 in 500 outside the 99.8% limits. Areas above the ",
-      "limits are coral (99.8%) and yellow (95%), areas below them teal ",
-      "(99.8%) and blue (95%), from the ACT Government regional colours, ",
+      "limits are coral (99.8%) and yellow (95%), areas below them blue ",
+      "(99.8%) and green (95%), from the ACT Government regional colours, ",
       "with larger triangles beyond the 99.8% limits."
     ),
 

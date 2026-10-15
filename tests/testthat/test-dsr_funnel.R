@@ -220,3 +220,18 @@ test_that("the funnel plot and map identify areas for linking", {
   expect_true(all(built$fill %in% c(.dsr_funnel_colours, "#efefec")))
 
 })
+
+test_that("positions run coral, yellow, grey, green and blue, from above to below", {
+
+  expect_equal(names(.dsr_funnel_colours), .dsr_funnel_positions)
+  expect_equal(unname(.dsr_funnel_colours),
+               c("#F15F50", "#C6B30B", "#CBCBC6", "#90A630", "#008FC5"))
+  # Triangles point up above the limits and down below, larger beyond the
+  # 99.8% limits
+  expect_equal(unname(.dsr_funnel_shapes), c(24, 24, 21, 25, 25))
+  expect_gt(.dsr_funnel_sizes[["Above 99.8% limit"]],
+            .dsr_funnel_sizes[["Above 95% limit"]])
+  expect_gt(.dsr_funnel_sizes[["Below 99.8% limit"]],
+            .dsr_funnel_sizes[["Below 95% limit"]])
+
+})

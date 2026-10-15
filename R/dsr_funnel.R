@@ -22,14 +22,15 @@
 
 # Position of an area relative to the limits, and its colour, shape and size.
 # Outside the limits the colours are four of the ACT Government's regional
-# colours (dev/reference/act-brand.md), warm above and cool below, darker
-# beyond the 99.8% limits; within them, grey. Shape and size repeat the
-# position for readers who cannot tell the colours apart.
+# colours (dev/reference/act-brand.md) in spectral order: coral and yellow
+# above, green and blue below, the outer colour beyond the 99.8% limits;
+# within them, grey. Shape and size repeat the position for readers who
+# cannot tell the colours apart.
 .dsr_funnel_positions <- c("Above 99.8% limit", "Above 95% limit",
                            "Within 95% limits", "Below 95% limit",
                            "Below 99.8% limit")
 .dsr_funnel_colours <- stats::setNames(
-  c("#F15F50", "#C6B30B", "#CBCBC6", "#008FC5", "#077F7A"),
+  c("#F15F50", "#C6B30B", "#CBCBC6", "#90A630", "#008FC5"),
   .dsr_funnel_positions
 )
 .dsr_funnel_shapes <- stats::setNames(c(24, 24, 21, 25, 25),

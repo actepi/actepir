@@ -33,10 +33,9 @@
 #' **Options**
 #'
 #' The sidebar's sections hold the options: *Events* (dataset, diagnosis
-#' codes and search), *Population* (population and geographic level), *Years
-#' and ages* (calendar years, pooling and ages) and *Rates* (standard
-#' population, rate per, suppression, male and female, and age-specific
-#' rates).
+#' codes and search), *Population* (population and geographic level), *Time
+#' periods* (calendar years and pooling) and *Rate details* (ages, standard
+#' population, rate per, suppression, and male and female).
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
@@ -73,8 +72,6 @@
 #'   the range. Rates are per population of those ages, and can be compared
 #'   only with rates for the same ages and standard population.
 #' * *Male and female*: adds male and female rates to the rates for persons.
-#' * *Age-specific rates*: adds a table of rates by 5-year age group, for the
-#'   ages chosen.
 #' * *Rate per*: 1,000, 10,000 or 100,000 population.
 #' * *Suppress counts below*: rows with fewer events than this have their
 #'   events and rates withheld (see [dsr_calculate()]). The default is 5; 0
@@ -95,9 +92,9 @@
 #'
 #' **Tables, maps and funnel plot**
 #'
-#' The *Tables* tab shows the rates and, when chosen, the age-specific
-#' rates. *Copy table* copies a table as tab-separated text that pastes into
-#' Excel.
+#' The *Tables* tab shows the rates or, with its *Age-specific rates* button,
+#' the rates by 5-year age group for the ages chosen. *Copy table* copies the
+#' table shown as tab-separated text that pastes into Excel.
 #'
 #' The *Map* tab maps the age-standardised rate, crude rate, age-specific
 #' rate or events of one year or period and sex by area. The age-specific
@@ -150,7 +147,7 @@
 #' chi-squared test; with fewer than 10 areas the estimate is unreliable.
 #' Suppressed areas are neither plotted nor included in the average. Areas
 #' above the limits are coral (99.8%) and yellow (95%), and areas below them
-#' teal (99.8%) and blue (95%), from the ACT Government's regional colours.
+#' blue (99.8%) and green (95%), from the ACT Government's regional colours.
 #'
 #' The *Help* tab gives the formulas for each rate, confidence interval and
 #' funnel plot limit, the tables and fields used, the boundary services and
@@ -188,7 +185,8 @@
 #' the age groups in range when the ages are limited and that assign each
 #' year to its period when the years are pooled, and the
 #' [dsr_calculate()] call, with the suppression threshold, that turns their
-#' results into the table shown. The code reproduces the results outside the
+#' results into the table shown, and the [dsr_age_specific()] call when the
+#' age-specific rates are shown. The code reproduces the results outside the
 #' calculator and can be adapted, for example by adding conditions to the
 #' events query.
 #'
@@ -820,8 +818,12 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 
 # ── Descriptions and code ───────────────────────────────────────────────────
 
+# The events, population and areas of the results in words, with the years
+# and the ages unless `years` or `ages` is FALSE, and the standard population
+# when it is named
 #' @noRd
-.dsr_describe <- function(spec, standard_name = NULL, years = TRUE) {
+.dsr_describe <- function(spec, standard_name = NULL, years = TRUE,
+                          ages = TRUE) {
   n <- spec$years[2] - spec$years[1] + 1L
   years <- if (!years) {
     NULL
@@ -837,7 +839,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   }
   level <- .dsr_area_label(spec$level)
   if (spec$level == "state") level <- tolower(level)
-  ages  <- .dsr_ages_text(spec$ages)
+  ages  <- if (ages) .dsr_ages_text(spec$ages)
   codes <- spec$codes$Label
   diagnosis <- if (length(codes)) {
     paste0(", ", if (spec$diagnosis == "all") "any" else "principal",
@@ -1241,12 +1243,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .epi-brand { display: flex; align-items: center; gap: 22px; }
         .epi-logo { height: 60px; }
         /* Sidebar: Lavender tint, with Calculate and Copy Code in view at
-           its foot across its full width */
+           its foot across its full width. The bar stays above what
+           scrolls under it, such as a focused section heading (z-index 3)
+           and slider handles, and below open dropdowns (1000). */
         :root { --bslib-sidebar-bg: #f7f4fd; }
         .sidebar .accordion { --bs-accordion-bg: transparent; }
         .dsr-actions {
           --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
-          position: sticky; bottom: 0; z-index: 1;
+          position: sticky; bottom: 0; z-index: 20;
           display: flex; gap: 8px;
           margin: 0 calc(-1 * var(--dsr-pad));
           padding: 10px var(--dsr-pad);
@@ -1428,8 +1432,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                               shiny::uiOutput("info_bar"))
     ),
 
+    # Not resizable: the resize handle would cover the sidebar's scrollbar
     sidebar = bslib::sidebar(
-      id = "settings", width = 340, open = "desktop",
+      id = "settings", width = 340, open = "desktop", resizable = FALSE,
       bslib::accordion(
         id = "settings_sections", open = TRUE, multiple = TRUE,
         bslib::accordion_panel(
@@ -1479,7 +1484,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           )
         ),
         bslib::accordion_panel(
-          "Years and ages", value = "years",
+          "Time periods", value = "time",
           shiny::sliderInput(
             "years", "Calendar years",
             min = init$min, max = init$max,
@@ -1493,16 +1498,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                         "All selected years" = "all"),
             width = "100%"
           ),
-          shiny::uiOutput("years_note"),
+          shiny::uiOutput("years_note")
+        ),
+        bslib::accordion_panel(
+          "Rate details", value = "rate",
           shiny::sliderInput(
             "ages", "Ages",
             min = 1, max = length(.dsr_age_labels),
             value = c(1, length(.dsr_age_labels)),
             step = 1, ticks = FALSE, width = "100%"
-          )
-        ),
-        bslib::accordion_panel(
-          "Rates", value = "rates",
+          ),
           shiny::selectInput(
             "standard", "Standard population",
             choices  = std_choices,
@@ -1520,9 +1525,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             "suppress", "Suppress counts below",
             value = 5, min = 0, step = 1, width = "100%"
           ),
-          shiny::checkboxInput("by_sex", "Male and female", value = FALSE),
-          shiny::checkboxInput("age_specific", "Age-specific rates",
-                               value = FALSE)
+          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
         )
       ),
       shiny::div(
@@ -1542,24 +1545,20 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     bslib::nav_panel(
       "Tables", value = "tables",
-      shiny::div(
-        class = "epi-table-head",
-        shiny::h5("Rates"),
-        shiny::actionButton("copy_summary", "Copy table",
-                            icon = shiny::icon("copy"),
-                            class = "btn-sm btn-primary")
-      ),
-      DT::dataTableOutput("summary_table"),
-      shiny::conditionalPanel(
-        "input.age_specific",
-        shiny::div(
-          class = "epi-table-head",
-          shiny::h5("Age-specific rates"),
-          shiny::actionButton("copy_age", "Copy table",
+      # The rates or the age-specific rates, with a button that copies the
+      # table shown
+      bslib::navset_pill(
+        id = "table",
+        bslib::nav_panel("Rates", value = "rates",
+                         DT::dataTableOutput("summary_table")),
+        bslib::nav_panel("Age-specific rates", value = "age",
+                         DT::dataTableOutput("age_table")),
+        bslib::nav_spacer(),
+        bslib::nav_item(
+          shiny::actionButton("copy_table", "Copy table",
                               icon = shiny::icon("copy"),
                               class = "btn-sm btn-primary")
-        ),
-        DT::dataTableOutput("age_table")
+        )
       ),
       shiny::uiOutput("footnote")
     ),
@@ -1911,7 +1910,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     output$age_table <- DT::renderDataTable({
       r <- results()
-      shiny::req(r, is.null(r$error), isTRUE(input$age_specific))
+      shiny::req(r, is.null(r$error))
       .dsr_datatable(age_results(), .dsr_area_label(r$spec$level),
                      r$multiplier, age = TRUE, suppress = r$suppress)
     })
@@ -1929,7 +1928,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # Copy a table to the clipboard as tab-separated text, ready for Excel
-    copy_table <- function(df, age) {
+    copy_tsv <- function(df, age) {
       if (is.null(rv$fetched)) {
         shiny::showNotification("Press Calculate first.", duration = 3,
                                 type = "warning")
@@ -1944,11 +1943,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         "Table copied to the clipboard"
       )
     }
-    shiny::observeEvent(input$copy_summary, {
-      copy_table(function() results()$summary, age = FALSE)
-    })
-    shiny::observeEvent(input$copy_age, {
-      copy_table(age_results, age = TRUE)
+    # Copy table copies the table shown
+    shiny::observeEvent(input$copy_table, {
+      if (identical(input$table, "age")) {
+        copy_tsv(age_results, age = TRUE)
+      } else {
+        copy_tsv(function() results()$summary, age = FALSE)
+      }
     })
 
     # ── Map and Explore ────────────────────────────────────────────────────
@@ -2056,15 +2057,33 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                                  stringsAsFactors = FALSE))
       })
 
+      # The age groups of the value shown: those mapped for age-specific
+      # rates, otherwise those of the rates. Titles, axes, tooltips and file
+      # names give them with the measure, and subtitles leave them out, so
+      # the map states one age range whatever it shows.
+      value_ages <- function(r) {
+        if (get("value") == "AgeRate") ages() else r$spec$ages
+      }
+      # ... in words: "aged 20 to 44", "all ages" for age-specific rates of
+      # every age, and NULL for other measures of every age
+      ages_label <- function(r) {
+        if (get("value") == "AgeRate") {
+          ages_words(ages())
+        } else if (!is.null(.dsr_ages_text(r$spec$ages))) {
+          ages_words(r$spec$ages)
+        }
+      }
+
       # The measure shown, e.g. "Age-specific rate per 100,000, aged 20 to 44"
       label <- function(r) {
         per <- paste0(" per ", .fmt_count(r$multiplier))
-        switch(get("value"),
-               DSR     = paste0("Age-standardised rate", per),
-               Crude   = paste0("Crude rate", per),
-               AgeRate = paste0("Age-specific rate", per, ", ",
-                                ages_words(ages())),
-               Events  = "Events")
+        a   <- ages_label(r)
+        paste0(switch(get("value"),
+                      DSR     = paste0("Age-standardised rate", per),
+                      Crude   = paste0("Crude rate", per),
+                      AgeRate = paste0("Age-specific rate", per),
+                      Events  = "Events"),
+               if (!is.null(a)) paste0(", ", a))
       }
 
       # Longitude and latitude limits of the map. The ACT, and the ACT and
@@ -2101,7 +2120,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
 
       list(get = get, ages = ages, band = band, values = values,
-           label = label, title = title, legend = legend, view = view)
+           value_ages = value_ages, ages_label = ages_label, label = label,
+           title = title, legend = legend, view = view)
     }
 
     # The note under a map on what grey areas are, and the boundaries' credit
@@ -2135,7 +2155,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         title    = ms$title(r),
         subtitle = .dsr_describe(s, if (input$map_value == "DSR") {
                                    std_name(s$standard)
-                                 }, years = FALSE),
+                                 }, years = FALSE, ages = FALSE),
         caption  = map_caption(r),
         xlim = view$xlim,
         ylim = view$ylim
@@ -2175,9 +2195,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       m <- map_values()
       row <- m$rows[m$rows$Area == area, ]
       name <- b$polys$Name[match(area, b$polys$Area)]
+      ages <- ms$ages_label(m$r)
       head <- paste0(area_label(m$r$spec), " ", area,
                      if (!is.na(name) && name != area) paste0(" ", name),
-                     if (m$band) paste0(", ", ages_words(map_ages())), ": ")
+                     if (!is.null(ages)) paste0(", ", ages), ": ")
       text <- .dsr_area_text(row, m$band, m$r$suppress, m$r$multiplier)
       shiny::div(class = "map-click", shiny::strong(head), text)
     })
@@ -2190,9 +2211,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     map_file <- function(ext) {
       function() {
-        ages <- if (input$map_value == "AgeRate") {
-          paste0("-", gsub(" ", "-", ages_words(map_ages())))
-        }
+        ages <- ms$ages_label(results())
+        if (!is.null(ages)) ages <- paste0("-", gsub(" ", "-", ages))
         paste0("dsr-map-", tolower(input$map_value), ages, "-", input$map_year,
                "-", tolower(input$map_sex), ".", ext)
       }
@@ -2258,13 +2278,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       nm <- ex_names()
       areas <- unique(c(names(nm), m$rows$Area))
       digits <- if (m$r$multiplier >= 100000) 1 else 2
+      ages <- ex$ages_label(m$r)
       vapply(areas, function(a) {
         row  <- m$rows[m$rows$Area %in% a, , drop = FALSE]
         name <- if (a %in% names(nm)) nm[[a]] else NA
         i    <- match(a, f$points$Area)
         head <- paste0(area_label(m$r$spec), " ", a,
                        if (!is.na(name) && name != a) paste0(" ", name),
-                       if (m$band) paste0(", ", ages_words(ex$ages())))
+                       if (!is.null(ages)) paste0(", ", ages))
         lines <- c(
           paste0("<b>", htmltools::htmlEscape(head), "</b>"),
           htmltools::htmlEscape(
@@ -2357,27 +2378,25 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::div(class = "epi-note", style = "margin: 2px 0 0 0;",
                    .dsr_describe(s, if (ex$get("value") == "DSR") {
                      std_name(s$standard)
-                   }, years = FALSE))
+                   }, years = FALSE, ages = FALSE))
       )
     })
 
-    # Axis titles of the funnel plot for the measure
+    # Axis titles of the funnel plot for the measure: a rate is named as in
+    # the title, against the population of the same ages
     ex_axes <- function(f) {
-      a <- if (f$measure == "AgeRate") .dsr_ages_text(ex$ages())
+      r <- ex$values()$r
+      a <- .dsr_ages_text(ex$value_ages(r))
       year <- if (f$years > 1) " a year"
-      per <- paste0(" per ", .fmt_count(f$multiplier))
+      population <- paste0("Population", if (!is.null(a)) paste0(" aged ", a),
+                           year)
       switch(
         f$measure,
         DSR     = list(x = paste0("Population derived from events and DSR",
                                   year),
-                       y = paste0("Age-standardised rate", per)),
-        Crude   = list(x = paste0("Population", year),
-                       y = paste0("Crude rate", per)),
-        AgeRate = list(x = paste0("Population", if (!is.null(a)) {
-                                    paste0(" aged ", a)
-                                  }, year),
-                       y = paste0("Age-specific rate", per,
-                                  if (!is.null(a)) paste0(", aged ", a))),
+                       y = ex$label(r)),
+        Crude   = list(x = population, y = ex$label(r)),
+        AgeRate = list(x = population, y = ex$label(r)),
         Events  = list(x = "Expected events",
                        y = "Observed / expected events")
       )
@@ -2595,10 +2614,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::showNotification(st$error, duration = 6, type = "warning")
         return(invisible(NULL))
       }
+      # The code adds the age-specific rates when their table is shown
       code <- .dsr_code(
         s,
         by_sex        = isTRUE(input$by_sex),
-        age_specific  = isTRUE(input$age_specific),
+        age_specific  = identical(input$table, "age"),
         multiplier    = as.numeric(input$multiplier),
         standard_name = std_name(s$standard),
         suppress      = suppress()

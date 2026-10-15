@@ -79,10 +79,9 @@ tabs on the top bar. The arrow at the top of the sidebar hides it.
 \strong{Options}
 
 The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis
-codes and search), \emph{Population} (population and geographic level), \emph{Years
-and ages} (calendar years, pooling and ages) and \emph{Rates} (standard
-population, rate per, suppression, male and female, and age-specific
-rates).
+codes and search), \emph{Population} (population and geographic level), \emph{Time
+periods} (calendar years and pooling) and \emph{Rate details} (ages, standard
+population, rate per, suppression, and male and female).
 \itemize{
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
@@ -120,8 +119,6 @@ The crude rate is the events in the range divided by the population in
 the range. Rates are per population of those ages, and can be compared
 only with rates for the same ages and standard population.
 \item \emph{Male and female}: adds male and female rates to the rates for persons.
-\item \emph{Age-specific rates}: adds a table of rates by 5-year age group, for the
-ages chosen.
 \item \emph{Rate per}: 1,000, 10,000 or 100,000 population.
 \item \emph{Suppress counts below}: rows with fewer events than this have their
 events and rates withheld (see \code{\link[=dsr_calculate]{dsr_calculate()}}). The default is 5; 0
@@ -143,9 +140,9 @@ from 2013, so neither holds the principal diagnosis in every year.
 
 \strong{Tables, maps and funnel plot}
 
-The \emph{Tables} tab shows the rates and, when chosen, the age-specific
-rates. \emph{Copy table} copies a table as tab-separated text that pastes into
-Excel.
+The \emph{Tables} tab shows the rates or, with its \emph{Age-specific rates} button,
+the rates by 5-year age group for the ages chosen. \emph{Copy table} copies the
+table shown as tab-separated text that pastes into Excel.
 
 The \emph{Map} tab maps the age-standardised rate, crude rate, age-specific
 rate or events of one year or period and sex by area. The age-specific
@@ -200,7 +197,7 @@ between areas. The tab reports the overdispersion ratio and its
 chi-squared test; with fewer than 10 areas the estimate is unreliable.
 Suppressed areas are neither plotted nor included in the average. Areas
 above the limits are coral (99.8\%) and yellow (95\%), and areas below them
-teal (99.8\%) and blue (95\%), from the ACT Government's regional colours.
+blue (99.8\%) and green (95\%), from the ACT Government's regional colours.
 
 The \emph{Help} tab gives the formulas for each rate, confidence interval and
 funnel plot limit, the tables and fields used, the boundary services and
@@ -238,7 +235,8 @@ calculator runs, including any diagnosis condition, the lines that keep
 the age groups in range when the ages are limited and that assign each
 year to its period when the years are pooled, and the
 \code{\link[=dsr_calculate]{dsr_calculate()}} call, with the suppression threshold, that turns their
-results into the table shown. The code reproduces the results outside the
+results into the table shown, and the \code{\link[=dsr_age_specific]{dsr_age_specific()}} call when the
+age-specific rates are shown. The code reproduces the results outside the
 calculator and can be adapted, for example by adding conditions to the
 events query.
 }

@@ -395,7 +395,7 @@
       border-color: #fff !important;
       color: #fff !important;
     }
-    #done.btn-primary:hover, #done.btn-primary:focus,
+    #done.btn-primary:hover, #done.btn-primary:focus-visible,
     #done.btn-primary:active {
       background-color: var(--epi-accent) !important;
       border-color: #fff !important;
@@ -426,9 +426,28 @@
       background-color: var(--epi-primary) !important;
       border-color: var(--epi-primary-brdr) !important;
     }
-    .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    .btn-primary:hover, .btn-primary:focus-visible, .btn-primary:active {
       background-color: var(--epi-accent) !important;
       border-color: var(--epi-accent) !important;
+    }
+    /* A click leaves no highlight behind: focus rings and colours show for
+       the keyboard (focus-visible), and a closed dropdown is plain */
+    .btn:focus:not(:focus-visible),
+    .accordion-button:focus:not(:focus-visible),
+    .shiny-input-container .checkbox input:focus:not(:focus-visible),
+    .shiny-input-container .radio input:focus:not(:focus-visible) {
+      outline: none; box-shadow: none;
+    }
+    .accordion-button:not(.collapsed):focus:not(:focus-visible) {
+      box-shadow: inset 0 calc(-1 * var(--bs-accordion-border-width))
+                  0 var(--bs-accordion-border-color);
+    }
+    .shiny-input-container .checkbox input:not(:checked):focus:not(:focus-visible) {
+      border-color: var(--bs-border-color);
+    }
+    .selectize-control.single .selectize-input.focus:not(.dropdown-active) {
+      border-color: var(--bs-border-color, #ccc) !important;
+      box-shadow: none !important;
     }
     /* Focus glow on inputs/selects: replace Bootstrap blue */
     .form-control:focus, select:focus, .selectize-input.focus {
@@ -478,6 +497,15 @@
     table.dataTable thead > tr > th.sorting_asc:before,
     table.dataTable thead > tr > th.sorting_desc:after {
       opacity: 1 !important;
+    }
+    /* The arrows sit in 9px lines, one above the other, and are sized in
+       em: with larger header text, or a symbol font substituted for them,
+       they overlap. Fix their size and font. */
+    table.dataTable thead > tr > th[class*='sorting']:before,
+    table.dataTable thead > tr > th[class*='sorting']:after {
+      font-family: Arial, 'Liberation Sans', sans-serif;
+      font-size: 9px !important;
+      line-height: 9px !important;
     }
     /* Selected rows. Two upstream mechanisms colour these blue:
        (1) dataTables.bootstrap.extra.css targets '.table.dataTable
