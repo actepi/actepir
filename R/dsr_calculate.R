@@ -29,11 +29,17 @@
 #'   intervals. Default 0.95.
 #' @param suppress Number. Rows with fewer events than this are suppressed:
 #'   their events and rates are not reported. Default 0, no suppression.
+#' @param min_events,min_population Numbers. A row's DSR is not presented when
+#'   it has fewer than `min_events` events, or a population under
+#'   `min_population` in any age group. The AIHW (2011) principles, which the
+#'   ABS applies, set these at 20 and 30. Default 0, no check.
 #'
 #' @return `dsr_calculate()` returns a data frame with the `by` columns, `Sex`
 #'   (`"Male"`, `"Female"` or `"Persons"`), `Events`, `Population`, the crude
 #'   rate (`Crude`, `CrudeLower`, `CrudeUpper`), the DSR (`DSR`, `DSRLower`,
-#'   `DSRUpper`) and `Suppressed`. `dsr_age_specific()` returns the `by`
+#'   `DSRUpper`), `DSRNote` and `Suppressed`. `DSRNote` says why the DSR is
+#'   `NA` in a row that is not suppressed, and is otherwise `NA`.
+#'   `dsr_age_specific()` returns the `by`
 #'   columns, `Sex`, `AgeGroup`, `AgeGroupName` (when `population` has it),
 #'   `Events`, `Population`, the rate (`Rate`, `RateLower`, `RateUpper`) and
 #'   `Suppressed`. Rates are per `multiplier`. Events left out of the rates
@@ -71,6 +77,20 @@
 #' the total count by the variance of the DSR; a negative lower limit is set
 #' to 0. The DSR interval is `NA` when there are no events.
 #'
+#' **Reliability.** The AIHW (2011) principles for direct age-standardisation,
+#' which the ABS applies (ABS 2011), advise against age-standardising when a
+#' population has fewer than 20 events in total (Principle 3) or a population
+#' under 30 in any one age group (Principle 2). Pooling years or areas raises
+#' the events, and wider age groups raise the populations; otherwise counts,
+#' crude rates and age-specific rates are reported instead. With `min_events`
+#' and `min_population` set, a row that falls short has its DSR and interval
+#' set to `NA` and the reason in `DSRNote`, for example `"fewer than 20
+#' events"` or `"a population under 30 in an age group"`, the events taking
+#' precedence; its counts and crude rate are kept. An age group with no
+#' population row in a group counts as a population of 0. `DSRNote` also
+#' gives `"events in an age group with no population"` for a DSR that is
+#' undefined (see Standardisation).
+#'
 #' **Suppression.** A row with fewer than `suppress` events, zero included,
 #' has `Suppressed` set to `TRUE` and its events and rates set to `NA`; the
 #' population is kept. Each row is judged on its own count, so a suppressed
@@ -78,6 +98,14 @@
 #' for example). Complementary suppression is not applied.
 #'
 #' @references
+#' Australian Bureau of Statistics (2011). *Deaths, Australia, 2010*, Appendix
+#' 1: Principles on the use of direct age-standardisation. Cat. no. 3302.0.
+#'
+#' Australian Institute of Health and Welfare (2011). *Principles on the use of
+#' direct age-standardisation in administrative data collections: for
+#' measuring the gap between Indigenous and non-Indigenous Australians*. Cat.
+#' no. CSI 12. Canberra: AIHW.
+#'
 #' Dobson AJ, Kuulasmaa K, Eberle E, Scherer J (1991). Confidence intervals
 #' for weighted sums of Poisson parameters. *Statistics in Medicine*, 10(3),
 #' 457-462.
@@ -115,9 +143,11 @@
 dsr_calculate <- function(events, population, standard,
                           by = NULL, by_sex = FALSE,
                           multiplier = 100000, conf_level = 0.95,
-                          suppress = 0) {
+                          suppress = 0, min_events = 0, min_population = 0) {
 
   .dsr_check_args(multiplier, conf_level, suppress)
+  .dsr_check_min(min_events, "min_events", "events")
+  .dsr_check_min(min_population, "min_population", "people")
   .dsr_check_df(standard, "standard", c("AgeGroup", "StdPopValue"))
   if (anyDuplicated(standard$AgeGroup)) {
     stop("'standard' must have one row per AgeGroup.", call. = FALSE)
@@ -146,8 +176,12 @@ dsr_calculate <- function(events, population, standard,
   rate <- ifelse(pos, d$Events / d$Population, ifelse(d$Events > 0, NA, 0))
   d$wr <- d$w * rate
   d$wv <- ifelse(pos, d$w^2 * d$Events / d$Population^2, 0)
+  # Age groups under min_population, and age groups present, in each group
+  d$Small <- d$Population < min_population
+  d$Cells <- 1
 
-  out <- .dsr_sum(d, c(by, "Sex"), c("Events", "Population", "wr", "wv"))
+  out <- .dsr_sum(d, c(by, "Sex"),
+                  c("Events", "Population", "wr", "wv", "Small", "Cells"))
 
   alpha <- (1 - conf_level) / 2
   lo <- .pois_lower(out$Events, alpha)
@@ -165,16 +199,29 @@ dsr_calculate <- function(events, population, standard,
   out$DSRLower <- pmax(out$wr + s * (lo - out$Events), 0) * multiplier
   out$DSRUpper <- (out$wr + s * (hi - out$Events)) * multiplier
 
+  # Why a DSR is not presented: it is undefined, or the group falls short of
+  # min_events or min_population (see Reliability), the events first
+  short <- min_population > 0 &
+    (out$Small > 0 | out$Cells < length(unique(d$AgeGroup)))
+  note <- rep(NA_character_, nrow(out))
+  note[is.na(out$DSR)] <- "events in an age group with no population"
+  note[short] <- paste("a population under", .fmt_count(min_population),
+                       "in an age group")
+  note[out$Events < min_events] <- paste("fewer than", .fmt_count(min_events),
+                                         "events")
+  out[!is.na(note), c("DSR", "DSRLower", "DSRUpper")] <- NA
+  out$DSRNote <- note
+
   out <- out[.dsr_order(out, c(by, "Sex")),
              c(by, "Sex", "Events", "Population",
                "Crude", "CrudeLower", "CrudeUpper",
-               "DSR", "DSRLower", "DSRUpper")]
+               "DSR", "DSRLower", "DSRUpper", "DSRNote")]
   rownames(out) <- NULL
 
-  n_na <- sum(is.na(out$DSR))
-  if (n_na) {
-    message("The DSR is NA for ", n_na, " group(s) with events in an age ",
-            "group that has no population.")
+  if (any(!is.na(note))) {
+    n <- table(factor(note[!is.na(note)], unique(note[!is.na(note)])))
+    message("The DSR is NA for ",
+            paste0(n, " group(s) with ", names(n), collapse = ", "), ".")
   }
 
   .dsr_report(.dsr_suppress(out, suppress), st$excluded)
@@ -430,8 +477,14 @@ dsr_age_specific <- function(events, population,
       is.na(conf_level) || conf_level <= 0 || conf_level >= 1) {
     stop("'conf_level' must be a number between 0 and 1.", call. = FALSE)
   }
-  if (!is.numeric(suppress) || length(suppress) != 1 ||
-      !is.finite(suppress) || suppress < 0) {
-    stop("'suppress' must be a number of events, 0 or more.", call. = FALSE)
+  .dsr_check_min(suppress, "suppress", "events")
+}
+
+
+#' @noRd
+.dsr_check_min <- function(x, name, unit) {
+  if (!is.numeric(x) || length(x) != 1 || !is.finite(x) || x < 0) {
+    stop("'", name, "' must be a number of ", unit, ", 0 or more.",
+         call. = FALSE)
   }
 }

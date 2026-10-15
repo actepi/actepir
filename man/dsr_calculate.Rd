@@ -13,7 +13,9 @@ dsr_calculate(
   by_sex = FALSE,
   multiplier = 1e+05,
   conf_level = 0.95,
-  suppress = 0
+  suppress = 0,
+  min_events = 0,
+  min_population = 0
 )
 
 dsr_age_specific(
@@ -54,12 +56,19 @@ intervals. Default 0.95.}
 
 \item{suppress}{Number. Rows with fewer events than this are suppressed:
 their events and rates are not reported. Default 0, no suppression.}
+
+\item{min_events, min_population}{Numbers. A row's DSR is not presented when
+it has fewer than \code{min_events} events, or a population under
+\code{min_population} in any age group. The AIHW (2011) principles, which the
+ABS applies, set these at 20 and 30. Default 0, no check.}
 }
 \value{
 \code{dsr_calculate()} returns a data frame with the \code{by} columns, \code{Sex}
 (\code{"Male"}, \code{"Female"} or \code{"Persons"}), \code{Events}, \code{Population}, the crude
 rate (\code{Crude}, \code{CrudeLower}, \code{CrudeUpper}), the DSR (\code{DSR}, \code{DSRLower},
-\code{DSRUpper}) and \code{Suppressed}. \code{dsr_age_specific()} returns the \code{by}
+\code{DSRUpper}), \code{DSRNote} and \code{Suppressed}. \code{DSRNote} says why the DSR is
+\code{NA} in a row that is not suppressed, and is otherwise \code{NA}.
+\code{dsr_age_specific()} returns the \code{by}
 columns, \code{Sex}, \code{AgeGroup}, \code{AgeGroupName} (when \code{population} has it),
 \code{Events}, \code{Population}, the rate (\code{Rate}, \code{RateLower}, \code{RateUpper}) and
 \code{Suppressed}. Rates are per \code{multiplier}. Events left out of the rates
@@ -107,6 +116,19 @@ the method of Dobson et al. (1991), which scales the exact Poisson limits of
 the total count by the variance of the DSR; a negative lower limit is set
 to 0. The DSR interval is \code{NA} when there are no events.
 
+\strong{Reliability.} The AIHW (2011) principles for direct age-standardisation,
+which the ABS applies (ABS 2011), advise against age-standardising when a
+population has fewer than 20 events in total (Principle 3) or a population
+under 30 in any one age group (Principle 2). Pooling years or areas raises
+the events, and wider age groups raise the populations; otherwise counts,
+crude rates and age-specific rates are reported instead. With \code{min_events}
+and \code{min_population} set, a row that falls short has its DSR and interval
+set to \code{NA} and the reason in \code{DSRNote}, for example \code{"fewer than 20 events"} or \code{"a population under 30 in an age group"}, the events taking
+precedence; its counts and crude rate are kept. An age group with no
+population row in a group counts as a population of 0. \code{DSRNote} also
+gives \code{"events in an age group with no population"} for a DSR that is
+undefined (see Standardisation).
+
 \strong{Suppression.} A row with fewer than \code{suppress} events, zero included,
 has \code{Suppressed} set to \code{TRUE} and its events and rates set to \code{NA}; the
 population is kept. Each row is judged on its own count, so a suppressed
@@ -134,6 +156,14 @@ dsr_age_specific(events, population, by = "Year")
 
 }
 \references{
+Australian Bureau of Statistics (2011). \emph{Deaths, Australia, 2010}, Appendix
+1: Principles on the use of direct age-standardisation. Cat. no. 3302.0.
+
+Australian Institute of Health and Welfare (2011). \emph{Principles on the use of
+direct age-standardisation in administrative data collections: for
+measuring the gap between Indigenous and non-Indigenous Australians}. Cat.
+no. CSI 12. Canberra: AIHW.
+
 Dobson AJ, Kuulasmaa K, Eberle E, Scherer J (1991). Confidence intervals
 for weighted sums of Poisson parameters. \emph{Statistics in Medicine}, 10(3),
 457-462.

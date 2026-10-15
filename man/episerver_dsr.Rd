@@ -123,6 +123,13 @@ only with rates for the same ages and standard population.
 \item \emph{Suppress counts below}: rows with fewer events than this have their
 events and rates withheld (see \code{\link[=dsr_calculate]{dsr_calculate()}}). The default is 5; 0
 turns suppression off.
+\item \emph{Minimum events for a DSR} and \emph{Minimum population per age group}: a
+row's age-standardised rate is not presented (n.p.) when it has fewer
+events in total, or a population under the minimum in any of its age
+groups, as the AIHW (2011) principles for direct age-standardisation
+advise (Principles 3 and 2), which the ABS applies (ABS 2011). The
+defaults are the principles' 20 and 30; 0 turns a check off. The row's
+counts and crude rate are still shown.
 \item \emph{Diagnosis codes}: counts only events with a diagnosis matching any of
 the ICD-10 codes or ranges entered, for example \code{J45}, \code{C13-C15.45} or
 \verb{E18.3 to E18.78}. A partial code matches every code that starts with
@@ -140,8 +147,11 @@ from 2013, so neither holds the principal diagnosis in every year.
 
 \strong{Tables, maps and funnel plot}
 
-The \emph{Tables} tab shows the rates or, with its \emph{Age-specific rates} button,
-the rates by 5-year age group for the ages chosen. \emph{Copy table} copies the
+The \emph{Tables} tab shows the rates, the \emph{Age-specific rates} by 5-year age
+group for the ages chosen, or the \emph{Counts by age}: the events and the
+population of each age group, one row of each for every year or period,
+area and sex, with populations under the minimum per age group and event
+totals under the minimum for a DSR highlighted. \emph{Copy table} copies the
 table shown as tab-separated text that pastes into Excel.
 
 The \emph{Map} tab maps the age-standardised rate, crude rate, age-specific
@@ -176,8 +186,8 @@ without being misled by the chance variation of small numbers:
 \item DSRs are plotted against the population that would give the DSR as a
 crude rate from the area's events (events / DSR), as in the funnel plots
 of the Office for Health Improvement and Disparities (OHID). The average
-is the events of all the areas over their derived populations. DSRs from
-fewer than 10 events are not plotted.
+is the events of the areas plotted over their derived populations. Areas
+whose DSR is not presented (n.p.) are left out.
 \item Events are divided by the events expected from the age-specific rates of
 all the areas plotted (indirect standardisation) and plotted against the
 expected events, as counts alone cannot be compared between areas of
@@ -255,6 +265,14 @@ episerver_dsr_stop()
 
 }
 \references{
+Australian Bureau of Statistics (2011). \emph{Deaths, Australia, 2010}, Appendix
+1: Principles on the use of direct age-standardisation. Cat. no. 3302.0.
+
+Australian Institute of Health and Welfare (2011). \emph{Principles on the use of
+direct age-standardisation in administrative data collections: for
+measuring the gap between Indigenous and non-Indigenous Australians}. Cat.
+no. CSI 12. Canberra: AIHW.
+
 Spiegelhalter DJ (2005). Funnel plots for comparing institutional
 performance. \emph{Statistics in Medicine}, 24(8), 1185-1202.
 

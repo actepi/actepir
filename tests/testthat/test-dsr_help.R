@@ -40,8 +40,11 @@ test_that("the help gives the data, formulas and sources the calculator uses", {
   expect_match(html, "w<sub>i</sub> = S<sub>i</sub> / &Sigma; S<sub>j</sub>",
                fixed = TRUE)
   expect_match(text, "Dobson et al. 1991", fixed = TRUE)
-  expect_match(text, paste("fewer than", .dsr_funnel_min_dsr, "events"),
+  expect_match(text, "fewer than 20 events in total (Principle 3)",
                fixed = TRUE)
+  expect_match(text, "a population under 30 in any one age group (Principle 2)",
+               fixed = TRUE)
+  expect_match(text, "Areas whose DSR is not presented", fixed = TRUE)
   expect_match(text, "P(X &ge; O a ) &lt; 0.025", fixed = TRUE)
   expect_match(text, "below 0.001", fixed = TRUE)
   expect_match(text, "z p is 1.960 (95%) or 3.090 (99.8%)", fixed = TRUE)
@@ -50,7 +53,8 @@ test_that("the help gives the data, formulas and sources the calculator uses", {
   # References
   for (ref in c("Garwood F (1936)", "Spiegelhalter DJ (2005). Funnel plots",
                 "Spiegelhalter DJ (2005). Handling over-dispersion",
-                "Cat. no. CSI 12", "Public Health England (2017)",
+                "Cat. no. CSI 12", "Cat. no. 3302.0",
+                "Public Health England (2017)",
                 "Australian Statistical Geography Standard (ASGS) Edition 3")) {
     expect_match(text, ref, fixed = TRUE)
   }

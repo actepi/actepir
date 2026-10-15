@@ -967,6 +967,142 @@ test_that("the app copies the table shown for pasting into a spreadsheet", {
     expect_equal(copied, .dsr_tsv(age_results(), "State or territory",
                                   100000, age = TRUE, suppress = 25))
     expect_match(copied, "\t<25\t", fixed = TRUE)
+    session$setInputs(table = "counts", copy_table = 4)
+    expect_equal(copied, .dsr_counts_tsv(counts(), "State or territory",
+                                         suppress = 25))
+  })
+
+})
+
+test_that("the app presents no DSR below the AIHW minimums, and says why", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  sent <- NULL
+  copied <- NULL
+  local_mocked_bindings(
+    .epi_send_code = function(session, code) sent <<- code,
+    .epi_copy_text = function(session, text, message) copied <<- text
+  )
+  n_events <- function() sum(grepl("AS Events", fake$calls(), fixed = TRUE))
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", by_sex = TRUE, table = "rates",
+                      min_events = 20, min_population = 30)
+    session$setInputs(calculate = 1)
+    expect_true(all(is.na(results()$summary$DSRNote)))
+
+    # Males and females have 531 events each, persons 1,080. The minimums
+    # recalculate without querying the events again.
+    session$setInputs(min_events = 600)
+    s <- results()$summary
+    expect_equal(s$DSRNote, c("fewer than 600 events", "fewer than 600 events",
+                              NA))
+    expect_true(all(is.na(s[1:2, c("DSR", "DSRLower", "DSRUpper")])))
+    expect_false(anyNA(s$Crude))
+    expect_match(strip_html(output$info_bar$html),
+                 paste("Age-standardised rates are not presented (n.p.) for 2",
+                       "of 3 rows: 2 with fewer than 600 events"),
+                 fixed = TRUE)
+    expect_equal(n_events(), 1)
+    session$setInputs(copy_table = 1)
+    male <- strsplit(strsplit(copied, "\n")[[1]][2], "\t")[[1]]
+    expect_equal(tail(male, 3), rep("n.p.", 3))
+
+    # Males number 10,150 at ages 0-4, females 10,200
+    session$setInputs(min_events = 0, min_population = 10200)
+    expect_equal(results()$summary$DSRNote,
+                 c("a population under 10,200 in an age group", NA, NA))
+
+    # Copy Code applies the same minimums, and a cleared one is off
+    session$setInputs(insert_code = 1)
+    expect_match(sent, "min_population = 10200", fixed = TRUE)
+    expect_no_match(sent, "min_events", fixed = TRUE)
+    session$setInputs(min_population = NA)
+    expect_true(all(is.na(results()$summary$DSRNote)))
+  })
+
+})
+
+test_that("counts by age set events and populations out with the ages across", {
+
+  d <- .dsr_counts(fake_events, fake_population, c("Year", "Area"),
+                   by_sex = TRUE, suppress = 22)
+  ages <- .dsr_age_labels
+
+  expect_equal(names(d), c("Year", "Area", "Sex", "Count", ages, "All ages"))
+  expect_equal(d$Sex, rep(c("Male", "Female", "Persons"), each = 2))
+  expect_equal(d$Count, rep(c("Events", "Population"), 3))
+
+  # Males have 21 to 38 events, so 21 is suppressed, in each age group;
+  # populations are never suppressed
+  expect_equal(unname(unlist(d[1, ages])), c(NA, 22:38))
+  expect_equal(unname(unlist(d[2, ages])), 10000 + 100 * (1:18) + 50)
+  # Persons include sex not stated: 2 (20 + a) + 1
+  expect_equal(unname(unlist(d[5, ages])), 2 * (21:38) + 1)
+
+  # The totals are the counts of the rates
+  r <- suppressMessages(dsr_calculate(fake_events, fake_population,
+                                      fake_standard, by = c("Year", "Area"),
+                                      by_sex = TRUE))
+  expect_equal(d[["All ages"]][c(1, 3, 5)], r$Events)
+  expect_equal(d[["All ages"]][c(2, 4, 6)], r$Population)
+
+  # Limited to ages, the columns are those age groups
+  ages_15_to_44 <- .dsr_counts(.dsr_truncate(fake_events, c(4L, 9L)),
+                               .dsr_truncate(fake_population, c(4L, 9L)),
+                               c("Year", "Area"))
+  expect_equal(names(ages_15_to_44)[-(1:4)], c(ages[4:9], "All ages"))
+
+  # Copied, ages and suppressed counts stay text in Excel
+  lines <- strsplit(.dsr_counts_tsv(d, "State or territory", suppress = 22),
+                    "\n", fixed = TRUE)[[1]]
+  expect_length(lines, 7)
+  expect_equal(strsplit(lines[1], "\t", fixed = TRUE)[[1]][c(1:5, 23)],
+               c("Year", "State or territory", "Sex", "Count", "0–4",
+                 "All ages"))
+  expect_match(lines[2], "^2023\tACT\tMale\tEvents\t<22\t22\t23\t")
+
+  # The table highlights populations and event totals below the minimums
+  tbl <- .dsr_counts_datatable(d, "State or territory", suppress = 22,
+                               min_events = 600, min_population = 10200)
+  expect_equal(names(tbl$x$data), names(d))
+  defs <- Filter(function(def) !is.null(def$render), tbl$x$options$columnDefs)
+  renders <- vapply(defs, function(def) as.character(def$render), character(1))
+  expect_match(renders[1], "!events && 10200 > 0 && data < 10200",
+               fixed = TRUE)
+  expect_match(renders[2], "events && 600 > 0", fixed = TRUE)
+  expect_match(renders[2], "dsr-short", fixed = TRUE)
+
+})
+
+test_that("the app shows counts by age and explains the highlights", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", by_sex = TRUE, suppress = 22,
+                      min_events = 600, min_population = 10200,
+                      table = "counts", ages = c(4, 9))
+    session$setInputs(calculate = 1)
+    r <- results()
+    expect_equal(counts(), .dsr_counts(r$events, r$population, r$by,
+                                       by_sex = TRUE, suppress = 22))
+    expect_equal(names(counts())[-(1:4)], c(.dsr_age_labels[4:9], "All ages"))
+    note <- gsub("\\s+", " ", strip_html(output$counts_note$html))
+    expect_match(note,
+                 paste("Highlighted: populations under 10,200 in an age group",
+                       "and event totals under 600, below the minimums"),
+                 fixed = TRUE)
+    expect_match(output$counts_table, "dsr-short", fixed = TRUE)
+
+    session$setInputs(min_events = 0, min_population = 0, suppress = 0)
+    expect_no_match(strip_html(output$counts_note$html), "Highlighted")
   })
 
 })
@@ -1238,7 +1374,16 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_match(tables, "data-value=\"rates\"", fixed = TRUE)
   expect_match(tables, "data-value=\"age\"", fixed = TRUE)
   expect_true(has_id(tables, "copy_table"))
+  expect_match(tables, "data-value=\"counts\"", fixed = TRUE)
+  expect_true(has_id(tables, "counts_table"))
   expect_false(has_id(page, "age_specific"))
+
+  # The minimums for a DSR start at the AIHW (2011) principles' 20 and 30
+  input_tag <- function(id) part(paste0("<input id=\"", id, "\"[^>]*>"))
+  expect_match(input_tag("min_events"), "value=\"20\"", fixed = TRUE)
+  expect_match(input_tag("min_population"), "value=\"30\"", fixed = TRUE)
+  expect_true(has_id(sidebar, "min_events"))
+  expect_true(has_id(sidebar, "min_population"))
 
   # The logo is shown at the brand's minimum size with its clear space, and
   # the page explains itself once Done has stopped the app
