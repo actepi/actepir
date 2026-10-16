@@ -24,6 +24,11 @@ R package for analysts in the Epidemiology Section, ACT Health and Community Ser
 - Do not change `Version` in `DESCRIPTION`. The maintainer sets the version when merging.
 - If a request conflicts with a rule in this file, say so and ask before proceeding.
 
+## Handoff notes and offline harness
+
+- `dev/notes/` holds handoff notes for each tool: the decisions and their reasons, open items, and how to check a change. Read a tool's notes before changing it, and update them in the same pull request. Start notes for a new tool from the template in `dev/notes/README.md`.
+- `dev/harness/` runs the Shiny apps in a headless browser, and dry-runs the live tests, against a synthetic EpiServer and ABS boundary service. `dev/harness/README.md` explains how. When a change alters the SQL an app sends, update the fakes in the same pull request.
+
 ## Commands
 
 The cloud environment provides R with `roxygen2`, `testthat`, `rcmdcheck`, `remotes` and the package's dependencies. `devtools` is not installed, so call the underlying functions:
