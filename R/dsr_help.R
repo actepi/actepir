@@ -88,7 +88,12 @@
       "first code to its last and includes every code that starts with the ",
       "last. For APC the principal diagnosis is ",
       code(.dsr_datasets$APC$diagnoses[1]), ". ED has no field that holds the ",
-      "principal diagnosis in every year, so all its fields are searched."
+      "principal diagnosis in every year, so all its fields are searched. ",
+      "Searching by condition finds the codes whose titles have a word ",
+      "starting with each word typed. The titles come from ",
+      code("Analysis.dbo.ICD10AM"), ", each from the latest edition that ",
+      "holds the code, and a code that some editions lack is labelled with ",
+      "the editions that hold it."
     ),
 
     shiny::h5("Populations and areas"),

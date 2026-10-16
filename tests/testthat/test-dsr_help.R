@@ -18,6 +18,7 @@ test_that("the help gives the data, formulas and sources the calculator uses", {
     expect_match(text, d$age, fixed = TRUE)
   }
   expect_match(text, "Diagnosis1 to Diagnosis100", fixed = TRUE)
+  expect_match(text, "Analysis.dbo.ICD10AM", fixed = TRUE)
   expect_match(text, "Analysis.dbo.StandardPops", fixed = TRUE)
   for (col in vapply(.dsr_levels, `[[`, character(1), "column")) {
     expect_match(text, col, fixed = TRUE)

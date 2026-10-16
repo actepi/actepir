@@ -201,6 +201,43 @@ GROUP BY {fields}",
 
 })
 
+test_that("the ICD-10-AM titles cover the diagnosis codes recorded", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+
+  raw <- db$query(.dsr_sql_icd())
+  expect_named(raw, c("Code", "Description", "FirstEdition", "LastEdition"))
+  expect_equal(anyDuplicated(trimws(raw$Code)), 0)
+  icd <- .dsr_icd_titles(raw)
+  expect_gt(nrow(icd), 10000)
+  expect_equal(attr(icd, "editions")[2], max(raw$LastEdition))
+  expect_true(all(c("I21", "J45", "C15.4") %in% icd$Code))
+  expect_true(all(validUTF8(icd$Title)))
+
+  # Every code but the morphology codes has the form the search reads
+  codes <- toupper(trimws(raw$Code))
+  dropped <- setdiff(codes[!grepl("/", codes, fixed = TRUE)], icd$Code)
+  expect_equal(utils::head(dropped, 20), character(0))
+
+  # The principal diagnoses of APC separations in 2018, all in one edition,
+  # have titles
+  ds <- .dsr_datasets$APC
+  d <- db$query(.dsr_fill("SELECT {field}, COUNT(*) AS n
+FROM Analysis.dbo.{table}
+WHERE {date} >= '20180101'
+  AND {date} < '20190101'
+  AND {icd10}
+GROUP BY {field}",
+    field = ds$diagnoses[1], table = ds$table, date = ds$date,
+    icd10 = ds$icd10))
+  key <- toupper(gsub(".", "", trimws(d[[1]]), fixed = TRUE))
+  coded <- !is.na(key) & nzchar(key) & !grepl("/", key, fixed = TRUE)
+  titled <- key %in% icd$Key
+  expect_gt(sum(d$n[coded & titled]) / sum(d$n[coded]), 0.99)
+
+})
+
 test_that("the ACT and surrounds SA3s and SA2s are in the population tables", {
 
   skip_if_no_episerver()
@@ -250,6 +287,7 @@ test_that("the app calculates against EpiServer", {
 
   skip_if_no_episerver()
 
+  titles <- .dsr_icd_titles(live_db()$query(.dsr_sql_icd()))
   app <- episerver_dsr_app()
 
   shiny::testServer(app, {
@@ -280,6 +318,10 @@ test_that("the app calculates against EpiServer", {
     total <- sum(r$summary$Events)
     session$setInputs(codes = "J45", diagnosis = "all", suppress = 5,
                       min_events = 20, min_population = 30)
+    # The code is spelt out with its title from Analysis.dbo.ICD10AM
+    note <- gsub("\\s+", " ", gsub("<[^>]+>", "", output$codes_note$html))
+    expect_match(note, paste("J45", titles$Title[titles$Code == "J45"]),
+                 fixed = TRUE)
     session$setInputs(calculate = 2)
     expect_null(rv$error)
     r <- results()

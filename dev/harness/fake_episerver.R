@@ -73,6 +73,35 @@ local({
   }
   events <- list(ED = events_for("ED"), APC = events_for("APC"))
 
+  # ICD-10-AM titles as .dsr_sql_icd() returns them, all invented: every
+  # category A00 to Z99 and its subdivisions .0 to .9 (28,600 codes) with
+  # titles of two words from a list, and five myocardial titles for the
+  # search checks. X99.9 left after edition 9 and U07.1 came in edition 10.
+  # Built without random numbers, so the counts above stay as recorded.
+  icd_words <- c("acute", "chronic", "test", "disorder", "heart", "lung",
+                 "kidney", "liver", "infection", "other", "artery", "skin",
+                 "pulmonary", "renal", "cerebral", "complication", "bone")
+  cats <- as.vector(outer(LETTERS, sprintf("%02d", 0:99), paste0))
+  icd_code <- c(cats, as.vector(outer(cats, 0:9, paste, sep = ".")))
+  icd_k <- seq_along(icd_code) - 1L
+  icd_n <- length(icd_words)
+  icd <- data.frame(
+    Code = icd_code,
+    Description = paste(icd_words[icd_k %% icd_n + 1L],
+                        icd_words[icd_k %/% icd_n %% icd_n + 1L], "condition"),
+    FirstEdition = 3L, LastEdition = 11L, stringsAsFactors = FALSE
+  )
+  myocardial <- c(
+    "I21"   = "Acute myocardial test condition",
+    "I21.0" = "Acute myocardial test condition of anterior wall",
+    "I21.4" = "Acute subendocardial myocardial test condition",
+    "I22"   = "Subsequent myocardial test condition",
+    "I25.2" = "Old myocardial test condition"
+  )
+  icd$Description[match(names(myocardial), icd$Code)] <- myocardial
+  icd$LastEdition[icd$Code == "X99.9"] <- 9L
+  icd$FirstEdition[icd$Code == "U07.1"] <- 10L
+
   extract_years <- function(sql) {
     y <- as.integer(regmatches(sql, gregexpr("[0-9]{4}(?=0101')", sql, perl = TRUE))[[1]])
     c(y[1], y[2] - 1L)
@@ -89,6 +118,7 @@ local({
 
     # ── DSR Calculator ──
     if (grepl("GROUP BY StdPopCode", sql, fixed = TRUE)) return(standard_list)
+    if (grepl("FROM Analysis.dbo.ICD10AM", sql, fixed = TRUE)) return(icd)
     if (grepl("FROM Analysis.dbo.StandardPops", sql, fixed = TRUE)) {
       code <- sub(".*StdPopCode = ([0-9]+).*", "\\1", sql)
       return(data.frame(AgeGroup = 1:18, AgeGroupName = age_names,

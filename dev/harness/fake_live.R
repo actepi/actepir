@@ -56,6 +56,7 @@ fake_fixed <- function(sql) {
   if (grepl("MIN(ERPYear)", sql, fixed = TRUE)) {
     return(data.frame(FirstYear = 2001L, LastYear = 2024L))
   }
+  if (grepl("FROM Analysis.dbo.ICD10AM", sql, fixed = TRUE)) return(icd_rows)
   if (grepl("MIN(", sql, fixed = TRUE)) {
     return(data.frame(FirstDate = as.POSIXct("2004-07-01 00:12:00", tz = "UTC"),
                       LastDate  = as.POSIXct("2025-06-30 23:50:00", tz = "UTC")))
@@ -103,6 +104,19 @@ records <- function(n, fields, icd) {
   }
   d
 }
+# ICD-10-AM titles as .dsr_sql_icd() returns them: every code of the pool
+# above, J45, and invented categories and subdivisions A00.0 to Z99.9, with
+# invented titles, in editions 3 to 11
+icd_rows <- local({
+  pool <- toupper(trimws(code_pool))
+  pool <- pool[nzchar(pool) & !grepl("/", pool, fixed = TRUE)]
+  cats <- as.vector(outer(LETTERS, sprintf("%02d", 0:99), paste0))
+  code <- unique(c(pool, "J45", cats, as.vector(outer(cats, 0:9, paste,
+                                                       sep = "."))))
+  data.frame(Code = code, Description = paste("Synthetic title", code),
+             FirstEdition = 3L, LastEdition = 11L, stringsAsFactors = FALSE)
+})
+
 # ICD holds ICD10AMEdition (ED) or ICDVersion (APC)
 recs <- list(
   ED  = records(20000, c("EDShortListCode", paste0("Diagnosis", 1:3)),

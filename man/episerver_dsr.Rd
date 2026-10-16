@@ -137,7 +137,14 @@ it. A range runs from its first code to its last and includes every
 code that starts with the last. Dots and case do not matter. Only
 ICD-10 coded records are searched: ED records with an \code{ICD10AMEdition}
 other than 99, and APC records with an \code{ICDVersion} of 10. With no codes
-every event is counted.
+every event is counted. A code or range is added as typed, with Enter,
+Tab or a comma. Words from a condition, such as \code{myocardial}, list the
+ICD-10-AM codes whose titles have a word starting with each word typed,
+and Enter, Tab or a click adds the code highlighted. Each code or range
+entered is spelt out below the box with its titles. The titles come from
+\code{Analysis.dbo.ICD10AM}, each from the latest edition that holds the code;
+a code that some editions lack is labelled with the editions that hold
+it.
 \item \emph{Search}: for APC, the principal diagnosis (\code{Diagnosis1}) or any
 diagnosis (\code{Diagnosis1} to \code{Diagnosis100}). ED always searches all four
 of its diagnosis fields (\code{EDShortListCode} and \code{Diagnosis1} to

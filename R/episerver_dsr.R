@@ -90,7 +90,14 @@
 #'   code that starts with the last. Dots and case do not matter. Only
 #'   ICD-10 coded records are searched: ED records with an `ICD10AMEdition`
 #'   other than 99, and APC records with an `ICDVersion` of 10. With no codes
-#'   every event is counted.
+#'   every event is counted. A code or range is added as typed, with Enter,
+#'   Tab or a comma. Words from a condition, such as `myocardial`, list the
+#'   ICD-10-AM codes whose titles have a word starting with each word typed,
+#'   and Enter, Tab or a click adds the code highlighted. Each code or range
+#'   entered is spelt out below the box with its titles. The titles come from
+#'   `Analysis.dbo.ICD10AM`, each from the latest edition that holds the code;
+#'   a code that some editions lack is labelled with the editions that hold
+#'   it.
 #' * *Search*: for APC, the principal diagnosis (`Diagnosis1`) or any
 #'   diagnosis (`Diagnosis1` to `Diagnosis100`). ED always searches all four
 #'   of its diagnosis fields (`EDShortListCode` and `Diagnosis1` to
@@ -487,6 +494,154 @@ episerver_dsr_stop <- function() {
 }
 
 
+# ── Diagnosis titles ────────────────────────────────────────────────────────
+
+# Codes and titles for the diagnosis search, from .dsr_sql_icd(): Code as
+# ICD-10-AM writes it, Key without the dot as the SQL compares codes, Title
+# with the editions that hold the code unless every edition in the table does,
+# and Words, the key and title as .dsr_icd_words() matches them. In code
+# order, each code before the codes under it. Morphology codes (M8140/3) are
+# left out, as the diagnosis condition skips them. The first and last
+# editions are in attribute "editions". NULL without titles.
+#' @noRd
+.dsr_icd_titles <- function(df) {
+
+  if (is.null(df) || !nrow(df)) return(NULL)
+  code <- toupper(trimws(df$Code))
+  keep <- grepl("^[A-Z][0-9]{2}(\\.[0-9A-Z]{1,3})?$", code) &
+    !is.na(df$LastEdition) & !duplicated(code)
+  if (!any(keep)) return(NULL)
+  df   <- df[keep, , drop = FALSE]
+  code <- code[keep]
+
+  # varchar text in a Latin1_General collation is Windows-1252; text the
+  # driver has not converted to UTF-8 is converted here, so it can be matched
+  title <- df$Description
+  title[is.na(title)] <- ""
+  bad <- !validUTF8(title)
+  title[bad] <- iconv(title[bad], "CP1252", "UTF-8", sub = "?")
+  Encoding(title) <- "UTF-8"
+  title <- trimws(title)
+
+  first <- as.integer(df$FirstEdition)
+  last  <- as.integer(df$LastEdition)
+  editions <- c(min(first), max(last))
+  span <- ifelse(first == last, paste("edition", first),
+                 paste("editions", first, "to", last))
+  key <- gsub(".", "", code, fixed = TRUE)
+
+  out <- data.frame(
+    Code  = code,
+    Key   = key,
+    Title = ifelse(first > editions[1] | last < editions[2],
+                   paste0(title, " (", span, ")"), title),
+    Words = .dsr_icd_words(paste(key, title)),
+    stringsAsFactors = FALSE
+  )
+  out <- out[order(key, method = "radix"), , drop = FALSE]
+  rownames(out) <- NULL
+  attr(out, "editions") <- editions
+  out
+
+}
+
+
+# Text as the diagnosis search matches it: lower case, accents dropped, dots
+# removed so that codes match with or without them, and anything other than
+# letters and digits a space, with a space before every word
+#' @noRd
+.dsr_icd_words <- function(x) {
+  # Accented letters, by code point, are matched as UTF-8 bytes, so that the
+  # session's encoding and locale do not matter
+  accents <- list(a = 0xe0:0xe5, c = 0xe7, e = 0xe8:0xeb, i = 0xec:0xef,
+                  n = 0xf1, o = c(0xf2:0xf6, 0xf8), u = 0xf9:0xfc, y = 0xfd)
+  x <- tolower(x)
+  for (letter in names(accents)) {
+    pattern <- paste(intToUtf8(accents[[letter]], multiple = TRUE),
+                     collapse = "|")
+    x <- gsub(pattern, letter, x, useBytes = TRUE)
+  }
+  x <- gsub("[^a-z0-9]+", " ", gsub(".", "", x, fixed = TRUE), useBytes = TRUE)
+  paste0(" ", trimws(x))
+}
+
+
+# Suggestions for text typed in the diagnosis codes box: the first n codes,
+# in code order, whose code or title has a word starting with each word typed
+#' @noRd
+.dsr_icd_search <- function(icd, text, n = 100L) {
+  words <- strsplit(trimws(.dsr_icd_words(text)), " ", fixed = TRUE)[[1]]
+  if (!length(words)) return(icd[0, , drop = FALSE])
+  hit <- Reduce(`&`, lapply(words, function(w) {
+    grepl(paste0(" ", w), icd$Words, fixed = TRUE)
+  }))
+  utils::head(icd[hit, , drop = FALSE], n)
+}
+
+
+# Answers the diagnosis codes box's requests for suggestions (?q=text) with
+# JSON rows: the code (value), its title, its words for matching in the
+# browser and its place in code order (rank)
+#' @noRd
+.dsr_icd_response <- function(icd, req) {
+  text <- shiny::parseQueryString(req$QUERY_STRING)$q
+  rows <- .dsr_icd_search(icd, if (is.null(text)) "" else text)
+  json <- jsonlite::toJSON(
+    data.frame(value = rows$Code, title = rows$Title, words = rows$Words,
+               rank = match(rows$Key, icd$Key)),
+    dataframe = "rows"
+  )
+  shiny::httpResponse(200L, "application/json; charset=utf-8",
+                      enc2utf8(as.character(json)))
+}
+
+
+# The codes and ranges of the settings in words, from the titles: Label, and
+# Text, which gives a code's title, the first and last of the codes a partial
+# code heads, or the codes at the ends of a range. Codes with no title are
+# named as missing from the editions in the table.
+#' @noRd
+.dsr_icd_describe <- function(codes, icd) {
+
+  editions <- attr(icd, "editions")
+  absent <- paste0("not in ICD-10-AM editions ", editions[1], " to ",
+                   editions[2])
+
+  # The row of a code, or else of the first or last of the highest codes that
+  # start with it
+  find <- function(key, last) {
+    i <- match(key, icd$Key)
+    if (!is.na(i)) return(i)
+    under <- which(startsWith(icd$Key, key))
+    if (!length(under)) return(NA_integer_)
+    under <- under[nchar(icd$Key[under]) == min(nchar(icd$Key[under]))]
+    if (last) max(under) else min(under)
+  }
+  end <- function(i, key) {
+    if (is.na(i)) {
+      return(paste0(sub("^(.{3})(.)", "\\1.\\2", key), " (", absent, ")"))
+    }
+    paste(icd$Code[i], icd$Title[i])
+  }
+
+  text <- vapply(seq_len(nrow(codes)), function(k) {
+    from <- codes$From[k]
+    to   <- codes$To[k]
+    f <- find(from, FALSE)
+    t <- find(to, TRUE)
+    if (from == to) {
+      if (is.na(f)) return(absent)
+      if (icd$Key[f] == from) return(icd$Title[f])
+    }
+    if (!is.na(f) && identical(f, t)) return(end(f, from))
+    paste(end(f, from), "to", end(t, to))
+  }, character(1))
+
+  data.frame(Label = codes$Label, Text = text, stringsAsFactors = FALSE)
+
+}
+
+
 # Population table for the settings, e.g. ERP5_SA3_ACT. The states of the ACT
 # and surrounds are summed from SA3s, as the surrounds are only part of NSW.
 #' @noRd
@@ -769,6 +924,26 @@ FROM Analysis.dbo.{table}", date = ds$date, table = ds$table)
 .dsr_sql_erp_years <- function(spec) {
   .dsr_fill("SELECT MIN(ERPYear) AS FirstYear, MAX(ERPYear) AS LastYear
 FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
+}
+
+
+# ICD-10-AM diagnosis codes for the diagnosis search, each with its title in
+# the latest edition that holds it and the first and last editions that hold
+# it. The table stacks every edition it holds; editions are read from
+# ICD10AMVersion, as its StartDate and EndDate are not reliable.
+#' @noRd
+.dsr_sql_icd <- function() {
+  "SELECT Code, Description, FirstEdition, LastEdition
+FROM (
+    SELECT Code, Description,
+           MIN(ICD10AMVersion) OVER (PARTITION BY Code) AS FirstEdition,
+           ICD10AMVersion AS LastEdition,
+           ROW_NUMBER() OVER (PARTITION BY Code
+                              ORDER BY ICD10AMVersion DESC) AS Latest
+    FROM Analysis.dbo.ICD10AM
+    WHERE VarType = 'Diagnosis'
+) AS d
+WHERE Latest = 1"
 }
 
 
@@ -1399,6 +1574,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     names(std_choices)[match(as.character(code), std_choices)]
   }
 
+  # ICD-10-AM codes and titles for the diagnosis search. NULL when they cannot
+  # be read, and codes are then typed without suggestions.
+  icd <- .dsr_icd_titles(try_cached("icd", .dsr_sql_icd()))
+
   # Initial year range for the default settings; the slider follows the
   # settings once the app is running
   this_year <- as.integer(format(Sys.Date(), "%Y"))
@@ -1408,6 +1587,12 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   }
 
   code_button_label <- if (in_rstudio) "Insert Code" else "Copy Code"
+
+  # Closes the diagnosis codes list while the box is empty, as it would
+  # otherwise list every suggestion fetched so far
+  close_if_empty <- I(
+    "function() { if (!this.$control_input.val().trim()) this.close(); }"
+  )
 
   # ── UI ────────────────────────────────────────────────────────────────────
   # The settings are in a sidebar, in sections that open and close, and the
@@ -1469,6 +1654,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           background: var(--epi-info-bg); color: var(--epi-primary);
           border-radius: 3px;
         }
+        .dsr-code { font-weight: 600; color: var(--epi-primary); }
+        .dsr-codes div { margin-bottom: 2px; }
         .map-click { font-size: 12px; color: #333; min-height: 1.6em;
                      margin-top: 4px; }
         .radio.disabled label { color: #999; }
@@ -1506,6 +1693,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       # Clipboard handler for the code and table copy buttons
       .epi_copy_script(),
+
+      # Where the diagnosis codes box fetches its suggestions
+      shiny::tags$script(shiny::HTML("
+        Shiny.addCustomMessageHandler('dsr_codes_url', function(url) {
+          window.dsrCodesUrl = url;
+        });
+      ")),
 
       # Slider labels stay within their slider, clear of the one beside it,
       # and the age sliders, which hold age group codes (1 to 18), show the
@@ -1642,17 +1836,65 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
           ),
+          # A code or range is added as typed. Other text lists the codes
+          # whose titles match it (.dsr_icd_search()), fetched from the URL
+          # the server sends, and Enter or Tab adds the code highlighted.
+          # Suggestions are matched again in the browser on their words, and
+          # none are shown while the box is empty.
           shiny::selectizeInput(
             "codes", "Diagnosis codes",
             choices = NULL, multiple = TRUE, width = "100%",
             options = list(
-              create       = TRUE,
-              createOnBlur = TRUE,
-              persist      = FALSE,
-              delimiter    = ",",
-              splitOn      = I("/\\s*[,;]+\\s*/"),
-              plugins      = list("remove_button"),
-              placeholder  = "All events. Type a code, then Enter"
+              create           = TRUE,
+              createOnBlur     = TRUE,
+              createFilter     = I(paste0(
+                "/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
+                "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")),
+              addPrecedence    = TRUE,
+              selectOnTab      = TRUE,
+              persist          = FALSE,
+              delimiter        = ",",
+              splitOn          = I("/\\s*[,;]+\\s*/"),
+              plugins          = list("remove_button"),
+              placeholder      = "All events. Type a code or condition",
+              valueField       = "value",
+              labelField       = "value",
+              searchField      = "words",
+              sortField        = "rank",
+              maxOptions       = 100,
+              openOnFocus      = FALSE,
+              closeAfterSelect = TRUE,
+              load = I("function(query, callback) {
+                if (!window.dsrCodesUrl || !query.trim()) return callback();
+                $.getJSON(window.dsrCodesUrl, {q: query})
+                  .done(callback).fail(function() { callback(); });
+              }"),
+              score = I("function(search) {
+                var words = search.toLowerCase().normalize('NFD')
+                  .replace(/[\\u0300-\\u036f]/g, '').replace(/\\./g, '')
+                  .replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+                  .filter(Boolean);
+                return function(item) {
+                  if (!words.length || !item.words) return 0;
+                  for (var i = 0; i < words.length; i++) {
+                    if (item.words.indexOf(' ' + words[i]) < 0) return 0;
+                  }
+                  return 1;
+                };
+              }"),
+              onType         = close_if_empty,
+              onDropdownOpen = close_if_empty,
+              render = I("{
+                option: function(item, escape) {
+                  return '<div class=\"option\"><span class=\"dsr-code\">' +
+                    escape(item.value) +
+                    '</span> ' + escape(item.title || '') + '</div>';
+                },
+                item: function(item, escape) {
+                  return '<div title=\"' + escape(item.title || '') + '\">' +
+                    escape(item.value) + '</div>';
+                }
+              }")
             )
           ),
           shiny::uiOutput("codes_note"),
@@ -1845,6 +2087,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     rv <- shiny::reactiveValues(fetched = NULL, error = NULL)
 
+    # The diagnosis codes box fetches its suggestions from this URL
+    if (!is.null(icd)) {
+      session$sendCustomMessage(
+        "dsr_codes_url",
+        session$registerDataObj("codes_search", icd, .dsr_icd_response)
+      )
+    }
+
     # Why the diagnosis codes cannot be read, or NULL
     codes_error <- shiny::reactive({
       tryCatch({
@@ -1920,17 +2170,33 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       dataset <- if (is.null(input$dataset)) "ED" else input$dataset
       ds <- .dsr_datasets[[dataset]]
-      shiny::div(
+      # Each code and range entered, with its titles
+      entered <- if (!is.null(icd) && length(input$codes)) {
+        d <- .dsr_icd_describe(.dsr_parse_codes(input$codes), icd)
+        shiny::div(class = "epi-note dsr-codes",
+                   lapply(seq_len(nrow(d)), function(i) {
+                     shiny::div(shiny::span(class = "dsr-code", d$Label[i]),
+                                d$Text[i])
+                   }))
+      }
+      shiny::tagList(entered, shiny::div(
         class = "epi-note",
         "Leave empty for all events. A partial code such as J45 matches ",
         "every code that starts with it, and a range such as C13-C15.45 ",
         "includes both ends. Only ICD-10 coded records are searched.",
+        if (is.null(icd)) {
+          paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
+                 "titles could not be read from Analysis.dbo.ICD10AM.")
+        } else {
+          paste0(" Type words from a condition, such as myocardial, to ",
+                 "choose from the codes whose titles contain them.")
+        },
         if (!ds$principal) {
           paste0(" ", dataset, " searches all its diagnosis fields (",
                  paste(ds$diagnoses, collapse = ", "), "), as none of them ",
                  "holds the principal diagnosis in every year.")
         }
-      )
+      ))
     })
 
     # The periods the years will be pooled into, or why they cannot be
