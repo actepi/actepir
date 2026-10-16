@@ -107,3 +107,20 @@ test_that("the logo is embedded in the page", {
   expect_equal(logo$attribs$class, "epi-logo")
 
 })
+
+test_that("each app has its own add-in and opens in the web browser", {
+
+  dcf <- read.dcf(system.file("rstudio", "addins.dcf", package = "actepir"))
+  apps <- dcf[dcf[, "Binding"] %in% c("episerver_dsr", "episerver_browse"), ,
+              drop = FALSE]
+  expect_equal(unname(apps[, "Name"]),
+               c("Open DSR Calculator", "Open EpiServer Browser"))
+  expect_true(all(dcf[, "Binding"] %in% getNamespaceExports("actepir")))
+  expect_false("addin_browse" %in% getNamespaceExports("actepir"))
+
+  # No display is offered: both open in the web browser
+  for (fn in list(episerver_dsr, episerver_browse, .run_app)) {
+    expect_false("display" %in% names(formals(fn)))
+  }
+
+})

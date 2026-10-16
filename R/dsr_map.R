@@ -1,20 +1,19 @@
-# Maps for the DSR Calculator: ASGS boundaries from the ABS, of the edition
-# the population tables use (.dsr_asgs), and a ggplot2 choropleth of the
-# calculator's results.
+# Maps for the DSR Calculator's Explore tab: ASGS boundaries from the ABS, of
+# the edition the population tables use (.dsr_asgs), and a ggplot2
+# choropleth of the calculator's results.
 
 # ABS ArcGIS REST services, where the boundaries of the edition in .dsr_asgs
 # are under ASGS<year> (ASGS2021), and the service and field prefix for each
-# geographic level of the calculator
+# geographic level mapped. State level is not mapped.
 .dsr_abs_service <- "https://geo.abs.gov.au/arcgis/rest/services"
 
 .dsr_boundary_layers <- list(
-  state = list(service = "STE", prefix = "(state|ste)"),
-  sa3   = list(service = "SA3", prefix = "sa3"),
-  sa2   = list(service = "SA2", prefix = "sa2")
+  sa3 = list(service = "SA3", prefix = "sa3"),
+  sa2 = list(service = "SA2", prefix = "sa2")
 )
 
 # How far the server may simplify the boundaries of a population, in degrees:
-# about 20 m for the ACT and 200 m for wider areas
+# about 20 m for the ACT and 200 m for the ACT and surrounds
 #' @noRd
 .dsr_boundary_offset <- function(scope) if (scope == "ACT") 0.0002 else 0.002
 
@@ -27,18 +26,15 @@
 
 
 # Boundaries of the areas at a level, for a population of the calculator, as
-# polygon vertices: Area (the code the calculator uses, or its label at state
-# level), Name, x and y (longitude and latitude), group (one per polygon) and
-# subgroup (one per ring, so holes draw as holes). Downloaded once from the
-# ABS, generalised to suit the map, and cached in `cache` when it is
-# writable. The states of the ACT and surrounds are drawn from their SA3s, as
-# the surrounds are only part of NSW.
+# polygon vertices: Area (the area code), Name, x and y (longitude and
+# latitude), group (one per polygon) and subgroup (one per ring, so holes draw
+# as holes). Downloaded once from the ABS, generalised to suit the map, and
+# cached in `cache` when it is writable.
 #' @noRd
 .dsr_boundaries <- function(level, scope, cache = .dsr_cache_dir()) {
 
   level <- match.arg(level, names(.dsr_boundary_layers))
   scope <- match.arg(scope, names(.dsr_scopes))
-  layer_level <- if (scope == "SURROUNDS" && level == "state") "sa3" else level
 
   file <- if (!is.null(cache)) {
     file.path(cache, sprintf("asgs%d_%s_%s_v1.rds", .dsr_asgs$year, level,
@@ -49,7 +45,7 @@
     if (is.data.frame(polys) && nrow(polys)) return(polys)
   }
 
-  layer <- .dsr_abs_layer(layer_level)
+  layer <- .dsr_abs_layer(level)
 
   # Field names are read from the layer rather than assumed
   meta   <- .dsr_fetch_json(paste0(layer, "?f=json"))
@@ -65,20 +61,16 @@
   }
   # e.g. sa3_code_2021 or SA3_CODE21
   year   <- paste0("(_", .dsr_asgs$year, "|", .dsr_asgs$year %% 100, ")?$")
-  prefix <- .dsr_boundary_layers[[layer_level]]$prefix
+  prefix <- .dsr_boundary_layers[[level]]$prefix
   code   <- field(paste0("^", prefix, "_code", year))
   name   <- field(paste0("^", prefix, "_name", year))
   # SA2 codes start with the code of their SA3
-  where  <- if (scope == "AUS") {
-    "1=1"
+  act    <- paste0(field(paste0("^(state|ste)_code", year)), " = '8'")
+  where  <- if (scope == "ACT") {
+    act
   } else {
-    act <- paste0(field(paste0("^(state|ste)_code", year)), " = '8'")
-    if (scope == "ACT") {
-      act
-    } else {
-      paste0(act, " OR ", paste0(code, " LIKE '", names(.dsr_surrounds), "%'",
-                                 collapse = " OR "))
-    }
+    paste0(act, " OR ", paste0(code, " LIKE '", names(.dsr_surrounds), "%'",
+                               collapse = " OR "))
   }
 
   # Object IDs first, then the features in batches: unlike result paging,
@@ -107,13 +99,6 @@
   }
 
   polys <- .dsr_geojson_polygons(features, code, name)
-  if (level == "state" && scope == "SURROUNDS") {
-    polys$Area <- ifelse(startsWith(polys$Area, "8"), "ACT",
-                         .dsr_surrounds_label)
-    polys$Name <- polys$Area
-  } else if (level == "state") {
-    polys$Area <- unname(.dsr_states[polys$Area])
-  }
 
   if (!is.null(file)) try(saveRDS(polys, file), silent = TRUE)
   polys
@@ -220,27 +205,6 @@
 }
 
 
-# The area whose polygons contain the point (x, y), or NA. Even-odd ray
-# casting over all of an area's rings, so holes and multipart areas count
-# correctly. Rings are closed, so consecutive vertices make every edge.
-#' @noRd
-.dsr_point_area <- function(x, y, polys) {
-  n <- nrow(polys)
-  if (n < 2 || is.null(x) || is.null(y)) return(NA_character_)
-  i <- seq_len(n - 1)
-  i <- i[polys$group[i] == polys$group[i + 1] &
-         polys$subgroup[i] == polys$subgroup[i + 1]]
-  x1 <- polys$x[i]
-  y1 <- polys$y[i]
-  x2 <- polys$x[i + 1]
-  y2 <- polys$y[i + 1]
-  cross <- ((y1 > y) != (y2 > y)) & (x < (x2 - x1) * (y - y1) / (y2 - y1) + x1)
-  counts <- tapply(cross, polys$Area[i], sum, na.rm = TRUE)
-  inside <- names(counts)[counts %% 2 == 1]
-  if (length(inside)) inside[1] else NA_character_
-}
-
-
 # Choropleth of one value per area: polys from .dsr_boundaries() and values
 # with Area and Value. Areas with no value (suppressed or not calculated) are
 # grey. xlim and ylim crop the view, and only polygons that reach into it are
@@ -312,12 +276,14 @@
 }
 
 
-# Width and height in inches for saving a map, from the shape of the area in
-# view, allowing about 1.5 inches for the legend and for the titles
+# Width and height in inches for saving a map as PDF, from the shape of the
+# area in view, allowing about 1.5 inches for the legend and for the titles.
+# At least 8 inches wide, as the funnel plot is, so that the title and the
+# subtitle, wrapped at 70 characters, fit beside a tall area such as the ACT.
 #' @noRd
 .dsr_map_size <- function(polys, xlim = NULL, ylim = NULL, height = 8) {
   xr <- if (is.null(xlim)) range(polys$x) else xlim
   yr <- if (is.null(ylim)) range(polys$y) else ylim
   aspect <- diff(yr) / (diff(xr) * cos(mean(yr) * pi / 180))
-  c(width = min(max((height - 1.5) / aspect + 1.5, 6), 14), height = height)
+  c(width = min(max((height - 1.5) / aspect + 1.5, 8), 14), height = height)
 }

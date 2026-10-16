@@ -6,7 +6,6 @@
 \usage{
 episerver_dsr(
   background = TRUE,
-  display = c("browser", "viewer", "window"),
   port = NULL,
   driver = NULL,
   max_attempts = NULL,
@@ -17,11 +16,6 @@ episerver_dsr(
 \item{background}{Logical. If \code{TRUE} (default), the app runs in a
 background R process and the console remains free. If \code{FALSE}, the
 app runs as a blocking gadget in the current session.}
-
-\item{display}{Character. Where to open the calculator: \code{"browser"} (the
-system web browser, default), \code{"viewer"} (the RStudio Viewer pane) or
-\code{"window"} (a standalone RStudio dialog window). Outside RStudio the
-system browser is always used.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port
@@ -64,16 +58,16 @@ sex, 5-year age group and area of residence, matches them to the estimated
 resident population of the same year, and standardises them to a chosen
 standard population. Events can be limited to ICD-10 diagnosis codes and
 rates to an age range. It shows counts, crude rates and DSRs, optionally
-with age-specific rates, maps them by area, compares areas in an
-interactive map and funnel plot, and copies R code that reproduces the
-results. Its \emph{Help} tab sets out the data, formulas and sources.
+with age-specific rates, compares areas in an interactive map and funnel
+plot, and copies R code that reproduces the results. Its \emph{Help} tab sets
+out the data, formulas and sources.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
-default so that the console stays free, and it can be opened from the ACT
-Epidemiology menu in the RStudio Addins menu. It opens in the system web
-browser by default, so that it has the whole window: the settings are in a
-sidebar on the left, in sections that open and close, and the results in
-tabs on the top bar. The arrow at the top of the sidebar hides it.
+default so that the console stays free, and it can be opened from the
+RStudio Addins menu (\emph{Open DSR Calculator}). It opens in the system web
+browser, so that it has the whole window: the settings are in a sidebar on
+the left, in sections that open and close, and the results in tabs on the
+top bar. The arrow at the top of the sidebar hides it.
 }
 \details{
 \strong{Options}
@@ -87,12 +81,12 @@ population, rate per, suppression, and male and female).
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
 of \code{SeparationDate}.
-\item \emph{Population}: ACT residents, using the ACT population tables; ACT and
-surrounds; or Australian residents, using the Australian tables. ACT and
-surrounds covers the ACT and the four NSW SA3s that border it
-(Queanbeyan, Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with
-their SA2s, and also uses the Australian tables. At state level it gives
-two areas, the ACT and NSW (surrounds), each summed from its SA3s.
+\item \emph{Population}: ACT residents, using the ACT population tables, or ACT and
+surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
+Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with their SA2s,
+using the Australian tables. At state level ACT and surrounds gives two
+areas, the ACT and NSW (surrounds), each summed from its SA3s. Both are
+populations that mostly use ACT hospitals.
 \item \emph{Geographic level}: state or territory (\code{geo_STATE}), SA3
 (\code{geo_SA3_2021}) or SA2 (\code{geo_SA2_2021}) of residence, with rates for
 each area. SA3s and SA2s are ASGS 2021 areas (see \strong{Data}). Populations
@@ -168,7 +162,7 @@ and procedure codes are entered, events with a diagnosis and a procedure
 (the default), or with either.
 }
 
-\strong{Tables, maps and funnel plot}
+\strong{Tables, map and funnel plot}
 
 The \emph{Tables} tab shows the rates, the \emph{Age-specific rates} by 5-year age
 group for the ages chosen, or the \emph{Counts by age}: the events and the
@@ -177,29 +171,29 @@ area and sex, with populations under the minimum per age group and event
 totals under the minimum for a DSR highlighted. \emph{Copy table} copies the
 table shown as tab-separated text that pastes into Excel.
 
-The \emph{Map} tab maps the age-standardised rate, crude rate, age-specific
-rate or events of one year or period and sex by area. The age-specific
+The \emph{Explore} tab compares the SA3s or SA2s in an interactive map and a
+funnel plot, side by side, of the age-standardised rate, crude rate,
+age-specific rate or events of one year or period and sex. State level
+gives too few areas to compare (one for ACT residents, two for the ACT
+and surrounds), so the tab shows neither plot for it. The age-specific
 rate is for the age range chosen with \emph{Ages mapped}, within the ages of
 the rates, for example 0 to 14 or 20 to 44: the events in the range
 divided by the population in the range, suppressed as in the tables. It
 is not age-standardised, so over a wide range it reflects differences in
 age structure within the range; for a standardised rate, set \emph{Ages} and
-map the age-standardised rate. Australia-wide SA3 and SA2 maps open on
-the ACT and surrounding region; the view of Australia leaves out
-Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
-Edition 3 (2021) boundaries, downloaded from the ABS boundary service
+show the age-standardised rate.
+
+Pointing at an area or a point shows its figures. Clicking areas or
+points, or drawing round them with the lasso in a plot's toolbar, selects
+them in both plots and lists them below; \emph{Zoom to selected} zooms the map
+to them, and the magnifier in the toolbar zooms and pans. The map can be
+coloured by value or by each area's position in the funnel plot. Each
+plot's toolbar downloads it as a PNG. \emph{Map PDF} and \emph{Funnel plot PDF}
+save them as PDF, titled with the measure and settings; the map PDF
+follows \emph{Zoom to selected} but not the toolbar's zoom. Boundaries are the
+ASGS Edition 3 (2021) boundaries, downloaded from the ABS boundary service
 (\code{geo.abs.gov.au}) the first time a level is mapped and kept in the folder
 given by \code{tools::R_user_dir("actepir", "cache")}.
-\emph{Copy map} copies the map as an image where the browser allows it; \emph{PNG}
-and \emph{PDF} download it.
-
-The \emph{Explore} tab shows an interactive map and a funnel plot side by
-side, with the same settings as the \emph{Map} tab. Pointing at an area or a
-point shows its figures. Clicking areas or points, or drawing round them
-with the lasso in a plot's toolbar, selects them in both plots and lists
-them below; \emph{Zoom to selected} zooms the map to them, and the magnifier in
-the toolbar zooms and pans. The map can be coloured by value or by each
-area's position in the funnel plot.
 
 The funnel plot compares each area with the average of the areas plotted,
 allowing for the size of its population, so that areas can be compared
@@ -278,9 +272,6 @@ events query.
 # Launch in a background process and open it in the web browser; the
 # console stays free
 episerver_dsr()
-
-# Open in the RStudio Viewer pane
-episerver_dsr(display = "viewer")
 
 # Stop the background app
 episerver_dsr_stop()

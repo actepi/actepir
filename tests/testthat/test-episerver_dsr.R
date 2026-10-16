@@ -1,7 +1,7 @@
 # tests/testthat/test-episerver_dsr.R
 #
 # Offline tests for the DSR Calculator: settings, diagnosis codes, SQL, year
-# ranges, the code and tables it copies, the map and the app's server logic. The app runs against a fake query function
+# ranges, the code and tables it copies, the Explore tab and the app's server logic. The app runs against a fake query function
 # that answers each SQL statement with synthetic data, so nothing here needs
 # EpiServer. The live queries are tested in test-episerver_dsr_live.R.
 
@@ -119,7 +119,7 @@ fake_episerver <- function() {
 all_specs <- function(years = 2023, codes = NULL, diagnosis = "principal",
                       pool = 1, ages = c(1, 18)) {
   grid <- expand.grid(dataset = c("ED", "APC"),
-                      scope = c("ACT", "SURROUNDS", "AUS"),
+                      scope = c("ACT", "SURROUNDS"),
                       level = c("state", "sa3", "sa2"), stringsAsFactors = FALSE)
   lapply(seq_len(nrow(grid)), function(i) {
     .dsr_spec(grid$dataset[i], grid$scope[i], grid$level[i], years,
@@ -157,15 +157,15 @@ strip_html <- function(x) gsub("<[^>]+>", "", x)
 
 test_that(".dsr_spec validates and normalises the settings", {
 
-  s <- .dsr_spec("APC", "AUS", "sa2", 2023, "300")
-  expect_equal(s, list(dataset = "APC", scope = "AUS", level = "sa2",
+  s <- .dsr_spec("APC", "SURROUNDS", "sa2", 2023, "300")
+  expect_equal(s, list(dataset = "APC", scope = "SURROUNDS", level = "sa2",
                        years = c(2023L, 2023L), standard = 300L,
                        codes = .dsr_parse_codes(NULL), diagnosis = "principal",
                        pool = 1L, ages = c(1L, 18L),
                        procedures = .dsr_parse_procedures(NULL),
                        procedure = "principal", combine = "and"))
   expect_equal(nrow(s$codes), 0)
-  expect_equal(.dsr_spec(scope = "SURROUNDS", years = 2023)$scope, "SURROUNDS")
+  expect_equal(.dsr_spec(years = 2023)$scope, "ACT")
 
   # ED has no principal diagnosis field, so it always searches every field
   expect_equal(.dsr_spec("ED", years = 2023, diagnosis = "principal")$diagnosis,
@@ -181,6 +181,9 @@ test_that(".dsr_spec validates and normalises the settings", {
 
   expect_error(.dsr_spec("XX", years = 2023))
   expect_error(.dsr_spec(scope = "NSW", years = 2023))
+  # Australian residents are not offered
+  expect_error(.dsr_spec(scope = "AUS", years = 2023))
+  expect_named(.dsr_scopes, c("ACT", "SURROUNDS"))
   expect_error(.dsr_spec(level = "sa1", years = 2023))
   expect_error(.dsr_spec(years = c(2023, 2019)), "earliest first")
   expect_error(.dsr_spec(years = "2023; DROP TABLE x"), "calendar year")
@@ -596,7 +599,7 @@ test_that(".dsr_icd_describe spells out codes, partial codes and ranges", {
 test_that(".dsr_pop_table names the ERP5 table for the settings", {
 
   expect_equal(.dsr_pop_table(.dsr_spec("ED", "ACT", "state", 2023)), "ERP5_STE_ACT")
-  expect_equal(.dsr_pop_table(.dsr_spec("ED", "AUS", "sa3", 2023)), "ERP5_SA3_AUS")
+  expect_equal(.dsr_pop_table(.dsr_spec("ED", "ACT", "sa3", 2023)), "ERP5_SA3_ACT")
   expect_equal(.dsr_pop_table(.dsr_spec("APC", "ACT", "sa2", 2023)), "ERP5_SA2_ACT")
 
   # The ACT and surrounds use the Australian tables, with states from SA3s
@@ -630,11 +633,11 @@ test_that("events SQL counts by calendar year of the dataset's date", {
 
 test_that("events SQL takes the area from the geo_ column of the level", {
 
-  expect_match(.dsr_sql_events(.dsr_spec("ED", "AUS", "state", 2023)),
+  expect_match(.dsr_sql_events(.dsr_spec("ED", "ACT", "state", 2023)),
                "geo_STATE AS Area", fixed = TRUE)
-  expect_match(.dsr_sql_events(.dsr_spec("ED", "AUS", "sa3", 2023)),
+  expect_match(.dsr_sql_events(.dsr_spec("ED", "ACT", "sa3", 2023)),
                "geo_SA3_2021 AS Area", fixed = TRUE)
-  expect_match(.dsr_sql_events(.dsr_spec("ED", "AUS", "sa2", 2023)),
+  expect_match(.dsr_sql_events(.dsr_spec("ED", "ACT", "sa2", 2023)),
                "geo_SA2_2021 AS Area", fixed = TRUE)
 
 })
@@ -645,11 +648,6 @@ test_that("events SQL keeps ACT residents and unrecorded residence for the ACT",
                "(geo_STATE = 'ACT' OR geo_STATE IS NULL)", fixed = TRUE)
   expect_match(.dsr_sql_events(.dsr_spec("ED", "ACT", "sa2", 2023)),
                "(geo_SA2_2021 LIKE '8%' OR geo_SA2_2021 IS NULL)", fixed = TRUE)
-
-  # Australian residents: no residence filter at all
-  aus <- .dsr_sql_events(.dsr_spec("ED", "AUS", "sa3", 2023))
-  expect_no_match(aus, "LIKE", fixed = TRUE)
-  expect_no_match(aus, "IS NULL", fixed = TRUE)
 
 })
 
@@ -773,8 +771,8 @@ test_that("diagnoses and procedures combine with and or or", {
 
 test_that("population SQL reads the ERP5 table for the same years", {
 
-  st <- .dsr_sql_population(.dsr_spec("ED", "AUS", "state", c(2019, 2023)))
-  expect_match(st, "FROM Analysis.dbo.ERP5_STE_AUS", fixed = TRUE)
+  st <- .dsr_sql_population(.dsr_spec("ED", "ACT", "state", c(2019, 2023)))
+  expect_match(st, "FROM Analysis.dbo.ERP5_STE_ACT", fixed = TRUE)
   expect_match(st, "WHERE ERPYear BETWEEN 2019 AND 2023", fixed = TRUE)
   expect_match(st, "AND EntityCode BETWEEN 1 AND 9", fixed = TRUE)
   expect_match(st, "WHEN 8 THEN 'ACT'", fixed = TRUE)
@@ -1076,14 +1074,14 @@ test_that(".dsr_describe can leave out the years", {
   expect_equal(.dsr_describe(.dsr_spec(years = c(2019, 2023), pool = 5)),
                "ED presentations, ACT residents, by state or territory, 2019 to 2023 pooled")
   expect_equal(
-    .dsr_describe(.dsr_spec("APC", "AUS", "state", 2023, ages = c(1, 15))),
-    "APC separations, Australian residents aged under 75, by state or territory, 2023"
+    .dsr_describe(.dsr_spec("APC", "ACT", "state", 2023, ages = c(1, 15))),
+    "APC separations, ACT residents aged under 75, by state or territory, 2023"
   )
-  # Map subtitles leave the ages to the title
+  # The Explore tab's subtitles leave the ages to the title
   expect_equal(
-    .dsr_describe(.dsr_spec("APC", "AUS", "state", 2023, ages = c(1, 15)),
+    .dsr_describe(.dsr_spec("APC", "ACT", "state", 2023, ages = c(1, 15)),
                   years = FALSE, ages = FALSE),
-    "APC separations, Australian residents, by state or territory"
+    "APC separations, ACT residents, by state or territory"
   )
 
 })
@@ -1212,7 +1210,7 @@ test_that("the app copies the code for the current settings", {
 
   # The code adds the age-specific rates while their table is shown
   shiny::testServer(app, {
-    session$setInputs(dataset = "APC", scope = "AUS", level = "sa3",
+    session$setInputs(dataset = "APC", scope = "SURROUNDS", level = "sa3",
                       standard = "300", years = c(2019, 2022),
                       multiplier = "10000", by_sex = TRUE,
                       table = "age", suppress = 5,
@@ -1223,7 +1221,7 @@ test_that("the app copies the code for the current settings", {
 
   code <- function(age_specific) {
     .dsr_code(
-      .dsr_spec("APC", "AUS", "sa3", c(2019, 2022), 300,
+      .dsr_spec("APC", "SURROUNDS", "sa3", c(2019, 2022), 300,
                 codes = c("C13-C15.45", "J45"), diagnosis = "all"),
       by_sex = TRUE, age_specific = age_specific, multiplier = 10000,
       standard_name = "European (1976) (superseded)", suppress = 5
@@ -1458,7 +1456,7 @@ test_that("the app shows counts by age and explains the highlights", {
 
 })
 
-test_that("the app maps the rates and identifies the area clicked", {
+test_that("the Explore map shows the rates and saves them with the heading", {
 
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
@@ -1469,45 +1467,110 @@ test_that("the app maps the rates and identifies the area clicked", {
   })
 
   shiny::testServer(app, {
-    session$setInputs(dataset = "ED", scope = "AUS", level = "state",
+    session$setInputs(dataset = "ED", scope = "SURROUNDS", level = "sa3",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", suppress = 5, by_sex = FALSE)
     session$setInputs(calculate = 1)
-    session$setInputs(map_value = "DSR", map_year = "2023", map_sex = "Persons")
+    session$setInputs(ex_value = "DSR", ex_year = "2023", ex_sex = "Persons")
 
-    p <- map_plot()
+    # On the page the heading is over both plots, so the map has no title
+    p <- ex_map_plot()
     expect_s3_class(p, "ggplot")
-    labs <- p$labels
-    expect_equal(labs$title, "Age-standardised rate per 100,000, 2023, persons")
-    expect_match(gsub("\n", " ", labs$subtitle),
-                 "Australian residents, by state or territory, standardised")
-    expect_match(labs$caption, "fewer than 5 events (suppressed)", fixed = TRUE)
-
+    expect_null(p$labels$title)
+    expect_match(p$labels$caption, "fewer than 5 events (suppressed)", fixed = TRUE)
     act <- results()$summary
     expect_equal(unique(p$data$Value[p$data$Area == "ACT"]), act$DSR)
     expect_true(all(is.na(p$data$Value[p$data$Area == "NSW"])))
 
-    session$setInputs(map_value = "Events")
-    expect_equal(unique(map_plot()$data$Value[map_plot()$data$Area == "ACT"]),
-                 act$Events)
+    t <- ex_titles()
+    expect_equal(t$title, "Age-standardised rate per 100,000, 2023, persons")
+    expect_match(t$subtitle, paste("residents of the ACT and surrounds, by SA3",
+                                   "(ASGS 2021), standardised to Australia",
+                                   "(2001)"), fixed = TRUE)
+    heading <- gsub("\\s+", " ", strip_html(output$ex_heading$html))
+    expect_match(heading, t$title, fixed = TRUE)
+    expect_match(heading, t$subtitle, fixed = TRUE)
 
-    # Clicking an area reports its figures; outside any area, nothing
-    session$setInputs(map_click = list(x = 149.5, y = -34.5))
-    info <- strip_html(output$map_click_info$html)
-    expect_match(info, "State or territory ACT Area ACT:", fixed = TRUE)
-    expect_match(info, paste0(.fmt_count(act$Events), " events"), fixed = TRUE)
-    session$setInputs(map_click = list(x = 150.5, y = -34.5))
-    expect_match(strip_html(output$map_click_info$html), "no results")
+    # The PDF is titled with the heading and named for what it shows
+    p <- ex_map_plot(t$title, t$subtitle)
+    expect_equal(p$labels$title, t$title)
+    expect_equal(gsub("\n", " ", p$labels$subtitle), t$subtitle)
+    file <- output$ex_map_pdf
+    expect_equal(basename(file), "dsr-map-dsr-2023-persons.pdf")
+    expect_equal(readBin(file, "raw", 4), charToRaw("%PDF"))
+
+    session$setInputs(ex_value = "Events")
+    p <- ex_map_plot()
+    expect_equal(unique(p$data$Value[p$data$Area == "ACT"]), act$Events)
 
     # Boundaries are fetched once for the level and population
     session$setInputs(by_sex = TRUE)
-    invisible(map_plot())
-    expect_equal(requested, "state AUS")
+    invisible(ex_map_plot())
+    expect_equal(requested, "sa3 SURROUNDS")
   })
 
 })
 
-test_that("the app explains a map it cannot draw", {
+test_that("the Explore tab compares areas at SA3 and SA2 but not by state", {
+
+  # Two areas at every level: the ACT and the NSW surrounds
+  query <- function(sql) {
+    if (grepl("AS Events", sql, fixed = TRUE)) {
+      nsw <- fake_events
+      nsw$Area[!is.na(nsw$Area)] <- "NSW (surrounds)"
+      return(rbind(fake_events, nsw))
+    }
+    if (grepl("AS Population", sql, fixed = TRUE)) {
+      nsw <- fake_population
+      nsw$Area <- "NSW (surrounds)"
+      return(rbind(fake_population, nsw))
+    }
+    fake_episerver()$query(sql)
+  }
+  app <- episerver_dsr_app(query = query)
+  requested <- NULL
+  local_mocked_bindings(.dsr_boundaries = function(level, scope, ...) {
+    requested <<- c(requested, paste(level, scope))
+    square_polys(c("ACT", "NSW (surrounds)"))
+  })
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "SURROUNDS", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5)
+    expect_match(strip_html(output$ex_note$html), "Press Calculate")
+
+    # State level: the two areas are in the tables, but neither the map nor
+    # the funnel plot is drawn
+    session$setInputs(calculate = 1)
+    session$setInputs(ex_value = "DSR", ex_year = "2023", ex_sex = "Persons")
+    expect_setequal(results()$summary$Area, c("ACT", "NSW (surrounds)"))
+    expect_match(strip_html(output$ex_note$html),
+                 "Choose SA3 or SA2 to compare areas within the ACT and surrounds.",
+                 fixed = TRUE)
+    for (id in c("ex_map", "ex_funnel", "ex_heading", "ex_method")) {
+      expect_error(output[[id]], class = "shiny.silent.error", label = id)
+    }
+    expect_error(ex_funnel(), class = "shiny.silent.error")
+    expect_null(requested)
+
+    session$setInputs(scope = "ACT", calculate = 2)
+    expect_match(strip_html(output$ex_note$html),
+                 "Choose SA3 or SA2 to compare areas within the ACT.",
+                 fixed = TRUE)
+    expect_error(output$ex_funnel, class = "shiny.silent.error")
+
+    # SA3: both plots compare the areas
+    session$setInputs(scope = "SURROUNDS", level = "sa3", calculate = 3)
+    expect_setequal(ex_funnel()$points$Area, c("ACT", "NSW (surrounds)"))
+    expect_match(output$ex_funnel, "data-id='NSW (surrounds)'", fixed = TRUE)
+    expect_match(output$ex_map, "data-id='ACT'", fixed = TRUE)
+    expect_equal(requested, "sa3 SURROUNDS")
+  })
+
+})
+
+test_that("the Explore tab explains a map it cannot draw", {
 
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
@@ -1516,17 +1579,13 @@ test_that("the app explains a map it cannot draw", {
   })
 
   shiny::testServer(app, {
-    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+    session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", suppress = 5)
-    expect_match(strip_html(output$map_note$html), "Press Calculate")
-
     session$setInputs(calculate = 1)
-    expect_match(strip_html(output$map_note$html), "Choose SA3 or SA2")
-
-    session$setInputs(scope = "AUS", calculate = 2)
-    note <- strip_html(output$map_note$html)
+    note <- strip_html(output$ex_note$html)
     expect_match(note, "could not be downloaded from the ABS")
+    expect_match(note, "so only the funnel plot is shown", fixed = TRUE)
     expect_match(note, "Could not resolve host: geo.abs.gov.au", fixed = TRUE)
   })
 
@@ -1741,31 +1800,6 @@ test_that("the diagnosis codes box adds typed codes and suggests codes for words
 
 })
 
-test_that("the app maps the ACT and surrounds by state", {
-
-  fake <- fake_episerver()
-  app <- episerver_dsr_app(query = fake$query)
-  requested <- NULL
-  local_mocked_bindings(.dsr_boundaries = function(level, scope, ...) {
-    requested <<- c(requested, paste(level, scope))
-    square_polys(c("ACT", "NSW (surrounds)"))
-  })
-
-  shiny::testServer(app, {
-    session$setInputs(dataset = "ED", scope = "SURROUNDS", level = "state",
-                      standard = "101", years = c(2023, 2023),
-                      multiplier = "100000", suppress = 5)
-    session$setInputs(calculate = 1)
-    session$setInputs(map_value = "DSR", map_year = "2023", map_sex = "Persons")
-    expect_match(strip_html(output$map_note$html), "Click an area")
-    p <- map_plot()
-    expect_equal(sort(unique(p$data$Area)), c("ACT", "NSW (surrounds)"))
-    expect_null(p$coordinates$limits$x)
-    expect_equal(requested, "state SURROUNDS")
-  })
-
-})
-
 test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
 
   # Rendering compiles the theme; keep sass from caching it in the user's
@@ -1787,16 +1821,22 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
   expect_match(page, "<option value=\"sa3\">SA3 (ASGS 2021)</option>",
                fixed = TRUE)
 
-  # The Map and Explore tabs each have the map settings
-  for (id in c("map", "ex")) {
-    for (input in c("value", "year", "sex", "ages")) {
-      expect_match(page, paste0("id=\"", id, "_", input, "\""), fixed = TRUE)
-    }
+  # The Explore tab has the map settings, the PDF downloads and toolbars in
+  # the brand purples; the Population choice has no Australian residents
+  for (input in c("value", "year", "sex", "ages")) {
+    expect_match(page, paste0("id=\"ex_", input, "\""), fixed = TRUE)
   }
   expect_match(page, "data-value=\"explore\"", fixed = TRUE)
   expect_match(page, "id=\"ex_funnel\"", fixed = TRUE)
   expect_match(page, "id=\"ex_overdispersion\"[^>]*checked")
+  expect_match(page, "id=\"ex_map_pdf\"", fixed = TRUE)
+  expect_match(page, "id=\"ex_funnel_pdf\"", fixed = TRUE)
+  expect_match(page, paste0("(?s)\\.ggiraph-toolbar-icon\\.neutral \\{\\s*",
+                            "stroke: var\\(--epi-accent\\)"), perl = TRUE)
   expect_match(page, "data-value=\"help\"", fixed = TRUE)
+  expect_match(page, "<option value=\"SURROUNDS\">ACT and surrounds</option>",
+               fixed = TRUE)
+  expect_no_match(page, "Australian residents", fixed = TRUE)
 
 })
 
@@ -1819,9 +1859,11 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
   expect_match(navbar, "class=\"epi-logo\"", fixed = TRUE)
   expect_match(navbar, "DSR Calculator", fixed = TRUE)
-  for (tab in c("tables", "map", "explore", "help")) {
+  for (tab in c("tables", "explore", "help")) {
     expect_match(navbar, paste0("data-value=\"", tab, "\""), fixed = TRUE)
   }
+  # The static map has gone; the Explore tab maps the areas
+  expect_no_match(navbar, "data-value=\"map\"", fixed = TRUE)
   expect_true(has_id(navbar, "done"))
 
   # The sidebar holds every setting, in four sections that start open, and
@@ -1849,7 +1891,7 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   at <- function(x) regexpr(x, sidebar, fixed = TRUE)
   expect_gt(at("id=\"ages\""), at("data-value=\"rate\""))
   expect_lt(at("id=\"pool\""), at("data-value=\"rate\""))
-  for (id in c("info_bar", "summary_table", "map", "ex_funnel", "done",
+  for (id in c("info_bar", "summary_table", "ex_map", "ex_funnel", "done",
                "copy_table")) {
     expect_false(has_id(sidebar, id), label = id)
   }
@@ -1878,8 +1920,9 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_match(page, ".epi-logo { height: 60px; }", fixed = TRUE)
   expect_match(page, "The DSR Calculator has stopped.", fixed = TRUE)
 
-  # The calculator opens in the web browser unless asked otherwise
-  expect_identical(eval(formals(episerver_dsr)$display)[1], "browser")
+  # The calculator opens in the web browser, with no other display offered
+  expect_named(formals(episerver_dsr),
+               c("background", "port", "driver", "max_attempts", "..."))
 
 })
 
@@ -1930,7 +1973,7 @@ test_that("the app limits the rates to an age range and reuses the counts", {
 
 })
 
-test_that("the app maps age-specific rates for the ages chosen", {
+test_that("the Explore tab maps age-specific rates for the ages chosen", {
 
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
@@ -1939,13 +1982,13 @@ test_that("the app maps age-specific rates for the ages chosen", {
   })
 
   shiny::testServer(app, {
-    session$setInputs(dataset = "ED", scope = "AUS", level = "state",
+    session$setInputs(dataset = "ED", scope = "SURROUNDS", level = "sa3",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", suppress = 5, by_sex = FALSE,
                       ages = c(5, 15))
     session$setInputs(calculate = 1)
-    session$setInputs(map_value = "AgeRate", map_year = "2023",
-                      map_sex = "Persons", map_ages = c(5, 9))
+    session$setInputs(ex_value = "AgeRate", ex_year = "2023",
+                      ex_sex = "Persons", ex_ages = c(5, 9))
 
     # Ages 20 to 44: the events of those ages over their population
     band <- suppressMessages(dsr_calculate(
@@ -1953,46 +1996,41 @@ test_that("the app maps age-specific rates for the ages chosen", {
       .dsr_truncate(fake_population, c(5L, 9L)),
       fake_standard, by = c("Year", "Area")
     ))
-    p <- map_plot()
+    p <- ex_map_plot()
     expect_equal(unique(p$data$Value[p$data$Area == "ACT"]), band$Crude)
-    expect_equal(p$labels$title,
-                 "Age-specific rate per 100,000, aged 20 to 44, 2023, persons")
     # The title states the ages mapped; the subtitle states no ages
-    expect_match(gsub("\n", " ", p$labels$subtitle),
-                 "Australian residents, by state or territory", fixed = TRUE)
-    expect_no_match(p$labels$subtitle, "aged")
-    expect_equal(map_file("png")(),
-                 "dsr-map-agerate-aged-20-to-44-2023-persons.png")
-
-    session$setInputs(map_click = list(x = 149.5, y = -34.5))
-    info <- strip_html(output$map_click_info$html)
-    expect_match(info, "State or territory ACT Area ACT, aged 20 to 44:",
+    t <- ex_titles()
+    expect_equal(t$title,
+                 "Age-specific rate per 100,000, aged 20 to 44, 2023, persons")
+    expect_match(t$subtitle, "residents of the ACT and surrounds, by SA3",
                  fixed = TRUE)
-    expect_match(info, paste0(.fmt_count(band$Events), " events, population ",
-                              .fmt_count(band$Population), ", rate "),
+    expect_no_match(t$subtitle, "aged")
+    expect_equal(ex_file("map"), "dsr-map-agerate-aged-20-to-44-2023-persons")
+
+    tip <- strip_html(ex_tooltips()[["ACT"]])
+    expect_match(tip, "SA3 ACT Area ACT, aged 20 to 44", fixed = TRUE)
+    expect_match(tip, paste0(.fmt_count(band$Events), " events, population ",
+                             .fmt_count(band$Population), ", rate "),
                  fixed = TRUE)
 
     # The ages mapped stay within the ages of the rates
-    session$setInputs(map_ages = c(1, 18))
-    expect_equal(map_ages(), c(5L, 15L))
-    expect_equal(map_plot()$labels$title,
+    session$setInputs(ex_ages = c(1, 18))
+    expect_equal(ex$ages(), c(5L, 15L))
+    expect_equal(ex_titles()$title,
                  "Age-specific rate per 100,000, aged 20 to 74, 2023, persons")
 
     # Every measure states the ages of its values in the same places: the
-    # title, the file name and the click text. Here they are the ages of the
+    # title, the file name and the tooltip. Here they are the ages of the
     # rates, 20 to 74.
-    session$setInputs(map_value = "DSR")
-    p <- map_plot()
-    expect_equal(p$labels$title,
+    session$setInputs(ex_value = "DSR")
+    expect_equal(ex_titles()$title,
                  "Age-standardised rate per 100,000, aged 20 to 74, 2023, persons")
-    expect_no_match(p$labels$subtitle, "aged")
-    expect_equal(map_file("png")(),
-                 "dsr-map-dsr-aged-20-to-74-2023-persons.png")
-    expect_match(strip_html(output$map_click_info$html),
-                 "Area ACT, aged 20 to 74:", fixed = TRUE)
-    session$setInputs(map_value = "Events")
-    expect_equal(map_plot()$labels$title,
-                 "Events, aged 20 to 74, 2023, persons")
+    expect_no_match(ex_titles()$subtitle, "aged")
+    expect_equal(ex_file("funnel"), "dsr-funnel-dsr-aged-20-to-74-2023-persons")
+    expect_match(strip_html(ex_tooltips()[["ACT"]]), "Area ACT, aged 20 to 74",
+                 fixed = TRUE)
+    session$setInputs(ex_value = "Events")
+    expect_equal(ex_titles()$title, "Events, aged 20 to 74, 2023, persons")
   })
 
 })
@@ -2017,11 +2055,9 @@ test_that("the app labels SA3 tables, descriptions and maps with ASGS 2021", {
     expect_match(strip_html(output$info_bar$html),
                  "ACT residents, by SA3 (ASGS 2021), 2023", fixed = TRUE)
 
-    session$setInputs(map_value = "DSR", map_year = "2023", map_sex = "Persons")
-    p <- map_plot()
-    expect_match(gsub("\n", " ", p$labels$subtitle), "by SA3 (ASGS 2021)",
-                 fixed = TRUE)
-    expect_match(gsub("\n", " ", p$labels$caption),
+    session$setInputs(ex_value = "DSR", ex_year = "2023", ex_sex = "Persons")
+    expect_match(ex_titles()$subtitle, "by SA3 (ASGS 2021)", fixed = TRUE)
+    expect_match(gsub("\n", " ", ex_map_plot()$labels$caption),
                  "Boundaries: ABS ASGS Edition 3 (2021), CC BY 4.0.", fixed = TRUE)
   })
 
@@ -2109,6 +2145,17 @@ test_that("the Explore tab plots the areas in a funnel plot of the measure", {
     }
     expect_match(html, "Funnel plot: Above 99.8% limit", fixed = TRUE)
     expect_match(output$ex_funnel, "data-id='80105'", fixed = TRUE)
+
+    # The toolbars download PNGs named as the PDFs are, and the funnel plot
+    # PDF is titled with the heading
+    expect_match(html, "dsr-map-dsr-2023-persons", fixed = TRUE)
+    expect_match(output$ex_funnel, "dsr-funnel-dsr-2023-persons", fixed = TRUE)
+    expect_no_match(output$ex_funnel, "saveaspng", fixed = TRUE)
+    file <- output$ex_funnel_pdf
+    expect_equal(basename(file), "dsr-funnel-dsr-2023-persons.pdf")
+    expect_equal(readBin(file, "raw", 4), charToRaw("%PDF"))
+    t <- ex_titles()
+    expect_equal(ex_funnel_plot(t$title, t$subtitle)$labels$title, t$title)
   })
 
 })

@@ -8,22 +8,18 @@
 #' resident population of the same year, and standardises them to a chosen
 #' standard population. Events can be limited to ICD-10 diagnosis codes and
 #' rates to an age range. It shows counts, crude rates and DSRs, optionally
-#' with age-specific rates, maps them by area, compares areas in an
-#' interactive map and funnel plot, and copies R code that reproduces the
-#' results. Its *Help* tab sets out the data, formulas and sources.
+#' with age-specific rates, compares areas in an interactive map and funnel
+#' plot, and copies R code that reproduces the results. Its *Help* tab sets
+#' out the data, formulas and sources.
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
-#' default so that the console stays free, and it can be opened from the ACT
-#' Epidemiology menu in the RStudio Addins menu. It opens in the system web
-#' browser by default, so that it has the whole window: the settings are in a
-#' sidebar on the left, in sections that open and close, and the results in
-#' tabs on the top bar. The arrow at the top of the sidebar hides it.
+#' default so that the console stays free, and it can be opened from the
+#' RStudio Addins menu (*Open DSR Calculator*). It opens in the system web
+#' browser, so that it has the whole window: the settings are in a sidebar on
+#' the left, in sections that open and close, and the results in tabs on the
+#' top bar. The arrow at the top of the sidebar hides it.
 #'
 #' @inheritParams episerver_browse
-#' @param display Character. Where to open the calculator: `"browser"` (the
-#'   system web browser, default), `"viewer"` (the RStudio Viewer pane) or
-#'   `"window"` (a standalone RStudio dialog window). Outside RStudio the
-#'   system browser is always used.
 #' @inheritDotParams episerver_connect encrypt trust_certificate
 #'
 #' @return In background mode, invisibly returns the `callr` process handle.
@@ -40,12 +36,12 @@
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
-#' * *Population*: ACT residents, using the ACT population tables; ACT and
-#'   surrounds; or Australian residents, using the Australian tables. ACT and
-#'   surrounds covers the ACT and the four NSW SA3s that border it
-#'   (Queanbeyan, Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with
-#'   their SA2s, and also uses the Australian tables. At state level it gives
-#'   two areas, the ACT and NSW (surrounds), each summed from its SA3s.
+#' * *Population*: ACT residents, using the ACT population tables, or ACT and
+#'   surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
+#'   Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with their SA2s,
+#'   using the Australian tables. At state level ACT and surrounds gives two
+#'   areas, the ACT and NSW (surrounds), each summed from its SA3s. Both are
+#'   populations that mostly use ACT hospitals.
 #' * *Geographic level*: state or territory (`geo_STATE`), SA3
 #'   (`geo_SA3_2021`) or SA2 (`geo_SA2_2021`) of residence, with rates for
 #'   each area. SA3s and SA2s are ASGS 2021 areas (see **Data**). Populations
@@ -120,7 +116,7 @@
 #'   and procedure codes are entered, events with a diagnosis and a procedure
 #'   (the default), or with either.
 #'
-#' **Tables, maps and funnel plot**
+#' **Tables, map and funnel plot**
 #'
 #' The *Tables* tab shows the rates, the *Age-specific rates* by 5-year age
 #' group for the ages chosen, or the *Counts by age*: the events and the
@@ -129,29 +125,29 @@
 #' totals under the minimum for a DSR highlighted. *Copy table* copies the
 #' table shown as tab-separated text that pastes into Excel.
 #'
-#' The *Map* tab maps the age-standardised rate, crude rate, age-specific
-#' rate or events of one year or period and sex by area. The age-specific
+#' The *Explore* tab compares the SA3s or SA2s in an interactive map and a
+#' funnel plot, side by side, of the age-standardised rate, crude rate,
+#' age-specific rate or events of one year or period and sex. State level
+#' gives too few areas to compare (one for ACT residents, two for the ACT
+#' and surrounds), so the tab shows neither plot for it. The age-specific
 #' rate is for the age range chosen with *Ages mapped*, within the ages of
 #' the rates, for example 0 to 14 or 20 to 44: the events in the range
 #' divided by the population in the range, suppressed as in the tables. It
 #' is not age-standardised, so over a wide range it reflects differences in
 #' age structure within the range; for a standardised rate, set *Ages* and
-#' map the age-standardised rate. Australia-wide SA3 and SA2 maps open on
-#' the ACT and surrounding region; the view of Australia leaves out
-#' Christmas, Cocos (Keeling) and Norfolk Islands. Boundaries are the ASGS
-#' Edition 3 (2021) boundaries, downloaded from the ABS boundary service
+#' show the age-standardised rate.
+#'
+#' Pointing at an area or a point shows its figures. Clicking areas or
+#' points, or drawing round them with the lasso in a plot's toolbar, selects
+#' them in both plots and lists them below; *Zoom to selected* zooms the map
+#' to them, and the magnifier in the toolbar zooms and pans. The map can be
+#' coloured by value or by each area's position in the funnel plot. Each
+#' plot's toolbar downloads it as a PNG. *Map PDF* and *Funnel plot PDF*
+#' save them as PDF, titled with the measure and settings; the map PDF
+#' follows *Zoom to selected* but not the toolbar's zoom. Boundaries are the
+#' ASGS Edition 3 (2021) boundaries, downloaded from the ABS boundary service
 #' (`geo.abs.gov.au`) the first time a level is mapped and kept in the folder
 #' given by `tools::R_user_dir("actepir", "cache")`.
-#' *Copy map* copies the map as an image where the browser allows it; *PNG*
-#' and *PDF* download it.
-#'
-#' The *Explore* tab shows an interactive map and a funnel plot side by
-#' side, with the same settings as the *Map* tab. Pointing at an area or a
-#' point shows its figures. Clicking areas or points, or drawing round them
-#' with the lasso in a plot's toolbar, selects them in both plots and lists
-#' them below; *Zoom to selected* zooms the map to them, and the magnifier in
-#' the toolbar zooms and pans. The map can be coloured by value or by each
-#' area's position in the funnel plot.
 #'
 #' The funnel plot compares each area with the average of the areas plotted,
 #' allowing for the size of its population, so that areas can be compared
@@ -255,21 +251,14 @@
 #' # console stays free
 #' episerver_dsr()
 #'
-#' # Open in the RStudio Viewer pane
-#' episerver_dsr(display = "viewer")
-#'
 #' # Stop the background app
 #' episerver_dsr_stop()
 #' }
 #'
 #' @author Warren Holroyd
 #'
-episerver_dsr <- function(background = TRUE,
-                          display = c("browser", "viewer", "window"),
-                          port = NULL,
+episerver_dsr <- function(background = TRUE, port = NULL,
                           driver = NULL, max_attempts = NULL, ...) {
-
-  display <- match.arg(display)
 
   .run_app(
     key          = "dsr",
@@ -279,7 +268,6 @@ episerver_dsr <- function(background = TRUE,
     factory_args = c(list(driver = driver, max_attempts = max_attempts),
                      list(...)),
     background   = background,
-    display      = display,
     port         = port
   )
 
@@ -352,17 +340,15 @@ episerver_dsr_stop <- function() {
              icd10 = "ICDVersion = 10")
 )
 
-# Populations: the choice offered, the wording in descriptions and the ERP5
-# tables used. The ACT and surrounds take their populations from the
-# Australian tables.
+# Populations: the choice offered, the wording in descriptions, the region
+# whose areas are compared and the ERP5 tables used. The ACT and surrounds
+# take their populations from the Australian tables.
 .dsr_scopes <- list(
   ACT       = list(label = "ACT residents", describe = "ACT residents",
-                   erp = "ACT"),
+                   region = "the ACT", erp = "ACT"),
   SURROUNDS = list(label = "ACT and surrounds",
                    describe = "residents of the ACT and surrounds",
-                   erp = "AUS"),
-  AUS       = list(label = "Australian residents",
-                   describe = "Australian residents", erp = "AUS")
+                   region = "the ACT and surrounds", erp = "AUS")
 )
 
 # The NSW SA3s (ASGS 2021) that share a border with the ACT. With the ACT they
@@ -907,11 +893,11 @@ ORDER BY Year, Sex, AgeGroup, Area",
 
 
 # Area of residence in the events query: the expression giving Area, and the
-# condition keeping the areas of the population. For the ACT and the ACT and
-# surrounds, events with no recorded residence are kept so that they can be
-# counted and reported; dsr_calculate() leaves them out of the rates. ASGS
-# codes start with the state code, 8 for the ACT, and SA2 codes start with
-# their SA3 code. The states of the ACT and surrounds come from the SA3.
+# condition keeping the areas of the population. Events with no recorded
+# residence are kept so that they can be counted and reported;
+# dsr_calculate() leaves them out of the rates. ASGS codes start with the
+# state code, 8 for the ACT, and SA2 codes start with their SA3 code. The
+# states of the ACT and surrounds come from the SA3.
 #' @noRd
 .dsr_sql_area <- function(spec) {
 
@@ -919,8 +905,6 @@ ORDER BY Year, Sex, AgeGroup, Area",
   keep <- function(col, cond) {
     paste0("\n      AND (", cond, " OR ", col, " IS NULL)")
   }
-
-  if (spec$scope == "AUS") return(list(area = col, where = ""))
 
   if (spec$scope == "ACT") {
     in_act <- if (spec$level == "state") " = 'ACT'" else " LIKE '8%'"
@@ -1716,9 +1700,9 @@ WHERE Latest = 1"
 }
 
 
-# Settings of a map: what to show, the year or period, sex, the extent of
-# Australian SA3 and SA2 maps and the ages of age-specific rates. The Map and
-# Explore tabs each have a set, with input IDs that start with id.
+# Settings of the Explore tab's map and funnel plot: what to show, the year
+# or period, sex and the ages of age-specific rates, with input IDs that
+# start with id
 #' @noRd
 .dsr_map_controls <- function(id) {
   name <- function(x) paste0(id, "_", x)
@@ -1736,8 +1720,7 @@ WHERE Latest = 1"
       shiny::selectInput(name("year"), "Year", choices = NULL,
                          width = "100%"),
       shiny::selectInput(name("sex"), "Sex", choices = "Persons",
-                         width = "100%"),
-      shiny::uiOutput(name("extent_ui"))
+                         width = "100%")
     ),
     shiny::conditionalPanel(
       sprintf("input.%s == 'AgeRate'", name("value")),
@@ -1938,13 +1921,19 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         }
         .dsr-code { font-weight: 600; color: var(--epi-primary); }
         .dsr-codes div { margin-bottom: 2px; }
-        .map-click { font-size: 12px; color: #333; min-height: 1.6em;
-                     margin-top: 4px; }
         .radio.disabled label { color: #999; }
         .explore-row { display: flex; flex-wrap: wrap; gap: 12px; }
         .explore-panel { flex: 1 1 400px; min-width: 0; }
         .explore-panel .ex-linked { stroke: #320557 !important;
                                     stroke-width: 2px !important; }
+        /* The plots' toolbars in Iris, Nightshade on hover, in place of
+           ggiraph's blue; lasso deselection stays red */
+        .explore-panel .ggiraph-toolbar-icon.neutral {
+          stroke: var(--epi-accent); fill: var(--epi-accent);
+        }
+        .explore-panel .ggiraph-toolbar-icon.neutral:hover {
+          stroke: var(--epi-primary); fill: var(--epi-primary);
+        }
         .ex-table { font-size: 12px; border-collapse: collapse;
                     margin: 6px 0 10px 0; }
         .ex-table th, .ex-table td { padding: 3px 8px;
@@ -1993,7 +1982,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           var labels = %s;
           function setUp(el) {
             var slider = $(el).data('ionRangeSlider');
-            var ids = ['years', 'ages', 'map_ages', 'ex_ages'];
+            var ids = ['years', 'ages', 'ex_ages'];
             if (!slider || ids.indexOf(el.id) < 0) {
               return;
             }
@@ -2076,37 +2065,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ", jsonlite::toJSON(names(Filter(function(d) !length(d$procedures),
                                        .dsr_datasets)))))),
-
-      # Copy map: the plot is a PNG data URI, decoded and written to the
-      # clipboard as an image within the click, where the browser allows it
-      shiny::tags$script(shiny::HTML("
-        $(document).on('click', '#copy_map', function() {
-          var report = function(ok, msg) {
-            Shiny.setInputValue('copy_map_result',
-                                {ok: ok, msg: msg, t: Date.now()});
-          };
-          var img = document.querySelector('#map img');
-          var m = img && /^data:([^;]+);base64,(.*)$/.exec(img.src);
-          if (!m) { report(false, 'There is no map to copy yet.'); return; }
-          if (!(navigator.clipboard && navigator.clipboard.write &&
-                window.ClipboardItem)) {
-            report(false, 'This window cannot copy images. ' +
-                          'Use the PNG or PDF download instead.');
-            return;
-          }
-          var bin = atob(m[2]);
-          var bytes = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          var item = {};
-          item[m[1]] = new Blob([bytes], {type: m[1]});
-          navigator.clipboard.write([new ClipboardItem(item)])
-            .then(function() { report(true, 'Map copied to the clipboard.'); })
-            .catch(function(e) {
-              report(false, 'The map could not be copied (' + e.message +
-                            '). Use the PNG or PDF download instead.');
-            });
-        });
-      ")),
 
       # Done stops the app. A browser tab stays open afterwards, so it says
       # so instead of greying out.
@@ -2286,24 +2244,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     ),
 
     bslib::nav_panel(
-      "Map", value = "map",
-      .dsr_map_controls("map"),
-      shiny::div(
-        class = "options-row",
-        shiny::actionButton("copy_map", "Copy map",
-                            icon = shiny::icon("copy"),
-                            class = "btn-sm btn-primary"),
-        shiny::downloadButton("map_png", "PNG",
-                              class = "btn-sm btn-primary"),
-        shiny::downloadButton("map_pdf", "PDF",
-                              class = "btn-sm btn-primary")
-      ),
-      shiny::uiOutput("map_note"),
-      shiny::plotOutput("map", height = "560px", click = "map_click"),
-      shiny::uiOutput("map_click_info")
-    ),
-
-    bslib::nav_panel(
       "Explore", value = "explore",
       .dsr_map_controls("ex"),
       shiny::div(
@@ -2325,7 +2265,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                             class = "btn-sm btn-primary"),
         shiny::actionButton("ex_clear", "Clear selection",
                             icon = shiny::icon("xmark"),
-                            class = "btn-sm btn-primary")
+                            class = "btn-sm btn-primary"),
+        shiny::downloadButton("ex_map_pdf", "Map PDF",
+                              class = "btn-sm btn-primary"),
+        shiny::downloadButton("ex_funnel_pdf", "Funnel plot PDF",
+                              class = "btn-sm btn-primary")
       ),
       shiny::uiOutput("ex_note"),
       shiny::uiOutput("ex_heading"),
@@ -2828,9 +2772,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       .epi_copy_text(session, text, "Table copied to the clipboard")
     })
 
-    # ── Map and Explore ────────────────────────────────────────────────────
-    # Both tabs have the same settings (.dsr_map_controls()): inputs map_* on
-    # the Map tab and ex_* on the Explore tab
+    # ── Explore: interactive map and funnel plot ───────────────────────────
+    # The tab's settings are the inputs ex_* (.dsr_map_controls())
 
     # Ages mapped, kept within the ages calculated
     within_ages <- function(a, ages) {
@@ -2842,14 +2785,15 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       if (is.null(words)) "all ages" else paste("aged", words)
     }
 
-    # A state map of the ACT alone shows one area
-    mappable <- function(s) !(s$scope == "ACT" && s$level == "state")
+    # Areas are compared at SA3 and SA2 only: at state level the ACT is one
+    # area, and the ACT and surrounds two blocks of SA3s
+    comparable <- function(s) s$level != "state"
 
     # Boundaries are downloaded when the map is first shown for a level and
     # population, then kept for the session (and on disk by .dsr_boundaries)
     boundaries <- shiny::reactive({
       r <- results()
-      shiny::req(r, is.null(r$error), mappable(r$spec))
+      shiny::req(r, is.null(r$error), comparable(r$spec))
       key <- paste0("bounds_", r$spec$level, "_", r$spec$scope)
       if (is.null(cache[[key]])) {
         b <- tryCatch(
@@ -2866,8 +2810,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       cache[[key]]
     })
 
-    # The settings of one tab: the rows of the results to show, the ages and
-    # rates of age-specific maps, the measure's label and the extent
+    # The tab's settings: the rows of the results to show, the ages and rates
+    # of age-specific rates, and the measure's label
     map_settings <- function(id) {
 
       name <- function(x) paste0(id, "_", x)
@@ -2922,7 +2866,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       # The rows of one year or period and sex, and the value shown
       values <- shiny::reactive({
         r <- results()
-        shiny::req(r, is.null(r$error), get("year"), get("sex"), get("value"))
+        shiny::req(r, is.null(r$error), comparable(r$spec), get("year"),
+                   get("sex"), get("value"))
         is_band <- get("value") == "AgeRate"
         rates <- if (is_band) band() else r$summary
         d <- rates[as.character(rates[[r$by[1]]]) == get("year") &
@@ -2962,31 +2907,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                if (!is.null(a)) paste0(", ", a))
       }
 
-      # Longitude and latitude limits of the map. The ACT, and the ACT and
-      # surrounds, show all their areas. Australian SA3 and SA2 maps open on
-      # the ACT and surrounding region. The view of Australia leaves out
-      # Christmas, Cocos (Keeling) and Norfolk Islands, which would shrink the
-      # mainland.
-      view <- function(s) {
-        if (s$scope != "AUS") return(list())
-        if (s$level != "state" && !identical(get("extent"), "all")) {
-          return(list(xlim = c(147.6, 150.6), ylim = c(-37.1, -34.0)))
-        }
-        list(xlim = c(112.5, 154), ylim = c(-44, -9.5))
-      }
-
-      output[[name("extent_ui")]] <- shiny::renderUI({
-        r <- results()
-        shiny::req(r, is.null(r$error), r$spec$scope == "AUS",
-                   r$spec$level != "state")
-        shiny::selectInput(
-          name("extent"), "Extent",
-          choices = c("ACT and surrounding region" = "region",
-                      "Australia" = "all"),
-          width = "100%"
-        )
-      })
-
       title  <- function(r) {
         paste0(label(r), ", ", get("year"), ", ", tolower(get("sex")))
       }
@@ -2997,7 +2917,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       list(get = get, ages = ages, band = band, values = values,
            value_ages = value_ages, ages_label = ages_label, label = label,
-           title = title, legend = legend, view = view)
+           title = title, legend = legend)
     }
 
     # The note under a map on what grey areas are, and the boundaries' credit
@@ -3023,110 +2943,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    ms <- map_settings("map")
-    map_ages   <- ms$ages
-    map_band   <- ms$band
-    map_values <- ms$values
-    map_view   <- ms$view
-
-    map_plot <- shiny::reactive({
-      b <- boundaries()
-      shiny::req(is.null(b$error))
-      m <- map_values()
-      r <- m$r
-      s <- r$spec
-      view <- map_view(s)
-      .dsr_map_plot(
-        b$polys, m$values,
-        legend   = ms$legend(),
-        title    = ms$title(r),
-        subtitle = .dsr_describe(s, if (input$map_value == "DSR") {
-                                   std_name(s$standard)
-                                 }, years = FALSE, ages = FALSE),
-        caption  = map_caption(r, input$map_value),
-        xlim = view$xlim,
-        ylim = view$ylim
-      )
-    })
-
-    output$map <- shiny::renderPlot(map_plot(), res = 96)
-
-    output$map_note <- shiny::renderUI({
-      if (is.null(rv$fetched)) {
-        return(shiny::div(class = "epi-note",
-                          "Press Calculate, then the map shows the results."))
-      }
-      s <- rv$fetched$spec
-      if (!mappable(s)) {
-        return(shiny::div(class = "epi-note",
-                          "Choose SA3 or SA2 to map areas within the ACT."))
-      }
-      b <- boundaries()
-      if (!is.null(b$error)) {
-        return(shiny::div(
-          class = "epi-note epi-error",
-          "The boundaries could not be downloaded from the ABS ",
-          "(geo.abs.gov.au): ", b$error, " Press Calculate to try again."
-        ))
-      }
-      shiny::div(class = "epi-note", "Click an area for its figures.")
-    })
-
-    output$map_click_info <- shiny::renderUI({
-      click <- input$map_click
-      shiny::req(click)
-      b <- boundaries()
-      shiny::req(is.null(b$error))
-      area <- .dsr_point_area(click$x, click$y, b$polys)
-      shiny::req(!is.na(area))
-      m <- map_values()
-      row <- m$rows[m$rows$Area == area, ]
-      name <- b$polys$Name[match(area, b$polys$Area)]
-      ages <- ms$ages_label(m$r)
-      head <- paste0(area_label(m$r$spec), " ", area,
-                     if (!is.na(name) && name != area) paste0(" ", name),
-                     if (!is.null(ages)) paste0(", ", ages), ": ")
-      text <- .dsr_area_text(row, m$band, m$r$suppress, m$r$multiplier)
-      shiny::div(class = "map-click", shiny::strong(head), text)
-    })
-
-    shiny::observeEvent(input$copy_map_result, {
-      res <- input$copy_map_result
-      shiny::showNotification(res$msg, duration = 4,
-                              type = if (isTRUE(res$ok)) "message" else "warning")
-    })
-
-    map_file <- function(ext) {
-      function() {
-        ages <- ms$ages_label(results())
-        if (!is.null(ages)) ages <- paste0("-", gsub(" ", "-", ages))
-        paste0("dsr-map-", tolower(input$map_value), ages, "-", input$map_year,
-               "-", tolower(input$map_sex), ".", ext)
-      }
-    }
-    # A saved map takes the shape of the area in view
-    save_map <- function(file, device) {
-      p    <- map_plot()
-      view <- map_view(results()$spec)
-      size <- .dsr_map_size(p$data, view$xlim, view$ylim)
-      ggplot2::ggsave(file, p, width = size[["width"]],
-                      height = size[["height"]], dpi = 200, bg = "white",
-                      device = device)
-    }
-    output$map_png <- shiny::downloadHandler(
-      filename = map_file("png"),
-      content  = function(file) save_map(file, "png")
-    )
-    output$map_pdf <- shiny::downloadHandler(
-      filename = map_file("pdf"),
-      content  = function(file) save_map(file, "pdf")
-    )
-
-    # ── Explore: interactive map and funnel plot ───────────────────────────
     ex <- map_settings("ex")
 
     # Areas selected in either plot, shown selected in both, and the extent
-    # the map is zoomed to (NULL for the tab's extent)
+    # the map is zoomed to (NULL for all its areas)
     ex_selected <- shiny::reactiveVal(character(0))
     ex_zoom     <- shiny::reactiveVal(NULL)
     shiny::observeEvent(results(), ex_zoom(NULL))
@@ -3152,7 +2972,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     ex_names <- shiny::reactive({
       r <- results()
       shiny::req(r, is.null(r$error))
-      if (!mappable(r$spec)) return(NULL)
+      if (!comparable(r$spec)) return(NULL)
       b <- boundaries()
       if (!is.null(b$error)) return(NULL)
       stats::setNames(b$polys$Name, b$polys$Area)[!duplicated(b$polys$Area)]
@@ -3164,7 +2984,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       f <- ex_funnel()
       nm <- ex_names()
       areas <- unique(c(names(nm), m$rows$Area))
-      digits <- if (m$r$multiplier >= 100000) 1 else 2
       ages <- ex$ages_label(m$r)
       vapply(areas, function(a) {
         row  <- m$rows[m$rows$Area %in% a, , drop = FALSE]
@@ -3191,9 +3010,18 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }, character(1))
     })
 
-    # Both plots are SVG drawn by ggiraph, with the same selection, hover
-    # and zoom behaviour
-    ex_girafe <- function(p) {
+    # File names of the saved plots, e.g.
+    # dsr-map-agerate-aged-20-to-44-2023-persons
+    ex_file <- function(what) {
+      ages <- ex$ages_label(results())
+      if (!is.null(ages)) ages <- paste0("-", gsub(" ", "-", ages))
+      paste0("dsr-", what, "-", tolower(ex$get("value")), ages, "-",
+             ex$get("year"), "-", tolower(ex$get("sex")))
+    }
+
+    # Both plots are SVG drawn by ggiraph, with the same selection, hover,
+    # zoom and PNG download
+    ex_girafe <- function(p, what) {
       p <- p + ggplot2::theme(plot.margin = ggplot2::margin(26, 12, 8, 8))
       ggiraph::girafe(
         ggobj = p, width_svg = 6.5, height_svg = 6,
@@ -3205,7 +3033,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           ggiraph::opts_selection_inv(css = "opacity:0.35;"),
           ggiraph::opts_hover(css = "stroke:#320557;stroke-width:2px;"),
           ggiraph::opts_zoom(min = 1, max = 10),
-          ggiraph::opts_toolbar(position = "topright", saveaspng = FALSE),
+          ggiraph::opts_toolbar(position = "topright", pngname = ex_file(what)),
           ggiraph::opts_tooltip(
             css = paste0("background:#ffffff;color:#333740;",
                          "border:1px solid #c8c3dd;border-radius:4px;",
@@ -3217,12 +3045,34 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    output$ex_map <- ggiraph::renderGirafe({
+    # The measure, year and sex, and the settings: over both plots, and on
+    # the plots saved as PDF
+    ex_titles <- function() {
+      m <- ex$values()
+      s <- m$r$spec
+      list(title    = ex$title(m$r),
+           subtitle = .dsr_describe(s, if (ex$get("value") == "DSR") {
+             std_name(s$standard)
+           }, years = FALSE, ages = FALSE))
+    }
+
+    output$ex_heading <- shiny::renderUI({
+      t <- ex_titles()
+      shiny::div(
+        class = "epi-table-head", style = "display: block;",
+        shiny::h5(t$title),
+        shiny::div(class = "epi-note", style = "margin: 2px 0 0 0;",
+                   t$subtitle)
+      )
+    })
+
+    # The map, coloured by value or by position in the funnel plot, and
+    # zoomed to the selected areas when asked. On the page the heading is
+    # over both plots, so only a PDF takes a title and subtitle.
+    ex_map_plot <- function(title = NULL, subtitle = NULL) {
       b <- boundaries()
       shiny::req(is.null(b$error))
       m <- ex$values()
-      r <- m$r
-      s <- r$spec
       f <- ex_funnel()
       by_position <- identical(input$ex_colour, "position")
       values <- if (by_position) {
@@ -3239,35 +3089,23 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         m$values
       }
       view <- ex_zoom()
-      if (is.null(view)) view <- ex$view(s)
-      p <- .dsr_map_plot(
+      .dsr_map_plot(
         b$polys, values,
         legend   = if (by_position) "Funnel plot" else ex$legend(),
+        title    = title,
+        subtitle = subtitle,
         caption  = if (by_position) {
           paste0("Grey: not in the funnel plot. Boundaries: ABS ",
                  .dsr_asgs$name, ", CC BY 4.0.")
         } else {
-          map_caption(r, ex$get("value"))
+          map_caption(m$r, ex$get("value"))
         },
         xlim = view$xlim, ylim = view$ylim,
         tooltips = ex_tooltips()
       )
-      ex_girafe(p)
-    })
+    }
 
-    # The measure, year and sex, and the settings, over both plots
-    output$ex_heading <- shiny::renderUI({
-      m <- ex$values()
-      s <- m$r$spec
-      shiny::div(
-        class = "epi-table-head", style = "display: block;",
-        shiny::h5(ex$title(m$r)),
-        shiny::div(class = "epi-note", style = "margin: 2px 0 0 0;",
-                   .dsr_describe(s, if (ex$get("value") == "DSR") {
-                     std_name(s$standard)
-                   }, years = FALSE, ages = FALSE))
-      )
-    })
+    output$ex_map <- ggiraph::renderGirafe(ex_girafe(ex_map_plot(), "map"))
 
     # Axis titles of the funnel plot for the measure: a rate is named as in
     # the title, against the population of the same ages
@@ -3289,22 +3127,49 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    output$ex_funnel <- ggiraph::renderGirafe({
+    ex_funnel_plot <- function(title = NULL, subtitle = NULL) {
       f <- ex_funnel()
       shiny::req(!is.null(f$points), nrow(f$points) >= 2)
       tips <- ex_tooltips()
       f$points$Tooltip <- unname(tips[f$points$Area])
       ax <- ex_axes(f)
-      p <- .dsr_funnel_plot(
-        f, xlab = ax$x, ylab = ax$y,
+      .dsr_funnel_plot(
+        f, xlab = ax$x, ylab = ax$y, title = title, subtitle = subtitle,
         caption  = paste0(
           "Line: average of the areas plotted. Curves: 95% and 99.8% ",
           "control limits", if (f$adjusted) ", allowing for overdispersion",
           "."
         )
       )
-      ex_girafe(p)
-    })
+    }
+
+    output$ex_funnel <- ggiraph::renderGirafe(
+      ex_girafe(ex_funnel_plot(), "funnel")
+    )
+
+    # Map PDF and Funnel plot PDF: vector copies of the plots, titled with
+    # the heading. The map takes the shape of the area in view.
+    ex_pdf <- function(what) {
+      shiny::downloadHandler(
+        filename = function() paste0(ex_file(what), ".pdf"),
+        content  = function(file) {
+          t <- ex_titles()
+          if (what == "map") {
+            p    <- ex_map_plot(t$title, t$subtitle)
+            view <- ex_zoom()
+            size <- .dsr_map_size(p$data, view$xlim, view$ylim)
+          } else {
+            p    <- ex_funnel_plot(t$title, t$subtitle)
+            size <- c(width = 8, height = 7)
+          }
+          ggplot2::ggsave(file, p, width = size[["width"]],
+                          height = size[["height"]], bg = "white",
+                          device = "pdf")
+        }
+      )
+    }
+    output$ex_map_pdf    <- ex_pdf("map")
+    output$ex_funnel_pdf <- ex_pdf("funnel")
 
     # A selection in either plot is made in the other too
     ex_select <- function(ids) {
@@ -3320,7 +3185,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                         ex_select(input$ex_funnel_selected), ignoreNULL = FALSE)
     shiny::observeEvent(input$ex_clear, ex_select(character(0)))
 
-    # Zoom the map to the selected areas, or back to the tab's extent
+    # Zoom the map to the selected areas, or back to all its areas
     shiny::observeEvent(input$ex_zoom, {
       b <- boundaries()
       p <- b$polys[b$polys$Area %in% ex_selected(), , drop = FALSE]
@@ -3343,8 +3208,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         return(note("Press Calculate, then the map and funnel plot show ",
                     "the results."))
       }
-      if (!mappable(rv$fetched$spec)) {
-        return(note("Choose SA3 or SA2 to compare areas within the ACT."))
+      s <- rv$fetched$spec
+      if (!comparable(s)) {
+        return(note(paste0("Choose SA3 or SA2 to compare areas within ",
+                           .dsr_scopes[[s$scope]]$region, ".")))
       }
       b <- boundaries()
       if (!is.null(b$error)) {
@@ -3356,8 +3223,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       note("Point at an area or a point for its figures. Click areas or ",
            "points, or draw round them with the lasso in a plot's toolbar, ",
-           "to select them in both plots. The magnifier in the toolbar ",
-           "zooms and pans.")
+           "to select them in both plots. The toolbar also zooms and pans, ",
+           "and downloads the plot as a PNG.")
     })
 
     # How the funnel plot is made, and how much the areas vary

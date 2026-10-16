@@ -37,7 +37,7 @@ test_that("every events and population query runs and matches on area", {
   db <- live_db()
 
   grid <- expand.grid(dataset = c("ED", "APC"),
-                      scope = c("ACT", "SURROUNDS", "AUS"),
+                      scope = c("ACT", "SURROUNDS"),
                       level = c("state", "sa3", "sa2"), stringsAsFactors = FALSE)
 
   for (i in seq_len(nrow(grid))) {
@@ -75,24 +75,6 @@ test_that("geo_STATE uses the state abbreviations the population SQL maps to", {
                               table, " WHERE geo_STATE IS NOT NULL"))
     expect_true(all(states$geo_STATE %in% .dsr_states), label = table)
   }
-
-})
-
-test_that("EntityCode 0 in ERP5_STE_AUS is the Australian total", {
-
-  skip_if_no_episerver()
-  db <- live_db()
-
-  # The state-level population SQL keeps EntityCode 1 to 9 on this basis
-  totals <- db$query("SELECT EntityCode, SUM(ERPCount) AS Population
-                      FROM Analysis.dbo.ERP5_STE_AUS
-                      WHERE ERPYear = 2023
-                      GROUP BY EntityCode")
-  australia <- totals$Population[totals$EntityCode == 0]
-  states    <- sum(totals$Population[totals$EntityCode %in% 1:9])
-
-  # Other Territories are in the total but have no row of their own
-  expect_equal(states / australia, 1, tolerance = 0.005)
 
 })
 
@@ -152,9 +134,9 @@ test_that("diagnosis codes select the events the R reading of the codes does", {
   skip_if_no_episerver()
   db <- live_db()
 
-  # Distinct diagnoses of a year's events with their counts, in the fields a
-  # principal diagnosis search covers, for checking the calculator's
-  # condition against dsr_code_matches() (helper-dsr.R)
+  # Distinct diagnoses of a year's events of ACT residents with their
+  # counts, in the fields a principal diagnosis search covers, for checking
+  # the calculator's condition against dsr_code_matches() (helper-dsr.R)
   diagnoses <- function(dataset, year) {
     ds <- .dsr_datasets[[dataset]]
     fields <- if (ds$principal) ds$diagnoses[1] else ds$diagnoses
@@ -162,10 +144,11 @@ test_that("diagnosis codes select the events the R reading of the codes does", {
 FROM Analysis.dbo.{table}
 WHERE {date} >= '{year}0101'
   AND {date} < '{until}0101'
-  AND {icd10}
+  AND {icd10}{residents}
 GROUP BY {fields}",
       fields = paste(fields, collapse = ", "), table = ds$table,
-      date = ds$date, year = year, until = year + 1L, icd10 = ds$icd10))
+      date = ds$date, year = year, until = year + 1L, icd10 = ds$icd10,
+      residents = .dsr_sql_area(.dsr_spec(dataset, "ACT", "state", year))$where))
   }
   matched <- function(d, codes) {
     fields <- setdiff(names(d), "n")
@@ -174,7 +157,7 @@ GROUP BY {fields}",
     sum(d$n[hit])
   }
   counted <- function(dataset, year, codes = NULL, diagnosis = "all") {
-    s <- .dsr_spec(dataset, "AUS", "state", year, codes = codes,
+    s <- .dsr_spec(dataset, "ACT", "state", year, codes = codes,
                    diagnosis = diagnosis)
     sum(db$query(.dsr_sql_events(s))$Events)
   }
@@ -257,20 +240,22 @@ test_that("procedure codes and blocks select the events the R reading does", {
 
   ds <- .dsr_datasets$APC
   counted <- function(...) {
-    s <- .dsr_spec("APC", "AUS", "state", 2023L, ...)
+    s <- .dsr_spec("APC", "ACT", "state", 2023L, ...)
     sum(db$query(.dsr_sql_events(s))$Events)
   }
 
-  # The principal procedure, against dsr_procedure_matches() (helper-dsr.R)
+  # The principal procedure of ACT residents' separations, against
+  # dsr_procedure_matches() (helper-dsr.R)
   procs <- c("13100", "1825-1827", "11012-00")
   d <- db$query(.dsr_fill("SELECT {fields}, COUNT(*) AS n
 FROM Analysis.dbo.{table}
 WHERE {date} >= '20230101'
   AND {date} < '20240101'
-  AND {icd10}
+  AND {icd10}{residents}
 GROUP BY {fields}",
     fields = paste(ds$procedures[1], ds$blocks[1], sep = ", "),
-    table = ds$table, date = ds$date, icd10 = ds$icd10))
+    table = ds$table, date = ds$date, icd10 = ds$icd10,
+    residents = .dsr_sql_area(.dsr_spec("APC", "ACT", "state", 2023L))$where))
   hit <- dsr_procedure_matches(d[[1]], d[[2]], .dsr_parse_procedures(procs))
   principal <- counted(procedures = procs)
   expect_equal(principal, sum(d$n[hit]))

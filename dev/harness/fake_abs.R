@@ -64,26 +64,10 @@ local({
     })
   }))
 
-  # States: NSW with the ACT as a hole, the ACT, and no geometry for
-  # Outside Australia
-  ste <- list(
-    feature(list(state_code_2021 = "1", state_name_2021 = "New South Wales"),
-            list(box(141.0, 153.6, -37.5, -28.2),
-                 box(148.95, 149.25, -35.75, -35.15))),
-    feature(list(state_code_2021 = "8",
-                 state_name_2021 = "Australian Capital Territory"),
-            list(box(148.95, 149.25, -35.75, -35.15))),
-    list(type = "Feature",
-         properties = list(state_code_2021 = "Z",
-                           state_name_2021 = "Outside Australia"),
-         geometry = NULL)
-  )
-
-  layers <- list(SA3 = sa3, SA2 = sa2, STE = ste)
+  layers <- list(SA3 = sa3, SA2 = sa2)
   fields <- list(
     SA3 = c("objectid", "sa3_code_2021", "sa3_name_2021", "state_code_2021"),
-    SA2 = c("objectid", "sa2_code_2021", "sa2_name_2021", "state_code_2021"),
-    STE = c("objectid", "state_code_2021", "state_name_2021")
+    SA2 = c("objectid", "sa2_code_2021", "sa2_name_2021", "state_code_2021")
   )
 
   fake_fetch_json <- function(url) {
@@ -97,16 +81,13 @@ local({
     q <- utils::URLdecode(url)
     if (grepl("returnIdsOnly=true", q, fixed = TRUE)) {
       # state_code_2021 = '8', optionally OR <code> LIKE '<prefix>%' ...
+      stopifnot(grepl("state_code_2021 = '8'", q, fixed = TRUE))
       prefixes <- sub("LIKE '", "", regmatches(q, gregexpr("LIKE '[0-9]+", q))[[1]])
       code_of <- function(f) as.character(f$properties[[grep("_code_2021$", names(f$properties), value = TRUE)[1]]])
-      keep <- if (grepl("state_code_2021 = '8'", q, fixed = TRUE)) {
-        which(vapply(feats, function(f) {
-          f$properties$state_code_2021 == "8" ||
-            any(startsWith(code_of(f), prefixes))
-        }, logical(1)))
-      } else {
-        seq_along(feats)
-      }
+      keep <- which(vapply(feats, function(f) {
+        f$properties$state_code_2021 == "8" ||
+          any(startsWith(code_of(f), prefixes))
+      }, logical(1)))
       return(list(objectIdFieldName = "objectid", objectIds = as.list(keep)))
     }
     ids <- as.integer(strsplit(sub(".*objectIds=([0-9,]+).*", "\\1", q), ",")[[1]])

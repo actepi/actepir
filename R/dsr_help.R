@@ -201,7 +201,7 @@
       "truncated DSR), and rates are per population of those ages."
     ),
     para(html(paste0(
-      "<strong>Age-specific rate for an age range</strong> (maps): ",
+      "<strong>Age-specific rate for an age range</strong> (Explore tab): ",
       "k &Sigma; O<sub>i</sub> / &Sigma; N<sub>i</sub> over the age groups ",
       "in the range. It is not age-standardised."
     ))),
@@ -321,7 +321,7 @@
     ),
     table(
       c("Level", "Boundary layer"),
-      lapply(names(.dsr_levels), function(level) {
+      lapply(names(.dsr_boundary_layers), function(level) {
         list(.dsr_area_label(level), code(.dsr_abs_layer(level)))
       })
     ),
@@ -329,17 +329,18 @@
       "Field names are read from each layer. The boundaries are requested in ",
       "longitude and latitude (WGS 84, EPSG:4326) and simplified by the ",
       "server to within ", offset("ACT"), " for ACT residents and ",
-      offset("AUS"), " for wider areas. Each level and population is ",
-      "downloaded once and kept in ",
+      offset("SURROUNDS"), " for the ACT and surrounds. Each level and ",
+      "population is downloaded once and kept in ",
       code(tools::R_user_dir("actepir", which = "cache")), ". Maps are drawn ",
       "in longitude and latitude, with the aspect corrected for latitude ",
-      "(ggplot2's coord_quickmap()); the Australian view leaves out ",
-      "Christmas, Cocos (Keeling) and Norfolk Islands."
+      "(ggplot2's coord_quickmap()). State level is neither mapped nor ",
+      "plotted in a funnel plot, as it gives one area for ACT residents and ",
+      "two for the ACT and surrounds."
     ),
 
     shiny::h5("Software"),
     para(
-      "R packages: shiny and miniUI (the app), DT (tables), DBI and odbc ",
+      "R packages: shiny and bslib (the app), DT (tables), DBI and odbc ",
       "(EpiServer), ggplot2 (maps and plots), ggiraph (the interactive map ",
       "and funnel plot) and jsonlite (boundaries). The funnel plots follow ",
       "OHID's R package PHEindicatormethods, with exact Poisson limits where ",

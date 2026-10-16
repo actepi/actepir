@@ -2,7 +2,7 @@
 #
 # Skip for tests that download boundaries from the ABS boundary service. Like
 # skip_if_no_episerver(), it decides by probing, never by detecting the
-# environment: one small request for the state layer's description, through
+# environment: one small request for the SA3 layer's description, through
 # the download path and proxy settings the calculator uses, with the result
 # cached for the test run.
 
@@ -16,7 +16,7 @@ abs_reachable <- local({
 
     withr::local_options(timeout = 10)
     ok <- tryCatch({
-      meta <- .dsr_fetch_json(paste0(.dsr_abs_layer("state"), "?f=json"))
+      meta <- .dsr_fetch_json(paste0(.dsr_abs_layer("sa3"), "?f=json"))
       length(meta$fields) > 0
     }, error = function(e) FALSE)
 

@@ -79,12 +79,6 @@ const fs = require('fs');
   await page.waitForTimeout(800);
   console.log('CODE:', JSON.stringify((await clipboard()).split('\n').filter(l => /dsr_calculate|min_|suppress/.test(l))));
 
-  // Map
-  await page.click('a[data-value=map]');
-  await page.waitForSelector('#map img', { timeout: 60000 });
-  await settle(2000);
-  await shot('03_map');
-
   // Explore: the linked map and funnel plot
   await page.click('a[data-value=explore]');
   await page.waitForSelector('#ex_funnel svg [data-id]', { timeout: 60000 });
@@ -93,13 +87,49 @@ const fs = require('fs');
   console.log('EXPLORE heading:', await text('#ex_heading'));
   console.log('EXPLORE note:', await text('#ex_method'));
   console.log('EXPLORE areas: map', await areas('#ex_map svg [data-id]'), 'funnel', await areas('#ex_funnel svg [data-id]'));
-  await shot('04_explore');
+  await shot('03_explore');
+
+  // The toolbars, shown on pointing at a plot, in Iris rgb(86, 44, 140)
+  // with a PNG download; and the PDF downloads
+  await page.hover('#ex_map svg');
+  await page.waitForTimeout(800);
+  console.log('EXPLORE map toolbar:', JSON.stringify(await page.$$eval('#ex_map .ggiraph-toolbar-icon',
+    is => is.map(i => [i.getAttribute('title'), getComputedStyle(i).fill]))));
+  await shot('04_explore_toolbar');
+  const download = async click => {
+    const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), click()]);
+    const file = `${out}/${d.suggestedFilename()}`;
+    await d.saveAs(file);
+    return [d.suggestedFilename(), fs.readFileSync(file).subarray(0, 4).toString('latin1')];
+  };
+  console.log('EXPLORE map PNG:', JSON.stringify(await download(() => page.click('#ex_map .ggiraph-toolbar-icon-saveaspng'))));
+  console.log('EXPLORE map PDF:', JSON.stringify(await download(() => page.click('#ex_map_pdf'))));
+  console.log('EXPLORE funnel PDF:', JSON.stringify(await download(() => page.click('#ex_funnel_pdf'))));
+
+  // At state level, the ACT and surrounds are two areas: neither plot is
+  // shown (htmlwidgets hides the last one drawn rather than removing it)
+  await select('scope', 'SURROUNDS');
+  await select('level', 'state');
+  await settle();
+  await page.click('#calculate');
+  await settle(2500);
+  const shown = sel => page.$eval(sel, e => getComputedStyle(e).visibility !== 'hidden' &&
+    e.querySelectorAll('svg [data-id]').length > 0);
+  console.log('EXPLORE state level: note', JSON.stringify(await text('#ex_note')),
+    'map shown', await shown('#ex_map'), 'funnel shown', await shown('#ex_funnel'),
+    'heading', JSON.stringify(await text('#ex_heading')));
+  await shot('05_explore_state');
+  await select('scope', 'ACT');
+  await select('level', 'sa3');
+  await settle();
+  await page.click('#calculate');
+  await settle(1500);
 
   // Help
   await page.click('a[data-value=help]');
   await settle(800);
   console.log('HELP sections:', JSON.stringify(await page.$$eval('.tab-pane.active h5', hs => hs.map(h => h.textContent.trim()))));
-  await shot('05_help');
+  await shot('06_help');
 
   // Diagnosis codes: words list the codes whose titles have words starting
   // with them, and Enter adds the code highlighted; a code or range is added
@@ -137,11 +167,11 @@ const fs = require('fs');
   await page.waitForTimeout(400);
   console.log('CODES list on clicking the empty box:',
     await page.$eval(`${control} .selectize-dropdown`, d => getComputedStyle(d).display));
-  await shot('06_codes_note');
+  await shot('07_codes_note');
   await page.click(box);
   await page.type(box, 'acute myoc', { delay: 60 });
   await page.waitForTimeout(800);
-  await shot('07_codes_search');
+  await shot('08_codes_search');
   await page.keyboard.press('Escape');
 
   // Procedure codes: disabled for ED. For APC, words list the codes and
@@ -171,7 +201,7 @@ const fs = require('fs');
   await page.click('#calculate');
   await settle(2000);
   console.log('INFO BAR with codes:', (await text('#info_bar')).split('. ')[0]);
-  await shot('08_procedures');
+  await shot('09_procedures');
 
   // Done stops the app and the page says so
   await page.click('#done');

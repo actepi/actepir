@@ -32,11 +32,14 @@ test_that("the help gives the data, formulas and sources the calculator uses", {
   for (code in names(.dsr_surrounds)) {
     expect_match(text, paste(code, .dsr_surrounds[[code]]), fixed = TRUE)
   }
-  for (level in names(.dsr_levels)) {
+  for (level in names(.dsr_boundary_layers)) {
     expect_match(text, .dsr_abs_layer(level), fixed = TRUE)
   }
-  expect_match(text, "within 0.0002 degrees for ACT residents and 0.002 degrees",
-               fixed = TRUE)
+  expect_match(text, paste("within 0.0002 degrees for ACT residents and 0.002",
+                           "degrees for the ACT and surrounds"), fixed = TRUE)
+  expect_match(text, "State level is neither mapped nor plotted", fixed = TRUE)
+  expect_no_match(text, "Australian view", fixed = TRUE)
+  expect_match(text, "shiny and bslib (the app)", fixed = TRUE)
   expect_match(text, tools::R_user_dir("actepir", which = "cache"), fixed = TRUE)
   expect_match(text, "CC BY 4.0", fixed = TRUE)
 
