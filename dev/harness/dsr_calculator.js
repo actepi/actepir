@@ -100,6 +100,11 @@ const fs = require('fs');
   console.log('EXPLORE map toolbar:', JSON.stringify(await page.$$eval('#ex_map .ggiraph-toolbar-icon',
     is => is.map(i => [i.getAttribute('title'), getComputedStyle(i).fill]))));
   await shot('04_explore_toolbar');
+  // The funnel plot's toolbar has no zoom with rectangle
+  await page.hover('#ex_funnel svg');
+  await page.waitForTimeout(800);
+  console.log('EXPLORE funnel toolbar:', JSON.stringify(await page.$$eval('#ex_funnel .ggiraph-toolbar-icon',
+    is => is.map(i => i.getAttribute('title')))));
 
   // Download: one menu of the four files. Choosing one closes the menu.
   await page.click('#ex_download');

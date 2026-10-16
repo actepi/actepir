@@ -2177,11 +2177,12 @@ test_that("the Explore tab plots the areas in a funnel plot of the measure", {
     expect_match(html, "Funnel plot: Above 99.8% limit", fixed = TRUE)
     expect_match(output$ex_funnel, "data-id='80105'", fixed = TRUE)
 
-    # The toolbars have no PNG download: Download saves both plots, titled
-    # with the heading
-    for (plot in list(html, output$ex_funnel)) {
-      expect_match(plot, "\"hidden\":\\[?\"saveaspng\"")
-    }
+    # The toolbars have no PNG download, as Download saves both plots, titled
+    # with the heading; the funnel plot has no zoom with rectangle either
+    expect_match(html, "\"hidden\":\\[?\"saveaspng\"")
+    expect_no_match(html, "zoom_rect", fixed = TRUE)
+    expect_match(output$ex_funnel, "\"hidden\":[\"saveaspng\",\"zoom_rect\"]",
+                 fixed = TRUE)
     file <- output$ex_funnel_pdf
     expect_equal(basename(file), "dsr-funnel-dsr-2023-persons.pdf")
     expect_equal(readBin(file, "raw", 4), charToRaw("%PDF"))

@@ -3061,10 +3061,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     }
 
     # Both plots are SVG drawn by ggiraph, with the same selection, hover and
-    # zoom. The toolbar's PNG download is hidden, as Download saves both
-    # plots; saveaspng = FALSE would not hide it, as girafe() drops the
-    # setting.
-    ex_girafe <- function(p) {
+    # zoom. `hidden` names the toolbar buttons left out. The PNG download is
+    # left out of both, as Download saves both plots; saveaspng = FALSE would
+    # not hide it, as girafe() drops the setting.
+    ex_girafe <- function(p, hidden = "saveaspng") {
       p <- p + ggplot2::theme(plot.margin = ggplot2::margin(26, 12, 8, 8))
       ggiraph::girafe(
         ggobj = p, width_svg = 6.5, height_svg = 6,
@@ -3076,7 +3076,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           ggiraph::opts_selection_inv(css = "opacity:0.35;"),
           ggiraph::opts_hover(css = "stroke:#320557;stroke-width:2px;"),
           ggiraph::opts_zoom(min = 1, max = 10),
-          ggiraph::opts_toolbar(position = "topright", hidden = "saveaspng"),
+          ggiraph::opts_toolbar(position = "topright", hidden = hidden),
           ggiraph::opts_tooltip(
             css = paste0("background:#ffffff;color:#333740;",
                          "border:1px solid #c8c3dd;border-radius:4px;",
@@ -3186,7 +3186,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    output$ex_funnel <- ggiraph::renderGirafe(ex_girafe(ex_funnel_plot()))
+    # The funnel plot has no zoom with rectangle: there it zoomed out, and
+    # only reset pan/zoom brought the plot back
+    output$ex_funnel <- ggiraph::renderGirafe(
+      ex_girafe(ex_funnel_plot(), hidden = c("saveaspng", "zoom_rect"))
+    )
 
     # Download: the map or the funnel plot as PDF (vector) or PNG, titled with
     # the heading. The map takes the shape of the area in view.

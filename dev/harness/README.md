@@ -64,7 +64,7 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
 |---|---|
 | `dsr_calculator.js`, tabs | Tables, Explore and Help. |
 | `dsr_calculator.js`, Counts by age | 40 populations highlighted `rgb(241, 236, 194)` and no event totals. With the diagnosis and procedure codes, 40 populations and 4 event totals, these `rgb(191, 227, 241)`; the note shows each in its colour. |
-| `dsr_calculator.js`, Explore | The map's toolbar icons are Iris, `rgb(86, 44, 140)`, except lasso deselection, which stays red, and there is no PNG button. The Download menu lists Map as PDF, Map as PNG, Funnel plot as PDF and Funnel plot as PNG, all enabled, and each downloads `dsr-map-dsr-2023-persons.pdf`, `.png`, `dsr-funnel-dsr-2023-persons.pdf` or `.png`. With the ACT and surrounds by state, the note reads "Choose SA3 or SA2 to compare areas within the ACT and surrounds." and neither plot is shown. |
+| `dsr_calculator.js`, Explore | The map's toolbar icons are Iris, `rgb(86, 44, 140)`, except lasso deselection, which stays red, and there is no PNG button. The funnel plot's toolbar has no zoom with rectangle. The Download menu lists Map as PDF, Map as PNG, Funnel plot as PDF and Funnel plot as PNG, all enabled, and each downloads `dsr-map-dsr-2023-persons.pdf`, `.png`, `dsr-funnel-dsr-2023-persons.pdf` or `.png`. With the ACT and surrounds by state, the note reads "Choose SA3 or SA2 to compare areas within the ACT and surrounds." and neither plot is shown. |
 | `episerver_browser.js` | Unchanged, through `episerver_browse()` with no display argument. |
 | `dryrun_live.R` | 11 tests, 192 expectations, 0 failed, 0 skipped: the test of `ERP5_STE_AUS` and the Australian residents' queries are gone. |
 
