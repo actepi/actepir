@@ -1,8 +1,7 @@
 # tests/testthat/test-dsr_map.R
 #
 # Tests for the DSR Calculator's maps: boundaries read from a fake ABS
-# boundary service, polygons from GeoJSON, the area at a point and the map
-# itself. The last test downloads real boundaries and is skipped when the ABS
+# boundary service, polygons from GeoJSON and the map itself. The last test downloads real boundaries and is skipped when the ABS
 # boundary service cannot be reached.
 
 library(testthat)
@@ -100,28 +99,12 @@ test_that(".dsr_boundaries reads a layer's areas in batches and caches them", {
 
 })
 
-test_that("state boundaries take abbreviations and Australia is not filtered", {
+test_that("only SA3s and SA2s are mapped, for the calculator's populations", {
 
-  features <- c(
-    area_features(c("1", "8"), c("New South Wales", "Australian Capital Territory"),
-                  "STATE_CODE_2021", "STATE_NAME_2021"),
-    features_from('{"features":[{"type":"Feature","properties":
-      {"STATE_CODE_2021":"Z","STATE_NAME_2021":"Outside Australia"},
-      "geometry":null}]}')
-  )
-  layer <- fake_layer(c("OBJECTID", "STATE_CODE_2021", "STATE_NAME_2021"),
-                      features)
-  local_mocked_bindings(.dsr_fetch_json = layer$fetch)
-
-  b <- .dsr_boundaries("state", "AUS", cache = NULL)
-  expect_equal(unique(b$Area), c("NSW", "ACT"))
-  expect_equal(unique(b$Name), c("New South Wales", "Australian Capital Territory"))
-
-  urls <- layer$urls()
-  expect_match(urls[1], "/ASGS2021/STE/MapServer/0?f=json", fixed = TRUE)
-  expect_match(urls[2], "where=1%3D1&", fixed = TRUE)
-  expect_match(urls[3], "outFields=STATE_CODE_2021%2CSTATE_NAME_2021&", fixed = TRUE)
-  expect_match(urls[3], "maxAllowableOffset=0.002&", fixed = TRUE)
+  # State level gives too few areas to compare, and is never mapped
+  expect_named(.dsr_boundary_layers, c("sa3", "sa2"))
+  expect_error(.dsr_boundaries("state", "ACT", cache = NULL))
+  expect_error(.dsr_boundaries("sa3", "AUS", cache = NULL))
 
 })
 
@@ -139,12 +122,13 @@ test_that("field names are read from the layer", {
   layer <- fake_layer(c("objectid", "sa2_code_2021"),
                       area_features("801011001", "Acton", "sa2_code_2021", "x"))
   local_mocked_bindings(.dsr_fetch_json = layer$fetch)
-  expect_error(.dsr_boundaries("sa2", "AUS", cache = NULL),
+  expect_error(.dsr_boundaries("sa2", "ACT", cache = NULL),
                "no field matching .* Its fields are: objectid, sa2_code_2021")
 
-  layer <- fake_layer(c("sa2_code_2021", "sa2_name_2021"), list())
+  layer <- fake_layer(c("sa2_code_2021", "sa2_name_2021", "state_code_2021"),
+                      list())
   local_mocked_bindings(.dsr_fetch_json = layer$fetch)
-  expect_error(.dsr_boundaries("sa2", "AUS", cache = NULL), "returned no areas")
+  expect_error(.dsr_boundaries("sa2", "ACT", cache = NULL), "returned no areas")
 
 })
 
@@ -164,22 +148,7 @@ test_that("the ACT and surrounds take the ACT and the bordering SA3s", {
   expect_match(utils::URLdecode(layer$urls()[2]),
                paste0("where=state_code_2021 = '8'", surrounds, "&"),
                fixed = TRUE)
-
-  # States come from the SA3s: the ACT, and the NSW surrounds as one area
-  layer <- fake_layer(
-    c("objectid", "sa3_code_2021", "sa3_name_2021", "state_code_2021"),
-    area_features(c("80101", "80104", "10102"),
-                  c("Belconnen", "Gungahlin", "Queanbeyan"),
-                  "sa3_code_2021", "sa3_name_2021")
-  )
-  local_mocked_bindings(.dsr_fetch_json = layer$fetch)
-  b <- .dsr_boundaries("state", "SURROUNDS", cache = NULL)
-  expect_match(layer$urls()[1], "/ASGS2021/SA3/MapServer/0?f=json", fixed = TRUE)
-  expect_equal(unique(b$Area), c("ACT", "NSW (surrounds)"))
-  expect_equal(unique(b$Name), c("ACT", "NSW (surrounds)"))
-  expect_length(unique(b$group), 3)
-  expect_equal(.dsr_point_area(1.5, 0.5, b), "ACT")
-  expect_equal(.dsr_point_area(2.5, 0.5, b), "NSW (surrounds)")
+  expect_match(layer$urls()[3], "maxAllowableOffset=0.002&", fixed = TRUE)
 
 })
 
@@ -233,19 +202,6 @@ test_that("GeoJSON polygons keep their holes and parts", {
 
 })
 
-test_that(".dsr_point_area finds the area at a point, holes and parts too", {
-
-  p <- .dsr_geojson_polygons(shapes, "code", "name")
-  expect_equal(.dsr_point_area(0.5, 0.5, p), "A")
-  expect_equal(.dsr_point_area(3.5, 3.5, p), "A")
-  expect_true(is.na(.dsr_point_area(1.5, 1.5, p)))
-  expect_equal(.dsr_point_area(5.5, 0.5, p), "B")
-  expect_equal(.dsr_point_area(7.5, 0.5, p), "B")
-  expect_true(is.na(.dsr_point_area(6.5, 0.5, p)))
-  expect_true(is.na(.dsr_point_area(NULL, NULL, p)))
-
-})
-
 # ── Map ─────────────────────────────────────────────────────────────────────
 
 test_that("the map colours areas by value and greys those without one", {
@@ -275,13 +231,16 @@ test_that("the map colours areas by value and greys those without one", {
 
 test_that("saved maps take the shape of the area in view", {
 
-  square <- data.frame(x = c(149, 150), y = c(-35, -34))
-  size <- .dsr_map_size(square)
+  wide <- data.frame(x = c(149, 151), y = c(-35, -34))
+  size <- .dsr_map_size(wide)
   expect_equal(size[["height"]], 8)
-  expect_equal(size[["width"]], 6.5 * cos(34.5 * pi / 180) + 1.5)
+  expect_equal(size[["width"]], 6.5 * 2 * cos(34.5 * pi / 180) + 1.5)
 
-  # Narrow and wide areas stay within 6 and 14 inches
-  expect_equal(.dsr_map_size(square, xlim = c(149, 149.1))[["width"]], 6)
+  # Narrow and wide areas stay within 8 and 14 inches, so that the titles fit
+  # beside a tall area such as the ACT
+  square <- data.frame(x = c(149, 150), y = c(-35, -34))
+  expect_equal(.dsr_map_size(square)[["width"]], 8)
+  expect_equal(.dsr_map_size(square, xlim = c(149, 149.1))[["width"]], 8)
   expect_equal(.dsr_map_size(square, xlim = c(112.5, 154),
                              ylim = c(-36, -34))[["width"]], 14)
 
@@ -289,7 +248,7 @@ test_that("saved maps take the shape of the area in view", {
 
 # ── Live ────────────────────────────────────────────────────────────────────
 
-test_that("ABS boundaries cover the ACT's areas and every state", {
+test_that("ABS boundaries cover the ACT and the ACT and surrounds", {
 
   skip_if_no_abs()
   cache <- withr::local_tempdir()
@@ -304,15 +263,10 @@ test_that("ABS boundaries cover the ACT's areas and every state", {
   expect_gte(length(unique(.dsr_boundaries("sa3", "ACT", cache = cache)$Area)), 9)
   expect_gte(length(unique(.dsr_boundaries("sa2", "ACT", cache = cache)$Area)), 120)
 
-  states <- .dsr_boundaries("state", "AUS", cache = cache)
-  expect_setequal(unique(states$Area), unname(.dsr_states))
-
   # The ACT and surrounds: the ACT's SA2s and the 18 SA2s of the four NSW SA3s
   sa2 <- unique(.dsr_boundaries("sa2", "SURROUNDS", cache = cache)$Area)
   nsw <- sa2[!startsWith(sa2, "8")]
   expect_setequal(unique(substr(nsw, 1, 5)), names(.dsr_surrounds))
   expect_length(nsw, 18)
-  expect_setequal(unique(.dsr_boundaries("state", "SURROUNDS", cache = cache)$Area),
-                  c("ACT", "NSW (surrounds)"))
 
 })

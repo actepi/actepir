@@ -6,7 +6,6 @@
 \usage{
 episerver_browse(
   background = TRUE,
-  display = c("viewer", "window", "browser"),
   port = NULL,
   driver = NULL,
   max_attempts = NULL
@@ -16,11 +15,6 @@ episerver_browse(
 \item{background}{Logical. If \code{TRUE} (default), the app runs in a
 background R process and the console remains free. If \code{FALSE}, the
 app runs as a blocking gadget in the current session.}
-
-\item{display}{Character. Where to open the app: \code{"viewer"} (the
-RStudio Viewer pane, default), \code{"window"} (a standalone RStudio
-dialog window), or \code{"browser"} (the system web browser). Outside
-RStudio the system browser is always used.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port
@@ -49,8 +43,9 @@ By default the app runs in a background R process using
 main R console therefore remains free while the browser is open. Set
 \code{background = FALSE} for the original blocking gadget behaviour.
 
-This function is registered as an RStudio Addin and can be launched from the
-Addins menu, or called directly from the console.
+The app opens in the system web browser. It is registered as an RStudio
+Addin and can be launched from the Addins menu (\emph{Open EpiServer
+Browser}), or called directly from the console.
 }
 \details{
 The browser provides three cascading selectors (Database, Schema, Table) and
@@ -89,16 +84,10 @@ The code button adapts to the mode. In foreground mode it is labelled
 the RStudio editor, so in background mode the button is labelled
 \strong{Copy Code} and places the generated code on the clipboard instead.
 
-The \code{"window"} display uses RStudio's gadget dialog, which is modal
-over the IDE: scripts cannot be edited while the window is open. In
-background mode the app keeps running when the window is closed, and can be
-reattached (in any display) by calling \code{episerver_browse()} again; the
-Done button stops the app as usual. The \code{"browser"} display offers the
-most screen space and leaves the IDE fully usable.
-
-In background mode, calling the function again while the app is running
-reopens the existing app rather than starting a second process, after first
-verifying it is still serving; a process that is alive but no longer
+In background mode the app keeps running when its browser tab is closed.
+Calling the function again while the app is running reopens the existing
+app rather than starting a second process, after first verifying it is
+still serving; a process that is alive but no longer
 responding is killed and replaced automatically. Stop the background app
 with the Done button or \code{\link{episerver_browse_stop}};
 it is also stopped automatically when the R session exits. Process
@@ -134,12 +123,6 @@ in the selected database
 \dontrun{
 # Launch in a background process; console stays free
 episerver_browse()
-
-# Open in a standalone RStudio window instead of the Viewer pane
-episerver_browse(display = "window")
-
-# Open in the system web browser
-episerver_browse(display = "browser")
 
 # Original blocking gadget behaviour
 episerver_browse(background = FALSE)

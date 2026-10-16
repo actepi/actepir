@@ -7,27 +7,18 @@
 
 # Runs the app built by the internal factory function named `factory`, as a
 # gadget in this session or in a background R process (see episerver_browse()
-# for the technique). The factory is passed by name so that the background
-# process can find it in the installed package. Each app is identified by
-# `key`: its process handle, URL and port are kept in .actepir_env as
-# <key>_proc, <key>_url and <key>_port. `title` names the app in windows and
-# messages; `fn` is the user-facing function named in hints.
+# for the technique), and opens it in the system web browser. The factory is
+# passed by name so that the background process can find it in the installed
+# package. Each app is identified by `key`: its process handle, URL and port
+# are kept in .actepir_env as <key>_proc, <key>_url and <key>_port. `title`
+# names the app in messages; `fn` is the user-facing function named in hints.
 #' @noRd
 .run_app <- function(key, title, fn, factory, factory_args = list(),
-                     background = TRUE,
-                     display = c("viewer", "window", "browser"),
-                     port = NULL) {
-
-  display <- match.arg(display)
+                     background = TRUE, port = NULL) {
 
   if (!background) {
     app <- do.call(utils::getFromNamespace(factory, "actepir"), factory_args)
-    viewer_fn <- switch(display,
-      viewer  = shiny::paneViewer(minHeight = 550),
-      window  = shiny::dialogViewer(title, width = 1000, height = 800),
-      browser = shiny::browserViewer()
-    )
-    return(shiny::runGadget(app, viewer = viewer_fn))
+    return(shiny::runGadget(app, viewer = shiny::browserViewer()))
   }
 
   # ── Background mode ──────────────────────────────────────────────────────
@@ -38,23 +29,6 @@
       "or use ", fn, "(background = FALSE).",
       call. = FALSE
     )
-  }
-
-  # Open the running app according to the display argument. Outside RStudio
-  # the system browser is the only option. The RStudio dialog window is
-  # opened via shiny::dialogViewer(), whose viewer functions are function(url)
-  # and therefore work for a background URL as well as for runGadget().
-  show_app <- function(url) {
-    if (!rstudioapi::isAvailable()) {
-      utils::browseURL(url)
-      return(invisible(NULL))
-    }
-    switch(display,
-      viewer  = rstudioapi::viewer(url),
-      window  = shiny::dialogViewer(title, width = 1000, height = 800)(url),
-      browser = utils::browseURL(url)
-    )
-    invisible(NULL)
   }
 
   # Readiness/health probe. A direct TCP connection is used deliberately:
@@ -87,7 +61,7 @@
     old_port <- .actepir_env[[port_name]]
     if (!is.null(old_port) && port_open(old_port)) {
       url <- .actepir_env[[url_name]]
-      show_app(url)
+      utils::browseURL(url)
       message(title, " is already running at ", url)
       return(invisible(existing))
     }
@@ -206,7 +180,7 @@
     .actepir_env$finalizer_set <- TRUE
   }
 
-  show_app(url)
+  utils::browseURL(url)
 
   message(
     title, " running in a background process at ", url, "\n",
@@ -296,7 +270,7 @@
 
 
 # Copies text to the clipboard through .epi_copy_script(), from the browser
-# or Viewer showing the app
+# showing the app
 #' @noRd
 .epi_copy_text <- function(session, text, message = "Copied to clipboard") {
   session$sendCustomMessage("actepir_copy", text)

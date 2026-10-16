@@ -10,7 +10,7 @@
 #
 # The working tree is installed into a temporary library and the app started
 # through its real background launcher (episerver_dsr() or
-# episerver_browse(), display = "browser"). The script is run as
+# episerver_browse()). The script is run as
 #   node <script.js> <app URL> <output dir>
 # Its output is printed, then the end of the app's error stream. Screenshots
 # and the install log go to the output directory; everything else goes to
@@ -67,8 +67,8 @@ options(browser = function(url) invisible(NULL))
 
 suppressPackageStartupMessages(library(actepir))
 proc <- switch(app,
-  dsr    = episerver_dsr(display = "browser"),
-  browse = episerver_browse(display = "browser")
+  dsr    = episerver_dsr(),
+  browse = episerver_browse()
 )
 url <- get(paste0(app, "_url"), envir = actepir:::.actepir_env)
 

@@ -12,16 +12,13 @@
 #' main R console therefore remains free while the browser is open. Set
 #' \code{background = FALSE} for the original blocking gadget behaviour.
 #'
-#' This function is registered as an RStudio Addin and can be launched from the
-#' Addins menu, or called directly from the console.
+#' The app opens in the system web browser. It is registered as an RStudio
+#' Addin and can be launched from the Addins menu (\emph{Open EpiServer
+#' Browser}), or called directly from the console.
 #'
 #' @param background Logical. If \code{TRUE} (default), the app runs in a
 #'   background R process and the console remains free. If \code{FALSE}, the
 #'   app runs as a blocking gadget in the current session.
-#' @param display Character. Where to open the app: \code{"viewer"} (the
-#'   RStudio Viewer pane, default), \code{"window"} (a standalone RStudio
-#'   dialog window), or \code{"browser"} (the system web browser). Outside
-#'   RStudio the system browser is always used.
 #' @param port Integer or \code{NULL}. The local port for the background app.
 #'   If \code{NULL} (default), the background process chooses a free port
 #'   itself, retrying on collision.
@@ -71,16 +68,10 @@
 #' the RStudio editor, so in background mode the button is labelled
 #' \strong{Copy Code} and places the generated code on the clipboard instead.
 #'
-#' The \code{"window"} display uses RStudio's gadget dialog, which is modal
-#' over the IDE: scripts cannot be edited while the window is open. In
-#' background mode the app keeps running when the window is closed, and can be
-#' reattached (in any display) by calling \code{episerver_browse()} again; the
-#' Done button stops the app as usual. The \code{"browser"} display offers the
-#' most screen space and leaves the IDE fully usable.
-#'
-#' In background mode, calling the function again while the app is running
-#' reopens the existing app rather than starting a second process, after first
-#' verifying it is still serving; a process that is alive but no longer
+#' In background mode the app keeps running when its browser tab is closed.
+#' Calling the function again while the app is running reopens the existing
+#' app rather than starting a second process, after first verifying it is
+#' still serving; a process that is alive but no longer
 #' responding is killed and replaced automatically. Stop the background app
 #' with the Done button or \code{\link{episerver_browse_stop}};
 #' it is also stopped automatically when the R session exits. Process
@@ -126,12 +117,6 @@
 #' # Launch in a background process; console stays free
 #' episerver_browse()
 #'
-#' # Open in a standalone RStudio window instead of the Viewer pane
-#' episerver_browse(display = "window")
-#'
-#' # Open in the system web browser
-#' episerver_browse(display = "browser")
-#'
 #' # Original blocking gadget behaviour
 #' episerver_browse(background = FALSE)
 #'
@@ -141,12 +126,8 @@
 #'
 #' @author Warren Holroyd
 #'
-episerver_browse <- function(background = TRUE,
-                             display = c("viewer", "window", "browser"),
-                             port = NULL,
+episerver_browse <- function(background = TRUE, port = NULL,
                              driver = NULL, max_attempts = NULL) {
-
-  display <- match.arg(display)
 
   .run_app(
     key          = "browse",
@@ -155,7 +136,6 @@ episerver_browse <- function(background = TRUE,
     factory      = "episerver_browse_app",
     factory_args = list(driver = driver, max_attempts = max_attempts),
     background   = background,
-    display      = display,
     port         = port
   )
 
@@ -795,198 +775,6 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL) {
         shiny::onStop(db$disconnect)
       }
     }
-  )
-
-}
-
-
-#' RStudio Addin Binding for the ACT Epidemiology Menu
-#'
-#' @description
-#' Shows the ACT Epidemiology menu: a small dialog with a group for each
-#' package tool, Browse EpiServer (\code{\link{episerver_browse}}) and DSR
-#' calculator (\code{\link{episerver_dsr}}). Each group offers the three
-#' \code{display} options (Viewer pane, web browser, or standalone RStudio
-#' window). Selecting an option launches the tool with the chosen display.
-#' Registered as a single entry ("Open Menu") in the RStudio Addins menu.
-#' Closing the dialog or pressing Escape cancels.
-#'
-#' Intended as an extensible launcher for package tools. Not intended to be
-#' called directly. Outside RStudio, console list selections are offered
-#' instead of the dialog.
-#'
-#' @return See \code{\link{episerver_browse}} and \code{\link{episerver_dsr}}.
-#'   Invisibly returns \code{NULL} if cancelled.
-#'
-#' @keywords internal
-#'
-#' @export
-addin_browse <- function() {
-
-  choice <- episerver_display_dialog()
-
-  if (is.null(choice)) {
-    return(invisible(NULL))
-  }
-
-  switch(choice$tool,
-    browse = episerver_browse(display = choice$display),
-    dsr    = episerver_dsr(display = choice$display)
-  )
-
-}
-
-# Internal chooser for the menu. Returns list(tool, display), where tool is
-# "browse" or "dsr" and display is "viewer", "window" or "browser", or NULL on
-# cancel. The gadget briefly blocks the console while the dialog is open,
-# which is inherent to a modal question; the launched tool itself then runs
-# in the background as usual.
-#' @noRd
-episerver_display_dialog <- function() {
-
-  # Outside RStudio the gadget dialog is unavailable; fall back to plain
-  # console selections
-  if (!rstudioapi::isAvailable()) {
-    tools <- c("EpiServer browser" = "browse", "DSR calculator" = "dsr")
-    tool <- utils::select.list(names(tools), title = "ACT Epidemiology Menu")
-    if (!nzchar(tool)) return(NULL)
-    picked <- utils::select.list(
-      c("viewer", "window", "browser"),
-      title = paste0("Open the ", tool, " in...")
-    )
-    return(if (nzchar(picked)) list(tool = tools[[tool]], display = picked) else NULL)
-  }
-
-  logo_tag <- .epi_logo(style = "height: 34px; vertical-align: middle;")
-
-  ui <- miniUI::miniPage(
-    shiny::tags$style(shiny::HTML("
-      :root {
-        --epi-primary: #320557;
-        --epi-accent:  #562C8C;
-      }
-      .epi-dialog-bar {
-        background-color: var(--epi-primary);
-        color: #fff; padding: 12px 15px; margin: 0;
-        display: flex; align-items: center; gap: 12px;
-      }
-      .epi-dialog-bar .epi-bar-logo { flex: 1 1 0; display: flex;
-                                      align-items: center; }
-      .epi-dialog-bar .epi-bar-title { flex: 2 1 0; text-align: center; }
-      .epi-dialog-bar .epi-bar-action { flex: 1 1 0; text-align: right; }
-      .epi-dialog-bar h4 { margin: 0; font-size: 15px; color: #fff; }
-      /* Done button in the bar: white outline, Iris on hover */
-      .epi-dialog-bar .epi-done {
-        background-color: var(--epi-primary) !important;
-        border: 1px solid #fff !important;
-        color: #fff !important;
-      }
-      .epi-dialog-bar .epi-done:hover,
-      .epi-dialog-bar .epi-done:focus,
-      .epi-dialog-bar .epi-done:active {
-        background-color: var(--epi-accent) !important;
-      }
-      .epi-dialog-body { padding: 15px; }
-      .epi-group {
-        border: 1px solid #ddd; border-radius: 4px;
-        padding: 12px; margin: 0;
-      }
-      .epi-group + .epi-group { margin-top: 12px; }
-      .epi-group > legend {
-        width: auto; margin: 0 0 6px 0; padding: 0 6px;
-        font-size: 12px; font-weight: 600; color: var(--epi-primary);
-        border: 0;
-      }
-      /* All options share one style: white with nightshade border/text,
-         filling Iris on hover */
-      .epi-dialog-body .epi-option {
-        background-color: #fff !important;
-        border: 1px solid var(--epi-primary) !important;
-        color: var(--epi-primary) !important;
-      }
-      .epi-dialog-body .epi-option:hover,
-      .epi-dialog-body .epi-option:focus,
-      .epi-dialog-body .epi-option:active {
-        background-color: var(--epi-accent) !important;
-        border-color: var(--epi-accent) !important;
-        color: #fff !important;
-      }
-    ")),
-    shiny::div(
-      class = "epi-dialog-bar",
-      shiny::div(class = "epi-bar-logo", logo_tag),
-      shiny::div(
-        class = "epi-bar-title",
-        shiny::h4("ACT Epidemiology Menu")
-      ),
-      shiny::div(
-        class = "epi-bar-action",
-        shiny::actionButton(
-          "cancel", "Done",
-          class = "epi-done btn-sm"
-        )
-      )
-    ),
-    miniUI::miniContentPanel(
-      padding = 0,
-      shiny::div(
-        class = "epi-dialog-body",
-        shiny::tags$fieldset(
-          class = "epi-group",
-          shiny::tags$legend("Browse EpiServer"),
-          shiny::actionButton(
-            "viewer", "Viewer pane",
-            width = "100%", class = "epi-option",
-            style = "margin-bottom: 8px;"
-          ),
-          shiny::actionButton(
-            "browser", "Web browser",
-            width = "100%", class = "epi-option",
-            style = "margin-bottom: 8px;"
-          ),
-          shiny::actionButton(
-            "window", "Standalone RStudio window",
-            width = "100%", class = "epi-option"
-          )
-        ),
-        shiny::tags$fieldset(
-          class = "epi-group",
-          shiny::tags$legend("DSR calculator"),
-          shiny::actionButton(
-            "dsr_viewer", "Viewer pane",
-            width = "100%", class = "epi-option",
-            style = "margin-bottom: 8px;"
-          ),
-          shiny::actionButton(
-            "dsr_browser", "Web browser",
-            width = "100%", class = "epi-option",
-            style = "margin-bottom: 8px;"
-          ),
-          shiny::actionButton(
-            "dsr_window", "Standalone RStudio window",
-            width = "100%", class = "epi-option"
-          )
-        )
-      )
-    )
-  )
-
-  server <- function(input, output, session) {
-    browse <- function(display) list(tool = "browse", display = display)
-    dsr    <- function(display) list(tool = "dsr", display = display)
-    shiny::observeEvent(input$viewer,      shiny::stopApp(browse("viewer")))
-    shiny::observeEvent(input$window,      shiny::stopApp(browse("window")))
-    shiny::observeEvent(input$browser,     shiny::stopApp(browse("browser")))
-    shiny::observeEvent(input$dsr_viewer,  shiny::stopApp(dsr("viewer")))
-    shiny::observeEvent(input$dsr_window,  shiny::stopApp(dsr("window")))
-    shiny::observeEvent(input$dsr_browser, shiny::stopApp(dsr("browser")))
-    # Also fired by the dialog's close button and Escape
-    shiny::observeEvent(input$cancel,  shiny::stopApp(NULL))
-  }
-
-  shiny::runGadget(
-    ui, server,
-    viewer       = shiny::paneViewer(minHeight = 480),    stopOnCancel = FALSE
   )
 
 }

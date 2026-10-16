@@ -3,7 +3,12 @@ Description: Create a branded Quarto analysis document in the current project or
 Binding: addin_new_epi_document
 Interactive: true
 
-Name: Open Menu
-Description: Open the ACT Epidemiology menu. Choose how to launch the EpiServer browser or the DSR calculator.
-Binding: addin_browse
+Name: Open DSR Calculator
+Description: Open the DSR Calculator in the web browser, in a background process, to calculate age-standardised rates from EpiServer.
+Binding: episerver_dsr
+Interactive: true
+
+Name: Open EpiServer Browser
+Description: Open the EpiServer Browser in the web browser, in a background process, to browse EpiServer's databases, tables and columns.
+Binding: episerver_browse
 Interactive: true

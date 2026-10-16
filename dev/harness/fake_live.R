@@ -48,12 +48,6 @@ fake_fixed <- function(sql) {
   if (grepl("SELECT DISTINCT geo_STATE", sql, fixed = TRUE)) {
     return(data.frame(geo_STATE = c("ACT", "NSW", "OT")))
   }
-  if (grepl("SELECT EntityCode, SUM(ERPCount)", sql, fixed = TRUE)) {
-    return(data.frame(EntityCode = 0:8,
-                      Population = c(27000000, 8400000, 6900000, 5500000,
-                                     1900000, 2900000, 580000, 255000,
-                                     470000)))
-  }
   if (grepl("MIN(ERPYear)", sql, fixed = TRUE)) {
     return(data.frame(FirstYear = 2001L, LastYear = 2024L))
   }
@@ -294,12 +288,6 @@ fake <- function(sql) {
     out <- d[!duplicated(k), fields, drop = FALSE]
     out$n <- as.integer(table(k)[k[!duplicated(k)]])
     return(out)
-  }
-  if (grepl("AS Events", sql, fixed = TRUE) &&
-      !grepl("geo_SA3_2021 AS Area|geo_SA2_2021 AS Area|LIKE '8%'|= 'ACT'",
-             sql)) {
-    # All events of the state-level, Australian query: the coded records
-    return(count_by(d))
   }
   fake_fixed(sql)
 }

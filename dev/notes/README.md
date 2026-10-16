@@ -7,7 +7,7 @@ There is one file of notes per tool or feature of actepir, so that the next sess
 
 | Notes | Covers |
 |---|---|
-| [shared-apps.md](shared-apps.md) | What the Shiny apps share, the ACT Epidemiology menu, and how to add a tool |
+| [shared-apps.md](shared-apps.md) | What the Shiny apps share, their add-ins, and how to add a tool |
 | [dsr-calculator.md](dsr-calculator.md) | The DSR Calculator (`episerver_dsr()`), `dsr_calculate()` and `dsr_age_specific()` |
 
 The rest of the package has no notes yet: EpiServer access and labels, the ggplot2 and gt themes, and the Quarto and R Markdown templates. Start notes for a part the next time it changes.
