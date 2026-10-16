@@ -21,7 +21,7 @@ The pull request descriptions give the detail of each change and what to check a
 |---|---|
 | `R/dsr_calculate.R` | `dsr_calculate()` and `dsr_age_specific()`; strata (`.dsr_strata()`), exact Poisson limits (`.pois_lower()`, `.pois_upper()`), suppression and argument checks |
 | `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`) and map controls; the app factory `episerver_dsr_app()` |
-| `R/dsr_map.R` | ABS boundaries of SA3s and SA2s (`.dsr_boundaries()`, `.dsr_fetch_json()`, the cache) and the Explore tab's map (`.dsr_map_plot()`, with `.dsr_map_size()` for its PDF) |
+| `R/dsr_map.R` | ABS boundaries of SA3s and SA2s (`.dsr_boundaries()`, `.dsr_fetch_json()`, the cache) and the Explore tab's map (`.dsr_map_plot()`, with `.dsr_map_size()` for the size of a saved map) |
 | `R/dsr_funnel.R` | Funnel statistics (`.dsr_funnel()`, limits, overdispersion) and the funnel plot |
 | `R/dsr_help.R` | The Help tab, built from the definitions so that it follows the code |
 | `R/epi_app.R` | Infrastructure shared with the other apps (see `shared-apps.md`) |
@@ -129,11 +129,12 @@ The pull request descriptions give the detail of each change and what to check a
 - **Exports.**
   - One Download menu saves the map or the funnel plot as PDF or PNG. It is a Bootstrap dropdown written in HTML (bslib already loads Bootstrap's JavaScript), so it adds no package. Its four links are `downloadLink()`s, with `suspendWhenHidden = FALSE` because they sit in a closed menu, and Shiny leaves a download link disabled until it has its address.
   - Each file is `ggsave()` of the same ggplot as on the page, with the heading over the plots as title and subtitle; PNGs at 200 dpi. ggiraph's interactive layers draw as plain layers outside the browser. File names come from `ex_file()`.
-  - The funnel plot's toolbar has no zoom with rectangle (`hidden = "zoom_rect"`): the maintainer found it zoomed out instead of in, and only reset pan/zoom brought the plot back. The map keeps it. The cause was not investigated; the funnel plot's `coord_cartesian(expand = FALSE)` limits are a candidate.
-  - ggiraph's own PNG button is hidden with `opts_toolbar(hidden = "saveaspng")`, so there is one way to save. `saveaspng = FALSE` does not hide it: `girafe()` merges the toolbar options by the arguments named in the call and drops the `hidden` entry that `saveaspng = FALSE` sets.
   - The map follows Zoom to selected (server side), not the toolbar's pan and zoom, which the server does not see.
   - The map takes the shape of the area in view, but is at least 8 inches wide, as the funnel plot is. Narrower, the subtitle (wrapped at 70 characters) was cut off beside the ACT, which is taller than it is wide.
-  - The toolbar icons are Iris, Nightshade on hover, by CSS on `.ggiraph-toolbar-icon.neutral`; ggiraph's default is blue `#069`. Lasso deselection stays red.
+- **Toolbars.** ggiraph's toolbars are set in `ex_girafe()`, whose `hidden` argument names the buttons left out.
+  - The icons are Iris, Nightshade on hover, by CSS on `.ggiraph-toolbar-icon.neutral`; ggiraph's default is blue `#069`. Lasso deselection stays red.
+  - Neither toolbar has ggiraph's PNG button (`hidden = "saveaspng"`), so Download is the one way to save. `saveaspng = FALSE` does not hide it: `girafe()` merges the toolbar options by the arguments named in the call and drops the `hidden` entry that `saveaspng = FALSE` sets.
+  - The funnel plot's toolbar has no zoom with rectangle (`hidden = "zoom_rect"`): the maintainer found it zoomed out instead of in, and only reset pan/zoom brought the plot back. The map keeps it. The cause was not investigated; the funnel plot's `coord_cartesian(expand = FALSE)` limits are a candidate.
 
 ## Open items
 
@@ -162,7 +163,7 @@ The pull request descriptions give the detail of each change and what to check a
 ## How to check a change
 
 **Offline:**
-- Run the three commands in CLAUDE.md. With no EpiServer, these tests skip: 18 that need EpiServer, 1 that needs an ODBC driver, and 1 that needs the ABS service when it cannot be reached.
+- Run the three commands in CLAUDE.md. With no EpiServer, these tests skip: 18 that need EpiServer, 1 that needs an ODBC driver, and 1 that needs the ABS service when it cannot be reached. In a cloud session, run the check in a UTF-8 locale (see Pitfalls in `dev/harness/README.md`).
 - `test-dsr_validation.R` needs `PHEindicatormethods` and `epitools`, and skips without them.
 - For the app in a browser, run `Rscript dev/harness/run_app.R dev/harness/dsr_calculator.js <output dir>`. Compare the output with the results recorded in `dev/harness/README.md`, and look at the screenshots.
 - For the live tests, run `Rscript dev/harness/dryrun_live.R`.

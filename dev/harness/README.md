@@ -102,6 +102,7 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
   - To check that the tests write nothing there, run `R_USER_CACHE_DIR=$(mktemp -d) Rscript -e 'testthat::test_local()'` and list the folder.
   - R CMD check's examples write two files to it. This is true on `main` too.
 - **rcmdcheck.** When scripting it, give `check_dir` an explicit temporary path. An unset shell variable once put the check directory at the root of the file system.
+  - In the C locale the check gives a warning, `Sys.setlocale("LC_CTYPE", "en_US.UTF-8")` cannot be honoured, as cloud containers have no `en_US.UTF-8` locale. It comes from the container, not the package. Run the check with `LANG=C.UTF-8 LC_ALL=C.UTF-8` set, as `C.UTF-8` is installed.
 - **DataTables.** With `scrollX`, the header is drawn in a separate table, so `thead` matches twice. Read rows with `#<output id> tbody tr`, and scroll with `#<output id> .dataTables_scrollBody`.
 - **Download menu.** Choosing a file closes the menu, so open it (`#ex_download`) again before the next. Shiny marks a download link `disabled` until it has its address; the script reports it.
 - **ggiraph.** Map areas and funnel points are SVG elements whose `data-id` is the area code. Tooltips are separate `div`s shown on hover; find them by their text.
@@ -109,3 +110,4 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
   - When a plot's `req()` fails, htmlwidgets hides the last plot drawn (`visibility: hidden`) rather than removing it, so check visibility, not the SVG elements.
 - **Network.** `www.abs.gov.au`, `www.aihw.gov.au` and `geo.abs.gov.au` are blocked unless the environment's network settings allow them; when `geo.abs.gov.au` is blocked, the ABS boundary test skips. Packages install through Posit Package Manager.
 - **Packages.** The setup script installs a later roxygen2 (8.1.1 at pull request #8) than the 8.0.0 that `DESCRIPTION` records; install that with `remotes::install_version("roxygen2", "8.0.0")`.
+- **For the environment's setup script (waiting on the maintainer).** Installing roxygen2 8.0.0, and setting `LANG=C.UTF-8` (or adding the `en_US.UTF-8` locale), would remove the two workarounds above.
