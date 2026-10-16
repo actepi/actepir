@@ -7,8 +7,9 @@
 # * Crude and age-specific rates: E is the overall rate times the population.
 # * DSRs, as in OHID's Fingertips funnel plots (PHEindicatormethods): the
 #   population is derived as O / DSR, the population that would give the
-#   DSR as a crude rate from the area's events, and DSRs from fewer than 10
-#   events are not plotted.
+#   DSR as a crude rate from the area's events. Areas whose DSR is not
+#   presented (dsr_calculate()'s min_events and min_population) are left
+#   out, in place of OHID's fewer than 10 events.
 # * Events: the ratio O / E, with E from the age-specific rates of the areas
 #   plotted (indirect standardisation).
 # Limits are exact Poisson limits. Spiegelhalter's (2005) additive random
@@ -17,19 +18,17 @@
 # Two-sided control limits, as the probability outside each side
 .dsr_funnel_p <- c("95%" = 0.025, "99.8%" = 0.001)
 
-# DSRs from fewer events are not plotted (OHID)
-.dsr_funnel_min_dsr <- 10
-
 # Position of an area relative to the limits, and its colour, shape and size.
 # Outside the limits the colours are four of the ACT Government's regional
-# colours (dev/reference/act-brand.md), warm above and cool below, darker
-# beyond the 99.8% limits; within them, grey. Shape and size repeat the
-# position for readers who cannot tell the colours apart.
+# colours (dev/reference/act-brand.md) in spectral order: coral and yellow
+# above, green and blue below, the outer colour beyond the 99.8% limits;
+# within them, grey. Shape and size repeat the position for readers who
+# cannot tell the colours apart.
 .dsr_funnel_positions <- c("Above 99.8% limit", "Above 95% limit",
                            "Within 95% limits", "Below 95% limit",
                            "Below 99.8% limit")
 .dsr_funnel_colours <- stats::setNames(
-  c("#F15F50", "#C6B30B", "#CBCBC6", "#008FC5", "#077F7A"),
+  c("#F15F50", "#C6B30B", "#CBCBC6", "#90A630", "#008FC5"),
   .dsr_funnel_positions
 )
 .dsr_funnel_shapes <- stats::setNames(c(24, 24, 21, 25, 25),
@@ -139,9 +138,10 @@
 # and the measure's column (DSR or Crude; Crude for age-specific rates).
 # For "Events", expected holds each area's expected events, named by area.
 # years is the number of years in each row, so that the x-axis shows the
-# population a year. Suppressed areas are left out of the average and not
-# plotted. Returns the areas plotted (points), the average (centre), the
-# limits on the plot's scales, and the overdispersion estimate (od).
+# population a year. Suppressed areas, and for DSRs areas whose DSR is not
+# presented (a DSRNote), are left out of the average and not plotted.
+# Returns the areas plotted (points), the average (centre), the limits on
+# the plot's scales, and the overdispersion estimate (od).
 #' @noRd
 .dsr_funnel <- function(rows, measure = c("DSR", "Crude", "AgeRate", "Events"),
                         multiplier = 100000, years = 1, expected = NULL,
@@ -150,6 +150,13 @@
   measure <- match.arg(measure)
   d <- rows[!rows$Suppressed & !is.na(rows$Events), , drop = FALSE]
   n_suppressed <- sum(rows$Suppressed)
+  n_not_presented <- 0
+
+  if (measure == "DSR") {
+    not_presented <- if (is.null(d$DSRNote)) FALSE else !is.na(d$DSRNote)
+    n_not_presented <- sum(not_presented)
+    d <- d[!not_presented, , drop = FALSE]
+  }
   n_rows <- nrow(d)
 
   if (measure == "DSR") {
@@ -169,17 +176,14 @@
 
   n_none <- n_rows - nrow(d)
 
-  # The average over the areas with a value, as events per unit of size
+  # The average over the areas plotted, as events per unit of size
   rate <- if (nrow(d)) sum(d$Events) / sum(d$Size) else NA_real_
-  shown <- if (measure == "DSR") d$Events >= .dsr_funnel_min_dsr else
-    rep(TRUE, nrow(d))
-  pts <- d[shown, c("Area", "Events", "Population", "Value", "Size"),
-           drop = FALSE]
+  pts <- d[, c("Area", "Events", "Population", "Value", "Size"), drop = FALSE]
 
   out <- list(measure = measure, multiplier = multiplier, years = years,
               points = NULL, centre = NA_real_, limits = NULL, od = NULL,
               adjusted = FALSE, suppressed = n_suppressed, no_value = n_none,
-              few_events = sum(!shown))
+              not_presented = n_not_presented)
   if (!nrow(pts) || !is.finite(rate) || rate <= 0) return(out)
 
   pts$Expected <- rate * pts$Size

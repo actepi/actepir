@@ -6,7 +6,7 @@
 \usage{
 episerver_dsr(
   background = TRUE,
-  display = c("viewer", "window", "browser"),
+  display = c("browser", "viewer", "window"),
   port = NULL,
   driver = NULL,
   max_attempts = NULL,
@@ -18,10 +18,10 @@ episerver_dsr(
 background R process and the console remains free. If \code{FALSE}, the
 app runs as a blocking gadget in the current session.}
 
-\item{display}{Character. Where to open the app: \code{"viewer"} (the
-RStudio Viewer pane, default), \code{"window"} (a standalone RStudio
-dialog window), or \code{"browser"} (the system web browser). Outside
-RStudio the system browser is always used.}
+\item{display}{Character. Where to open the calculator: \code{"browser"} (the
+system web browser, default), \code{"viewer"} (the RStudio Viewer pane) or
+\code{"window"} (a standalone RStudio dialog window). Outside RStudio the
+system browser is always used.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port
@@ -70,10 +70,18 @@ results. Its \emph{Help} tab sets out the data, formulas and sources.
 
 Like \code{\link[=episerver_browse]{episerver_browse()}}, the calculator runs in a background R process by
 default so that the console stays free, and it can be opened from the ACT
-Epidemiology menu in the RStudio Addins menu.
+Epidemiology menu in the RStudio Addins menu. It opens in the system web
+browser by default, so that it has the whole window: the settings are in a
+sidebar on the left, in sections that open and close, and the results in
+tabs on the top bar. The arrow at the top of the sidebar hides it.
 }
 \details{
 \strong{Options}
+
+The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis
+codes and search), \emph{Population} (population and geographic level), \emph{Time
+periods} (calendar years and pooling) and \emph{Rate details} (ages, standard
+population, rate per, suppression, and male and female).
 \itemize{
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
@@ -111,12 +119,17 @@ The crude rate is the events in the range divided by the population in
 the range. Rates are per population of those ages, and can be compared
 only with rates for the same ages and standard population.
 \item \emph{Male and female}: adds male and female rates to the rates for persons.
-\item \emph{Age-specific rates}: adds a table of rates by 5-year age group, for the
-ages chosen.
 \item \emph{Rate per}: 1,000, 10,000 or 100,000 population.
 \item \emph{Suppress counts below}: rows with fewer events than this have their
 events and rates withheld (see \code{\link[=dsr_calculate]{dsr_calculate()}}). The default is 5; 0
 turns suppression off.
+\item \emph{Minimum events for a DSR} and \emph{Minimum population per age group}: a
+row's age-standardised rate is not presented (n.p.) when it has fewer
+events in total, or a population under the minimum in any of its age
+groups, as the AIHW (2011) principles for direct age-standardisation
+advise (Principles 3 and 2), which the ABS applies (ABS 2011). The
+defaults are the principles' 20 and 30; 0 turns a check off. The row's
+counts and crude rate are still shown.
 \item \emph{Diagnosis codes}: counts only events with a diagnosis matching any of
 the ICD-10 codes or ranges entered, for example \code{J45}, \code{C13-C15.45} or
 \verb{E18.3 to E18.78}. A partial code matches every code that starts with
@@ -134,9 +147,12 @@ from 2013, so neither holds the principal diagnosis in every year.
 
 \strong{Tables, maps and funnel plot}
 
-The \emph{Tables} tab shows the rates and, when chosen, the age-specific
-rates. \emph{Copy table} copies a table as tab-separated text that pastes into
-Excel.
+The \emph{Tables} tab shows the rates, the \emph{Age-specific rates} by 5-year age
+group for the ages chosen, or the \emph{Counts by age}: the events and the
+population of each age group, one row of each for every year or period,
+area and sex, with populations under the minimum per age group and event
+totals under the minimum for a DSR highlighted. \emph{Copy table} copies the
+table shown as tab-separated text that pastes into Excel.
 
 The \emph{Map} tab maps the age-standardised rate, crude rate, age-specific
 rate or events of one year or period and sex by area. The age-specific
@@ -170,8 +186,8 @@ without being misled by the chance variation of small numbers:
 \item DSRs are plotted against the population that would give the DSR as a
 crude rate from the area's events (events / DSR), as in the funnel plots
 of the Office for Health Improvement and Disparities (OHID). The average
-is the events of all the areas over their derived populations. DSRs from
-fewer than 10 events are not plotted.
+is the events of the areas plotted over their derived populations. Areas
+whose DSR is not presented (n.p.) are left out.
 \item Events are divided by the events expected from the age-specific rates of
 all the areas plotted (indirect standardisation) and plotted against the
 expected events, as counts alone cannot be compared between areas of
@@ -191,7 +207,7 @@ between areas. The tab reports the overdispersion ratio and its
 chi-squared test; with fewer than 10 areas the estimate is unreliable.
 Suppressed areas are neither plotted nor included in the average. Areas
 above the limits are coral (99.8\%) and yellow (95\%), and areas below them
-teal (99.8\%) and blue (95\%), from the ACT Government's regional colours.
+blue (99.8\%) and green (95\%), from the ACT Government's regional colours.
 
 The \emph{Help} tab gives the formulas for each rate, confidence interval and
 funnel plot limit, the tables and fields used, the boundary services and
@@ -229,17 +245,19 @@ calculator runs, including any diagnosis condition, the lines that keep
 the age groups in range when the ages are limited and that assign each
 year to its period when the years are pooled, and the
 \code{\link[=dsr_calculate]{dsr_calculate()}} call, with the suppression threshold, that turns their
-results into the table shown. The code reproduces the results outside the
+results into the table shown, and the \code{\link[=dsr_age_specific]{dsr_age_specific()}} call when the
+age-specific rates are shown. The code reproduces the results outside the
 calculator and can be adapted, for example by adding conditions to the
 events query.
 }
 \examples{
 \dontrun{
-# Launch in a background process; console stays free
+# Launch in a background process and open it in the web browser; the
+# console stays free
 episerver_dsr()
 
-# Open in the system web browser
-episerver_dsr(display = "browser")
+# Open in the RStudio Viewer pane
+episerver_dsr(display = "viewer")
 
 # Stop the background app
 episerver_dsr_stop()
@@ -247,6 +265,14 @@ episerver_dsr_stop()
 
 }
 \references{
+Australian Bureau of Statistics (2011). \emph{Deaths, Australia, 2010}, Appendix
+1: Principles on the use of direct age-standardisation. Cat. no. 3302.0.
+
+Australian Institute of Health and Welfare (2011). \emph{Principles on the use of
+direct age-standardisation in administrative data collections: for
+measuring the gap between Indigenous and non-Indigenous Australians}. Cat.
+no. CSI 12. Canberra: AIHW.
+
 Spiegelhalter DJ (2005). Funnel plots for comparing institutional
 performance. \emph{Statistics in Medicine}, 24(8), 1185-1202.
 

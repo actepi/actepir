@@ -327,6 +327,52 @@
 }
 
 
+# The reversed (white) ACT Government logo as an <img>, or NULL if the file
+# is not installed. The image is embedded as a data URI, which avoids
+# addResourcePath() and so works in foreground and background apps alike.
+# `...` adds attributes such as class or style.
+#' @noRd
+.epi_logo <- function(...) {
+  path <- system.file("www", "ACTGov_inline_rev.png", package = "actepir")
+  if (!nzchar(path)) {
+    return(NULL)
+  }
+  # base64_enc() breaks its output into lines, which a data URI does not need
+  png <- readBin(path, "raw", file.info(path)$size)
+  shiny::tags$img(
+    src = paste0("data:image/png;base64,",
+                 gsub("[\r\n]", "", jsonlite::base64_enc(png))),
+    alt = "ACT Government", ...
+  )
+}
+
+
+# Bootstrap 5 theme for apps built with bslib: the brand purples and fonts
+# of dev/reference/act-brand.md. Fonts are named, not downloaded, so Arial
+# and Calibri, the brand's alternatives, stand in where Montserrat and
+# Source Sans 3 are not installed. .epi_app_style() styles the widgets that
+# Bootstrap's variables do not reach.
+#' @noRd
+.epi_theme <- function() {
+  theme <- bslib::bs_theme(
+    version      = 5,
+    primary      = "#320557",  # Nightshade
+    base_font    = bslib::font_collection("Source Sans 3", "Source Sans Pro",
+                                          "Calibri", "Arial", "sans-serif"),
+    heading_font = bslib::font_collection("Montserrat", "Arial", "sans-serif"),
+    "navbar-bg"                = "#320557",
+    "link-color"               = "#562C8C",  # Iris
+    "link-hover-color"         = "#320557",
+    "component-active-bg"      = "#562C8C",
+    "input-focus-border-color" = "#562C8C",
+    "focus-ring-color"         = "rgba(86, 44, 140, 0.35)"
+  )
+  # The app's name in the top bar is a heading
+  bslib::bs_add_rules(theme,
+                      ".navbar-brand { font-family: $headings-font-family; }")
+}
+
+
 # Theme shared by the apps: Nightshade title bar, buttons, inputs,
 # DataTables and sliders
 #' @noRd
@@ -349,11 +395,11 @@
       border-color: #fff !important;
       color: #fff !important;
     }
-    #done.btn-primary:hover, #done.btn-primary:focus,
+    #done.btn-primary:hover, #done.btn-primary:focus-visible,
     #done.btn-primary:active {
-      background-color: var(--epi-primary) !important;
-      border-color: #DCC8FA !important;
-      color: #DCC8FA !important;
+      background-color: var(--epi-accent) !important;
+      border-color: #fff !important;
+      color: #fff !important;
     }
     .selector-row { display: flex; gap: 10px; margin-bottom: 10px;
                     align-items: flex-end; }
@@ -375,14 +421,33 @@
     input[type=radio], input[type=checkbox] {
       accent-color: var(--epi-accent);
     }
-    /* Themed primary buttons */
+    /* Themed primary buttons: Nightshade, Iris on hover */
     .btn-primary {
       background-color: var(--epi-primary) !important;
       border-color: var(--epi-primary-brdr) !important;
     }
-    .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
-      background-color: var(--epi-primary-brdr) !important;
-      border-color: var(--epi-primary-brdr) !important;
+    .btn-primary:hover, .btn-primary:focus-visible, .btn-primary:active {
+      background-color: var(--epi-accent) !important;
+      border-color: var(--epi-accent) !important;
+    }
+    /* A click leaves no highlight behind: focus rings and colours show for
+       the keyboard (focus-visible), and a closed dropdown is plain */
+    .btn:focus:not(:focus-visible),
+    .accordion-button:focus:not(:focus-visible),
+    .shiny-input-container .checkbox input:focus:not(:focus-visible),
+    .shiny-input-container .radio input:focus:not(:focus-visible) {
+      outline: none; box-shadow: none;
+    }
+    .accordion-button:not(.collapsed):focus:not(:focus-visible) {
+      box-shadow: inset 0 calc(-1 * var(--bs-accordion-border-width))
+                  0 var(--bs-accordion-border-color);
+    }
+    .shiny-input-container .checkbox input:not(:checked):focus:not(:focus-visible) {
+      border-color: var(--bs-border-color);
+    }
+    .selectize-control.single .selectize-input.focus:not(.dropdown-active) {
+      border-color: var(--bs-border-color, #ccc) !important;
+      box-shadow: none !important;
     }
     /* Focus glow on inputs/selects: replace Bootstrap blue */
     .form-control:focus, select:focus, .selectize-input.focus {
@@ -432,6 +497,15 @@
     table.dataTable thead > tr > th.sorting_asc:before,
     table.dataTable thead > tr > th.sorting_desc:after {
       opacity: 1 !important;
+    }
+    /* The arrows sit in 9px lines, one above the other, and are sized in
+       em: with larger header text, or a symbol font substituted for them,
+       they overlap. Fix their size and font. */
+    table.dataTable thead > tr > th[class*='sorting']:before,
+    table.dataTable thead > tr > th[class*='sorting']:after {
+      font-family: Arial, 'Liberation Sans', sans-serif;
+      font-size: 9px !important;
+      line-height: 9px !important;
     }
     /* Selected rows. Two upstream mechanisms colour these blue:
        (1) dataTables.bootstrap.extra.css targets '.table.dataTable

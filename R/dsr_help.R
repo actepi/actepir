@@ -156,6 +156,20 @@
       "are events in an age group with no population."
     ))),
     para(
+      strong("When a DSR is not presented."), " The AIHW (2011) principles ",
+      "for direct age-standardisation, which the ABS applies (ABS 2011), ",
+      "advise against age-standardising when a population has fewer than 20 ",
+      "events in total (Principle 3) or a population under 30 in any one age ",
+      "group (Principle 2). Such a DSR is shown as n.p. (not presented), with ",
+      "the reason on pointing at it, and its counts and crude rate are kept. ",
+      "Combining years (Pool years) or choosing a larger area raises the ",
+      "events; otherwise the principles suggest reporting the counts, crude ",
+      "rates and age-specific rates instead. The minimums are set under Rate ",
+      "details; 0 turns a check off. Counts by age in the Tables tab shows the ",
+      "events and population of each age group, with populations and event ",
+      "totals under the minimums highlighted."
+    ),
+    para(
       strong("Ages."), " Limiting the rates to an age range keeps the ",
       "events, populations and standard population of those age groups only. ",
       "The weights are then the standard's shares within the range (a ",
@@ -209,8 +223,9 @@
       "DSRs follow the method of the Office for Health Improvement and ",
       "Disparities (OHID) in Fingertips: the derived population is the ",
       "population that would give the DSR as a crude rate from the area's ",
-      "events. DSRs from fewer than ", .dsr_funnel_min_dsr, " events are not ",
-      "plotted but count towards the average. A count alone cannot be ",
+      "events. Areas whose DSR is not presented (see Rates and confidence ",
+      "intervals) are neither plotted nor counted in the average; OHID leaves ",
+      "out DSRs from fewer than 10 events. A count alone cannot be ",
       "compared between areas of different sizes, so events are divided by ",
       "the events expected from the age-specific rates of all the areas ",
       "plotted (indirect standardisation); the expected events then total the ",
@@ -267,8 +282,8 @@
       "overdispersion, by more than the usual variation between areas). ",
       "Among many areas, about 1 in 20 falls outside the 95% limits by chance ",
       "alone, and about 1 in 500 outside the 99.8% limits. Areas above the ",
-      "limits are coral (99.8%) and yellow (95%), areas below them teal ",
-      "(99.8%) and blue (95%), from the ACT Government regional colours, ",
+      "limits are coral (99.8%) and yellow (95%), areas below them blue ",
+      "(99.8%) and green (95%), from the ACT Government regional colours, ",
       "with larger triangles beyond the 99.8% limits."
     ),
 
@@ -310,6 +325,12 @@
     shiny::h5("References"),
     shiny::tags$ul(
       class = "help-refs",
+      item(
+        "Australian Bureau of Statistics (2011). ",
+        em("Deaths, Australia, 2010."),
+        " Appendix 1: Principles on the use of direct age-standardisation. ",
+        "Cat. no. 3302.0. Canberra: ABS."
+      ),
       item(
         "Australian Bureau of Statistics (2021). ",
         em(paste0("Australian Statistical Geography Standard (ASGS) ",

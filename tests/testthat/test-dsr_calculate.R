@@ -215,6 +215,7 @@ test_that("events in an age group with no population make the DSR NA", {
 
   expect_message(r <- dsr_calculate(ev2, po, st2), regexp = "DSR is NA")
   expect_true(is.na(r$DSR))
+  expect_equal(r$DSRNote, "events in an age group with no population")
   expect_equal(r$Crude, 3000)
 
   # With no events either, the empty age group contributes nothing
@@ -252,7 +253,71 @@ test_that("inputs are validated", {
   for (bad in list(-1, NA_real_, Inf, "5", c(1, 5))) {
     expect_error(dsr_calculate(ev2, po2, st2, suppress = bad),
                  "'suppress' must be a number of events")
+    expect_error(dsr_calculate(ev2, po2, st2, min_events = bad),
+                 "'min_events' must be a number of events")
+    expect_error(dsr_calculate(ev2, po2, st2, min_population = bad),
+                 "'min_population' must be a number of people")
   }
+
+})
+
+# ── Reliability (AIHW 2011 principles) ──────────────────────────────────────
+
+test_that("a DSR from fewer than min_events events is not presented", {
+
+  # Females 8 events, males 10, persons 20
+  full <- dsr_calculate(ev_sex, po_sex, st_sex, by_sex = TRUE)
+  expect_true(all(is.na(full$DSRNote)))
+
+  expect_message(
+    r <- dsr_calculate(ev_sex, po_sex, st_sex, by_sex = TRUE, min_events = 20),
+    "DSR is NA for 2 group\\(s\\) with fewer than 20 events"
+  )
+  expect_equal(r$DSRNote, c("fewer than 20 events", "fewer than 20 events", NA))
+  expect_true(all(is.na(r[1:2, c("DSR", "DSRLower", "DSRUpper")])))
+  # Counts and crude rates stay; the rest of the table is as before
+  keep <- c("Sex", "Events", "Population", "Crude", "CrudeLower",
+            "CrudeUpper", "Suppressed")
+  expect_equal(r[keep], full[keep])
+  expect_equal(r[3, ], full[3, ], ignore_attr = TRUE)
+  expect_false(any(r$Suppressed))
+
+})
+
+test_that("a DSR with a population under min_population in an age group is not presented", {
+
+  po <- data.frame(Area = rep(c("A", "B"), each = 2), AgeGroup = rep(1:2, 2),
+                   Population = c(1000, 4000, 1000, 29))
+  ev <- data.frame(Area = rep(c("A", "B"), each = 2), AgeGroup = rep(1:2, 2),
+                   Events = c(10, 20, 15, 1))
+  r <- suppressMessages(dsr_calculate(ev, po, st2, by = "Area",
+                                      min_population = 30))
+  expect_equal(r$DSRNote, c(NA, "a population under 30 in an age group"))
+  expect_false(is.na(r$DSR[1]))
+  expect_true(is.na(r$DSR[2]))
+  expect_equal(r$Crude[2], 16 / 1029 * 1e5)
+
+  # Exactly 30 is enough
+  po$Population[4] <- 30
+  expect_true(all(is.na(dsr_calculate(ev, po, st2, by = "Area",
+                                      min_population = 30)$DSRNote)))
+
+  # An age group with no population row counts as no population
+  r <- suppressMessages(dsr_calculate(ev[-4, ], po[-4, ], st2, by = "Area",
+                                      min_population = 30))
+  expect_equal(r$DSRNote[2], "a population under 30 in an age group")
+
+  # Fewer events take precedence, and suppression hides the note
+  r <- suppressMessages(dsr_calculate(ev, transform(po, Population = 10), st2,
+                                      by = "Area", min_events = 20,
+                                      min_population = 30, suppress = 20))
+  expect_equal(r$DSRNote, c("a population under 30 in an age group", NA))
+  expect_equal(r$Suppressed, c(FALSE, TRUE))
+  r <- suppressMessages(dsr_calculate(ev, transform(po, Population = 10), st2,
+                                      by = "Area", min_events = 20,
+                                      min_population = 30))
+  expect_equal(r$DSRNote, c("a population under 30 in an age group",
+                            "fewer than 20 events"))
 
 })
 

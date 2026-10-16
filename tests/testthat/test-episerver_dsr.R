@@ -728,6 +728,12 @@ test_that(".dsr_describe can leave out the years", {
     .dsr_describe(.dsr_spec("APC", "AUS", "state", 2023, ages = c(1, 15))),
     "APC separations, Australian residents aged under 75, by state or territory, 2023"
   )
+  # Map subtitles leave the ages to the title
+  expect_equal(
+    .dsr_describe(.dsr_spec("APC", "AUS", "state", 2023, ages = c(1, 15)),
+                  years = FALSE, ages = FALSE),
+    "APC separations, Australian residents, by state or territory"
+  )
 
 })
 
@@ -798,7 +804,7 @@ test_that("the app calculates from the queried counts", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "state",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", by_sex = FALSE,
-                      age_specific = FALSE)
+                      table = "rates")
     session$setInputs(calculate = 1)
 
     r <- results()
@@ -848,24 +854,33 @@ test_that("the app copies the code for the current settings", {
 
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
-  sent <- NULL
-  local_mocked_bindings(.epi_send_code = function(session, code) sent <<- code)
+  sent <- list()
+  local_mocked_bindings(
+    .epi_send_code = function(session, code) sent[[length(sent) + 1]] <<- code
+  )
 
+  # The code adds the age-specific rates while their table is shown
   shiny::testServer(app, {
     session$setInputs(dataset = "APC", scope = "AUS", level = "sa3",
                       standard = "300", years = c(2019, 2022),
                       multiplier = "10000", by_sex = TRUE,
-                      age_specific = TRUE, suppress = 5,
+                      table = "age", suppress = 5,
                       codes = c("C13-C15.45", "J45"), diagnosis = "all")
     session$setInputs(insert_code = 1)
+    session$setInputs(table = "rates", insert_code = 2)
   })
 
-  expect_equal(sent, .dsr_code(
-    .dsr_spec("APC", "AUS", "sa3", c(2019, 2022), 300,
-              codes = c("C13-C15.45", "J45"), diagnosis = "all"),
-    by_sex = TRUE, age_specific = TRUE, multiplier = 10000,
-    standard_name = "European (1976) (superseded)", suppress = 5
-  ))
+  code <- function(age_specific) {
+    .dsr_code(
+      .dsr_spec("APC", "AUS", "sa3", c(2019, 2022), 300,
+                codes = c("C13-C15.45", "J45"), diagnosis = "all"),
+      by_sex = TRUE, age_specific = age_specific, multiplier = 10000,
+      standard_name = "European (1976) (superseded)", suppress = 5
+    )
+  }
+  expect_length(sent, 2)
+  expect_equal(sent[[1]], code(TRUE))
+  expect_equal(sent[[2]], code(FALSE))
 
 })
 
@@ -882,7 +897,7 @@ test_that("the app reports a failed query instead of stopping", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "state",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", by_sex = FALSE,
-                      age_specific = FALSE)
+                      table = "rates")
     session$setInputs(calculate = 1)
     expect_match(rv$error, "Login timeout expired")
     expect_null(rv$fetched)
@@ -924,7 +939,7 @@ test_that("the app searches diagnosis codes and checks them first", {
 
 })
 
-test_that("the app copies each table for pasting into a spreadsheet", {
+test_that("the app copies the table shown for pasting into a spreadsheet", {
 
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
@@ -937,21 +952,157 @@ test_that("the app copies each table for pasting into a spreadsheet", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "state",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", suppress = 25, by_sex = TRUE,
-                      age_specific = TRUE)
+                      table = "rates")
 
     # Nothing to copy before the first calculation
-    session$setInputs(copy_summary = 1)
+    session$setInputs(copy_table = 1)
     expect_null(copied)
 
     session$setInputs(calculate = 1)
 
-    session$setInputs(copy_summary = 2)
+    session$setInputs(copy_table = 2)
     expect_equal(copied, .dsr_tsv(results()$summary, "State or territory",
                                   100000, suppress = 25))
-    session$setInputs(copy_age = 1)
+    session$setInputs(table = "age", copy_table = 3)
     expect_equal(copied, .dsr_tsv(age_results(), "State or territory",
                                   100000, age = TRUE, suppress = 25))
     expect_match(copied, "\t<25\t", fixed = TRUE)
+    session$setInputs(table = "counts", copy_table = 4)
+    expect_equal(copied, .dsr_counts_tsv(counts(), "State or territory",
+                                         suppress = 25))
+  })
+
+})
+
+test_that("the app presents no DSR below the AIHW minimums, and says why", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  sent <- NULL
+  copied <- NULL
+  local_mocked_bindings(
+    .epi_send_code = function(session, code) sent <<- code,
+    .epi_copy_text = function(session, text, message) copied <<- text
+  )
+  n_events <- function() sum(grepl("AS Events", fake$calls(), fixed = TRUE))
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", by_sex = TRUE, table = "rates",
+                      min_events = 20, min_population = 30)
+    session$setInputs(calculate = 1)
+    expect_true(all(is.na(results()$summary$DSRNote)))
+
+    # Males and females have 531 events each, persons 1,080. The minimums
+    # recalculate without querying the events again.
+    session$setInputs(min_events = 600)
+    s <- results()$summary
+    expect_equal(s$DSRNote, c("fewer than 600 events", "fewer than 600 events",
+                              NA))
+    expect_true(all(is.na(s[1:2, c("DSR", "DSRLower", "DSRUpper")])))
+    expect_false(anyNA(s$Crude))
+    expect_match(strip_html(output$info_bar$html),
+                 paste("Age-standardised rates are not presented (n.p.) for 2",
+                       "of 3 rows: 2 with fewer than 600 events"),
+                 fixed = TRUE)
+    expect_equal(n_events(), 1)
+    session$setInputs(copy_table = 1)
+    male <- strsplit(strsplit(copied, "\n")[[1]][2], "\t")[[1]]
+    expect_equal(tail(male, 3), rep("n.p.", 3))
+
+    # Males number 10,150 at ages 0-4, females 10,200
+    session$setInputs(min_events = 0, min_population = 10200)
+    expect_equal(results()$summary$DSRNote,
+                 c("a population under 10,200 in an age group", NA, NA))
+
+    # Copy Code applies the same minimums, and a cleared one is off
+    session$setInputs(insert_code = 1)
+    expect_match(sent, "min_population = 10200", fixed = TRUE)
+    expect_no_match(sent, "min_events", fixed = TRUE)
+    session$setInputs(min_population = NA)
+    expect_true(all(is.na(results()$summary$DSRNote)))
+  })
+
+})
+
+test_that("counts by age set events and populations out with the ages across", {
+
+  d <- .dsr_counts(fake_events, fake_population, c("Year", "Area"),
+                   by_sex = TRUE, suppress = 22)
+  ages <- .dsr_age_labels
+
+  expect_equal(names(d), c("Year", "Area", "Sex", "Count", ages, "All ages"))
+  expect_equal(d$Sex, rep(c("Male", "Female", "Persons"), each = 2))
+  expect_equal(d$Count, rep(c("Events", "Population"), 3))
+
+  # Males have 21 to 38 events, so 21 is suppressed, in each age group;
+  # populations are never suppressed
+  expect_equal(unname(unlist(d[1, ages])), c(NA, 22:38))
+  expect_equal(unname(unlist(d[2, ages])), 10000 + 100 * (1:18) + 50)
+  # Persons include sex not stated: 2 (20 + a) + 1
+  expect_equal(unname(unlist(d[5, ages])), 2 * (21:38) + 1)
+
+  # The totals are the counts of the rates
+  r <- suppressMessages(dsr_calculate(fake_events, fake_population,
+                                      fake_standard, by = c("Year", "Area"),
+                                      by_sex = TRUE))
+  expect_equal(d[["All ages"]][c(1, 3, 5)], r$Events)
+  expect_equal(d[["All ages"]][c(2, 4, 6)], r$Population)
+
+  # Limited to ages, the columns are those age groups
+  ages_15_to_44 <- .dsr_counts(.dsr_truncate(fake_events, c(4L, 9L)),
+                               .dsr_truncate(fake_population, c(4L, 9L)),
+                               c("Year", "Area"))
+  expect_equal(names(ages_15_to_44)[-(1:4)], c(ages[4:9], "All ages"))
+
+  # Copied, ages and suppressed counts stay text in Excel
+  lines <- strsplit(.dsr_counts_tsv(d, "State or territory", suppress = 22),
+                    "\n", fixed = TRUE)[[1]]
+  expect_length(lines, 7)
+  expect_equal(strsplit(lines[1], "\t", fixed = TRUE)[[1]][c(1:5, 23)],
+               c("Year", "State or territory", "Sex", "Count", "0–4",
+                 "All ages"))
+  expect_match(lines[2], "^2023\tACT\tMale\tEvents\t<22\t22\t23\t")
+
+  # The table highlights populations and event totals below the minimums
+  tbl <- .dsr_counts_datatable(d, "State or territory", suppress = 22,
+                               min_events = 600, min_population = 10200)
+  expect_equal(names(tbl$x$data), names(d))
+  defs <- Filter(function(def) !is.null(def$render), tbl$x$options$columnDefs)
+  renders <- vapply(defs, function(def) as.character(def$render), character(1))
+  expect_match(renders[1], "!events && 10200 > 0 && data < 10200",
+               fixed = TRUE)
+  expect_match(renders[2], "events && 600 > 0", fixed = TRUE)
+  expect_match(renders[2], "dsr-short", fixed = TRUE)
+
+})
+
+test_that("the app shows counts by age and explains the highlights", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", by_sex = TRUE, suppress = 22,
+                      min_events = 600, min_population = 10200,
+                      table = "counts", ages = c(4, 9))
+    session$setInputs(calculate = 1)
+    r <- results()
+    expect_equal(counts(), .dsr_counts(r$events, r$population, r$by,
+                                       by_sex = TRUE, suppress = 22))
+    expect_equal(names(counts())[-(1:4)], c(.dsr_age_labels[4:9], "All ages"))
+    note <- gsub("\\s+", " ", strip_html(output$counts_note$html))
+    expect_match(note,
+                 paste("Highlighted: populations under 10,200 in an age group",
+                       "and event totals under 600, below the minimums"),
+                 fixed = TRUE)
+    expect_match(output$counts_table, "dsr-short", fixed = TRUE)
+
+    session$setInputs(min_events = 0, min_population = 0, suppress = 0)
+    expect_no_match(strip_html(output$counts_note$html), "Highlighted")
   })
 
 })
@@ -1130,6 +1281,9 @@ test_that("the app maps the ACT and surrounds by state", {
 
 test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
 
+  # Rendering compiles the theme; keep sass from caching it in the user's
+  # cache folder
+  withr::local_options(sass.cache = FALSE)
   app  <- episerver_dsr_app(query = fake_episerver()$query)
   page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
                                QUERY_STRING = ""))$content
@@ -1159,6 +1313,88 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
 
 })
 
+test_that("the settings are in a sidebar and the results in tabs on the top bar", {
+
+  withr::local_options(sass.cache = FALSE)
+  app  <- episerver_dsr_app(query = fake_episerver()$query)
+  page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
+                               QUERY_STRING = ""))$content
+  part <- function(pattern) {
+    regmatches(page, regexpr(pattern, page, perl = TRUE))
+  }
+  has_id <- function(html, id) grepl(paste0("id=\"", id, "\""), html, fixed = TRUE)
+
+  expect_match(page, "<title>DSR Calculator</title>", fixed = TRUE)
+
+  # The top bar holds the logo, the name, the tabs and Done
+  navbar <- part("(?s)<nav .*?</nav>")
+  expect_length(navbar, 1)
+  expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
+  expect_match(navbar, "class=\"epi-logo\"", fixed = TRUE)
+  expect_match(navbar, "DSR Calculator", fixed = TRUE)
+  for (tab in c("tables", "map", "explore", "help")) {
+    expect_match(navbar, paste0("data-value=\"", tab, "\""), fixed = TRUE)
+  }
+  expect_true(has_id(navbar, "done"))
+
+  # The sidebar holds every setting, in four sections that start open, and
+  # Calculate and the code button; the results are outside it. It cannot be
+  # resized, as the resize handle would cover its scrollbar.
+  sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
+  expect_length(sidebar, 1)
+  expect_no_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
+  for (id in c("dataset", "codes", "diagnosis", "scope", "level", "years",
+               "pool", "ages", "standard", "multiplier", "suppress",
+               "by_sex", "calculate", "insert_code")) {
+    expect_true(has_id(sidebar, id), label = id)
+  }
+  sections <- c(events = "Events", population = "Population",
+                time = "Time periods", rate = "Rate details")
+  for (section in names(sections)) {
+    expect_match(sidebar, paste0("(?s)class=\"accordion-item\" data-value=\"",
+                                 section, "\".*?accordion-title\">",
+                                 sections[[section]], "<"), perl = TRUE)
+  }
+  expect_equal(lengths(regmatches(sidebar, gregexpr("aria-expanded=\"true\"",
+                                                    sidebar))), 4)
+  # Ages are a detail of the rates; the time periods are the years alone
+  at <- function(x) regexpr(x, sidebar, fixed = TRUE)
+  expect_gt(at("id=\"ages\""), at("data-value=\"rate\""))
+  expect_lt(at("id=\"pool\""), at("data-value=\"rate\""))
+  for (id in c("info_bar", "summary_table", "map", "ex_funnel", "done",
+               "copy_table")) {
+    expect_false(has_id(sidebar, id), label = id)
+  }
+
+  # The Tables tab switches between the rates and the age-specific rates,
+  # with one button that copies the table shown
+  tables <- part("(?s)<div class=\"tab-pane[^\"]*\" data-value=\"tables\".*?id=\"footnote\"")
+  expect_length(tables, 1)
+  expect_true(has_id(tables, "table"))
+  expect_match(tables, "data-value=\"rates\"", fixed = TRUE)
+  expect_match(tables, "data-value=\"age\"", fixed = TRUE)
+  expect_true(has_id(tables, "copy_table"))
+  expect_match(tables, "data-value=\"counts\"", fixed = TRUE)
+  expect_true(has_id(tables, "counts_table"))
+  expect_false(has_id(page, "age_specific"))
+
+  # The minimums for a DSR start at the AIHW (2011) principles' 20 and 30
+  input_tag <- function(id) part(paste0("<input id=\"", id, "\"[^>]*>"))
+  expect_match(input_tag("min_events"), "value=\"20\"", fixed = TRUE)
+  expect_match(input_tag("min_population"), "value=\"30\"", fixed = TRUE)
+  expect_true(has_id(sidebar, "min_events"))
+  expect_true(has_id(sidebar, "min_population"))
+
+  # The logo is shown at the brand's minimum size with its clear space, and
+  # the page explains itself once Done has stopped the app
+  expect_match(page, ".epi-logo { height: 60px; }", fixed = TRUE)
+  expect_match(page, "The DSR Calculator has stopped.", fixed = TRUE)
+
+  # The calculator opens in the web browser unless asked otherwise
+  expect_identical(eval(formals(episerver_dsr)$display)[1], "browser")
+
+})
+
 test_that("the app limits the rates to an age range and reuses the counts", {
 
   fake <- fake_episerver()
@@ -1169,7 +1405,7 @@ test_that("the app limits the rates to an age range and reuses the counts", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "state",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", by_sex = FALSE,
-                      age_specific = TRUE, ages = c(1, 18))
+                      table = "age", ages = c(1, 18))
     session$setInputs(calculate = 1)
     all_ages <- results()$summary
 
@@ -1233,8 +1469,10 @@ test_that("the app maps age-specific rates for the ages chosen", {
     expect_equal(unique(p$data$Value[p$data$Area == "ACT"]), band$Crude)
     expect_equal(p$labels$title,
                  "Age-specific rate per 100,000, aged 20 to 44, 2023, persons")
+    # The title states the ages mapped; the subtitle states no ages
     expect_match(gsub("\n", " ", p$labels$subtitle),
-                 "Australian residents aged 20 to 74, by state or territory")
+                 "Australian residents, by state or territory", fixed = TRUE)
+    expect_no_match(p$labels$subtitle, "aged")
     expect_equal(map_file("png")(),
                  "dsr-map-agerate-aged-20-to-44-2023-persons.png")
 
@@ -1251,6 +1489,22 @@ test_that("the app maps age-specific rates for the ages chosen", {
     expect_equal(map_ages(), c(5L, 15L))
     expect_equal(map_plot()$labels$title,
                  "Age-specific rate per 100,000, aged 20 to 74, 2023, persons")
+
+    # Every measure states the ages of its values in the same places: the
+    # title, the file name and the click text. Here they are the ages of the
+    # rates, 20 to 74.
+    session$setInputs(map_value = "DSR")
+    p <- map_plot()
+    expect_equal(p$labels$title,
+                 "Age-standardised rate per 100,000, aged 20 to 74, 2023, persons")
+    expect_no_match(p$labels$subtitle, "aged")
+    expect_equal(map_file("png")(),
+                 "dsr-map-dsr-aged-20-to-74-2023-persons.png")
+    expect_match(strip_html(output$map_click_info$html),
+                 "Area ACT, aged 20 to 74:", fixed = TRUE)
+    session$setInputs(map_value = "Events")
+    expect_equal(map_plot()$labels$title,
+                 "Events, aged 20 to 74, 2023, persons")
   })
 
 })
@@ -1270,7 +1524,7 @@ test_that("the app labels SA3 tables, descriptions and maps with ASGS 2021", {
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000")
     session$setInputs(calculate = 1)
-    session$setInputs(copy_summary = 1)
+    session$setInputs(copy_table = 1)
     expect_match(copied, "^Year\tSA3 \\(ASGS 2021\\)\tSex\t")
     expect_match(strip_html(output$info_bar$html),
                  "ACT residents, by SA3 (ASGS 2021), 2023", fixed = TRUE)
@@ -1355,6 +1609,9 @@ test_that("the Explore tab plots the areas in a funnel plot of the measure", {
     band <- ex$band()
     expect_equal(sort(f$points$X), sort(band$Population))
     expect_match(ex$title(r), "aged 70 and over", fixed = TRUE)
+    expect_equal(ex_axes(f),
+                 list(x = "Population aged 70 and over",
+                      y = "Age-specific rate per 100,000, aged 70 and over"))
 
     # The map shows each area with its tooltip, by value or by position
     session$setInputs(ex_value = "DSR", ex_colour = "position")

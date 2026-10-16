@@ -256,7 +256,7 @@ test_that("the app calculates against EpiServer", {
     session$setInputs(dataset = "ED", scope = "ACT", level = "sa3",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", by_sex = TRUE,
-                      age_specific = TRUE)
+                      table = "age")
     session$setInputs(calculate = 1)
 
     expect_null(rv$error)
@@ -265,15 +265,39 @@ test_that("the app calculates against EpiServer", {
     expect_gt(nrow(r$summary), 0)
     expect_equal(nrow(age_results()), nrow(r$summary) * 18)
 
-    # Asthma in any diagnosis, with the usual suppression
+    # The counts by age total to the events and populations of the rates
+    key <- function(d) paste(d$Year, d$Area, d$Sex)
+    k <- counts()
+    events <- k[k$Count == "Events", ]
+    pop    <- k[k$Count == "Population", ]
+    rows   <- match(key(r$summary), key(events))
+    expect_false(anyNA(rows))
+    expect_equal(events[["All ages"]][rows], r$summary$Events)
+    expect_equal(pop[["All ages"]][rows], r$summary$Population)
+
+    # Asthma in any diagnosis, with the usual suppression and the AIHW
+    # minimums
     total <- sum(r$summary$Events)
-    session$setInputs(codes = "J45", diagnosis = "all", suppress = 5)
+    session$setInputs(codes = "J45", diagnosis = "all", suppress = 5,
+                      min_events = 20, min_population = 30)
     session$setInputs(calculate = 2)
     expect_null(rv$error)
     r <- results()
     expect_null(r$error)
     expect_lt(sum(r$summary$Events, na.rm = TRUE), total)
     expect_true(all(is.na(r$summary$Events) == r$summary$Suppressed))
+
+    # A DSR is presented only from 20 events and a population of 30 or more
+    # in every age group, as the counts by age show
+    k <- counts()
+    pop <- k[k$Count == "Population", ]
+    ages <- setdiff(names(k), c("Year", "Area", "Sex", "Count", "All ages"))
+    small <- unname(apply(pop[ages] < 30, 1, any))[match(key(r$summary),
+                                                         key(pop))]
+    shown <- !r$summary$Suppressed
+    expect_equal(is.na(r$summary$DSRNote[shown]),
+                 (r$summary$Events >= 20 & !small)[shown])
+    expect_equal(is.na(r$summary$DSR[shown]), !is.na(r$summary$DSRNote[shown]))
 
     # Three years pooled into one period
     session$setInputs(years = c(2021, 2023), pool = "3", calculate = 3)

@@ -8,3 +8,5 @@
 .csv
 dev/*
 !dev/reference/
+!dev/notes/
+!dev/harness/

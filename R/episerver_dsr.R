@@ -14,9 +14,16 @@
 #'
 #' Like [episerver_browse()], the calculator runs in a background R process by
 #' default so that the console stays free, and it can be opened from the ACT
-#' Epidemiology menu in the RStudio Addins menu.
+#' Epidemiology menu in the RStudio Addins menu. It opens in the system web
+#' browser by default, so that it has the whole window: the settings are in a
+#' sidebar on the left, in sections that open and close, and the results in
+#' tabs on the top bar. The arrow at the top of the sidebar hides it.
 #'
 #' @inheritParams episerver_browse
+#' @param display Character. Where to open the calculator: `"browser"` (the
+#'   system web browser, default), `"viewer"` (the RStudio Viewer pane) or
+#'   `"window"` (a standalone RStudio dialog window). Outside RStudio the
+#'   system browser is always used.
 #' @inheritDotParams episerver_connect encrypt trust_certificate
 #'
 #' @return In background mode, invisibly returns the `callr` process handle.
@@ -24,6 +31,11 @@
 #'
 #' @details
 #' **Options**
+#'
+#' The sidebar's sections hold the options: *Events* (dataset, diagnosis
+#' codes and search), *Population* (population and geographic level), *Time
+#' periods* (calendar years and pooling) and *Rate details* (ages, standard
+#' population, rate per, suppression, and male and female).
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
@@ -60,12 +72,17 @@
 #'   the range. Rates are per population of those ages, and can be compared
 #'   only with rates for the same ages and standard population.
 #' * *Male and female*: adds male and female rates to the rates for persons.
-#' * *Age-specific rates*: adds a table of rates by 5-year age group, for the
-#'   ages chosen.
 #' * *Rate per*: 1,000, 10,000 or 100,000 population.
 #' * *Suppress counts below*: rows with fewer events than this have their
 #'   events and rates withheld (see [dsr_calculate()]). The default is 5; 0
 #'   turns suppression off.
+#' * *Minimum events for a DSR* and *Minimum population per age group*: a
+#'   row's age-standardised rate is not presented (n.p.) when it has fewer
+#'   events in total, or a population under the minimum in any of its age
+#'   groups, as the AIHW (2011) principles for direct age-standardisation
+#'   advise (Principles 3 and 2), which the ABS applies (ABS 2011). The
+#'   defaults are the principles' 20 and 30; 0 turns a check off. The row's
+#'   counts and crude rate are still shown.
 #' * *Diagnosis codes*: counts only events with a diagnosis matching any of
 #'   the ICD-10 codes or ranges entered, for example `J45`, `C13-C15.45` or
 #'   `E18.3 to E18.78`. A partial code matches every code that starts with
@@ -82,9 +99,12 @@
 #'
 #' **Tables, maps and funnel plot**
 #'
-#' The *Tables* tab shows the rates and, when chosen, the age-specific
-#' rates. *Copy table* copies a table as tab-separated text that pastes into
-#' Excel.
+#' The *Tables* tab shows the rates, the *Age-specific rates* by 5-year age
+#' group for the ages chosen, or the *Counts by age*: the events and the
+#' population of each age group, one row of each for every year or period,
+#' area and sex, with populations under the minimum per age group and event
+#' totals under the minimum for a DSR highlighted. *Copy table* copies the
+#' table shown as tab-separated text that pastes into Excel.
 #'
 #' The *Map* tab maps the age-standardised rate, crude rate, age-specific
 #' rate or events of one year or period and sex by area. The age-specific
@@ -117,8 +137,8 @@
 #' * DSRs are plotted against the population that would give the DSR as a
 #'   crude rate from the area's events (events / DSR), as in the funnel plots
 #'   of the Office for Health Improvement and Disparities (OHID). The average
-#'   is the events of all the areas over their derived populations. DSRs from
-#'   fewer than 10 events are not plotted.
+#'   is the events of the areas plotted over their derived populations. Areas
+#'   whose DSR is not presented (n.p.) are left out.
 #' * Events are divided by the events expected from the age-specific rates of
 #'   all the areas plotted (indirect standardisation) and plotted against the
 #'   expected events, as counts alone cannot be compared between areas of
@@ -137,7 +157,7 @@
 #' chi-squared test; with fewer than 10 areas the estimate is unreliable.
 #' Suppressed areas are neither plotted nor included in the average. Areas
 #' above the limits are coral (99.8%) and yellow (95%), and areas below them
-#' teal (99.8%) and blue (95%), from the ACT Government's regional colours.
+#' blue (99.8%) and green (95%), from the ACT Government's regional colours.
 #'
 #' The *Help* tab gives the formulas for each rate, confidence interval and
 #' funnel plot limit, the tables and fields used, the boundary services and
@@ -175,11 +195,20 @@
 #' the age groups in range when the ages are limited and that assign each
 #' year to its period when the years are pooled, and the
 #' [dsr_calculate()] call, with the suppression threshold, that turns their
-#' results into the table shown. The code reproduces the results outside the
+#' results into the table shown, and the [dsr_age_specific()] call when the
+#' age-specific rates are shown. The code reproduces the results outside the
 #' calculator and can be adapted, for example by adding conditions to the
 #' events query.
 #'
 #' @references
+#' Australian Bureau of Statistics (2011). *Deaths, Australia, 2010*, Appendix
+#' 1: Principles on the use of direct age-standardisation. Cat. no. 3302.0.
+#'
+#' Australian Institute of Health and Welfare (2011). *Principles on the use of
+#' direct age-standardisation in administrative data collections: for
+#' measuring the gap between Indigenous and non-Indigenous Australians*. Cat.
+#' no. CSI 12. Canberra: AIHW.
+#'
 #' Spiegelhalter DJ (2005). Funnel plots for comparing institutional
 #' performance. *Statistics in Medicine*, 24(8), 1185-1202.
 #'
@@ -199,11 +228,12 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Launch in a background process; console stays free
+#' # Launch in a background process and open it in the web browser; the
+#' # console stays free
 #' episerver_dsr()
 #'
-#' # Open in the system web browser
-#' episerver_dsr(display = "browser")
+#' # Open in the RStudio Viewer pane
+#' episerver_dsr(display = "viewer")
 #'
 #' # Stop the background app
 #' episerver_dsr_stop()
@@ -212,7 +242,7 @@
 #' @author Warren Holroyd
 #'
 episerver_dsr <- function(background = TRUE,
-                          display = c("viewer", "window", "browser"),
+                          display = c("browser", "viewer", "window"),
                           port = NULL,
                           driver = NULL, max_attempts = NULL, ...) {
 
@@ -806,8 +836,12 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 
 # ── Descriptions and code ───────────────────────────────────────────────────
 
+# The events, population and areas of the results in words, with the years
+# and the ages unless `years` or `ages` is FALSE, and the standard population
+# when it is named
 #' @noRd
-.dsr_describe <- function(spec, standard_name = NULL, years = TRUE) {
+.dsr_describe <- function(spec, standard_name = NULL, years = TRUE,
+                          ages = TRUE) {
   n <- spec$years[2] - spec$years[1] + 1L
   years <- if (!years) {
     NULL
@@ -823,7 +857,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
   }
   level <- .dsr_area_label(spec$level)
   if (spec$level == "state") level <- tolower(level)
-  ages  <- .dsr_ages_text(spec$ages)
+  ages  <- if (ages) .dsr_ages_text(spec$ages)
   codes <- spec$codes$Label
   diagnosis <- if (length(codes)) {
     paste0(", ", if (spec$diagnosis == "all") "any" else "principal",
@@ -849,15 +883,27 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 #' @noRd
 .dsr_code <- function(spec, by_sex = FALSE, age_specific = FALSE,
                       multiplier = 100000, standard_name = NULL,
-                      suppress = 0) {
+                      suppress = 0, min_events = 0, min_population = 0) {
 
+  num <- function(x) format(x, scientific = FALSE)
   args <- paste0(
     "  by = c(\"", .dsr_time(spec), "\", \"Area\"), by_sex = ",
     if (by_sex) "TRUE" else "FALSE",
-    ", multiplier = ", format(multiplier, scientific = FALSE),
-    if (suppress > 0) paste0(", suppress = ", format(suppress, scientific = FALSE)),
+    ", multiplier = ", num(multiplier),
+    if (suppress > 0) paste0(", suppress = ", num(suppress)),
     "\n"
   )
+  # The minimums for presenting a DSR apply to dsr_calculate() only
+  minimums <- c(if (min_events > 0) paste0("min_events = ", num(min_events)),
+                if (min_population > 0) {
+                  paste0("min_population = ", num(min_population))
+                })
+  dsr_args <- if (length(minimums)) {
+    paste0(sub("\n$", ",\n", args), "  ", paste(minimums, collapse = ", "),
+           "\n")
+  } else {
+    args
+  }
 
   # Same rows as .dsr_truncate()
   truncation <- if (!is.null(.dsr_ages_text(spec$ages))) {
@@ -904,7 +950,7 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     pooling,
     "rates <- actepir::dsr_calculate(\n",
     "  events, population, standard,\n",
-    args,
+    dsr_args,
     ")\n",
     if (age_specific) {
       paste0(
@@ -949,7 +995,10 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
                     "DSR", "DSRLower", "DSRUpper")
     rate_heads <- list("Crude rate (95% CI)", "Age-standardised rate (95% CI)")
   }
-  df <- df[, c(id_cols, "Events", "Population", rate_cols)]
+  # The reason a DSR is not presented rides in a hidden last column
+  note <- !age && !is.null(df$DSRNote)
+  df <- df[, c(id_cols, "Events", "Population", rate_cols,
+               if (note) "DSRNote")]
 
   heads <- c(Year = "Year", Period = "Period", Area = area_label, Sex = "Sex",
              AgeGroupName = "Age group")[id_cols]
@@ -960,7 +1009,8 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
                function(h) htmltools::tags$th(rowspan = 2, h)),
         lapply(rate_heads,
                function(h) htmltools::tags$th(colspan = 3, h,
-                                               style = "text-align: center;"))
+                                               style = "text-align: center;")),
+        if (note) htmltools::tags$th(rowspan = 2, "Note")
       ),
       htmltools::tags$tr(
         lapply(rep(c("Rate", "Lower", "Upper"), length(rate_heads)),
@@ -977,6 +1027,27 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
        return type === 'display' ?
          DTWidget.formatRound(data, 0, 3, ',', '.', null) : data;
      }", .fmt_count(suppress)))
+  # A DSR that is not presented reads n.p., with the reason on pointing
+  dsr <- DT::JS(sprintf(
+    "function(data, type, row) {
+       var note = row[%d];
+       if (data === null) {
+         if (type !== 'display') return -1;
+         return note ? '<span title=\"' + note + '\">n.p.</span>' : '';
+       }
+       return type === 'display' ?
+         DTWidget.formatRound(data, %d, 3, ',', '.', null) : data;
+     }", ncol(df) - 1L, digits))
+  dsr_cols <- intersect(c("DSR", "DSRLower", "DSRUpper"), rate_cols)
+
+  defs <- list(list(targets = match("Events", names(df)) - 1L,
+                    render = events))
+  if (note) {
+    defs <- c(defs, list(
+      list(targets = match(dsr_cols, names(df)) - 1L, render = dsr),
+      list(targets = ncol(df) - 1L, visible = FALSE)
+    ))
+  }
 
   tbl <- DT::datatable(
     df,
@@ -984,19 +1055,19 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     rownames  = FALSE,
     selection = "none",
     class     = "compact stripe hover",
-    style     = "bootstrap",
+    style     = "bootstrap5",
     options   = list(
       dom        = if (long) "ftip" else "ft",
       paging     = long,
       pageLength = 100,
       scrollX    = TRUE,
       autoWidth  = FALSE,
-      columnDefs = list(list(targets = match("Events", names(df)) - 1L,
-                             render = events))
+      columnDefs = defs
     )
   )
   tbl <- DT::formatRound(tbl, "Population", digits = 0, mark = ",")
-  DT::formatRound(tbl, rate_cols, digits = digits, mark = ",")
+  DT::formatRound(tbl, if (note) setdiff(rate_cols, dsr_cols) else rate_cols,
+                  digits = digits, mark = ",")
 
 }
 
@@ -1035,12 +1106,150 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
            format(df$Events, scientific = FALSE, trim = TRUE)),
     format(df$Population, scientific = FALSE, trim = TRUE)
   ))
+  # A DSR that is not presented reads n.p.
   out <- c(out, lapply(names(rates), function(col) {
-    ifelse(is.na(df[[col]]), "",
-           formatC(df[[col]], format = "f", digits = digits))
+    x <- ifelse(is.na(df[[col]]), "",
+                formatC(df[[col]], format = "f", digits = digits))
+    if (startsWith(col, "DSR") && !is.null(df$DSRNote)) {
+      x[!is.na(df$DSRNote)] <- "n.p."
+    }
+    x
   }))
 
   lines <- c(paste(c(heads, "Events", "Population", rates), collapse = "\t"),
+             do.call(paste, c(out, sep = "\t")))
+  paste0(paste(lines, collapse = "\n"), "\n")
+
+}
+
+
+# Events and populations by age group, with the age groups across: one row of
+# each for every group and sex, from the same counts as the rates
+# (.dsr_strata()), and their total over the ages. Events below `suppress`,
+# zero included, are NA, as in the rates, in each age group and in the total.
+#' @noRd
+.dsr_counts <- function(events, population, by, by_sex = FALSE,
+                        suppress = 0) {
+
+  d    <- .dsr_strata(events, population, by, by_sex)$data
+  ages <- sort(unique(d$AgeGroup))
+  keys <- unique(d[c(by, "Sex")])
+  keys <- keys[.dsr_order(keys, c(by, "Sex")), , drop = FALSE]
+  k    <- .dsr_keys(d, keys, c(by, "Sex"))
+  cell <- cbind(match(k$x, k$y), match(d$AgeGroup, ages))
+
+  # Rows alternate events and population; an age group with no population
+  # row counts 0 of each
+  n <- nrow(keys)
+  counts <- matrix(0, 2 * n, length(ages),
+                   dimnames = list(NULL, .dsr_age_labels[ages]))
+  counts[cbind(2 * cell[, 1] - 1, cell[, 2])] <- d$Events
+  counts[cbind(2 * cell[, 1], cell[, 2])]     <- d$Population
+  total <- rowSums(counts)
+
+  is_events <- rep(c(TRUE, FALSE), n)
+  counts[counts < suppress & is_events] <- NA
+  total[total < suppress & is_events] <- NA
+
+  out <- keys[rep(seq_len(n), each = 2), , drop = FALSE]
+  out$Count <- rep(c("Events", "Population"), n)
+  out <- cbind(out, as.data.frame(counts, check.names = FALSE))
+  out[["All ages"]] <- total
+  rownames(out) <- NULL
+  out
+
+}
+
+
+# DataTable of .dsr_counts(): suppressed events read "<suppress", and
+# populations under min_population and event totals under min_events, the
+# minimums for a DSR, are highlighted
+#' @noRd
+.dsr_counts_datatable <- function(df, area_label, suppress = 0,
+                                  min_events = 0, min_population = 0) {
+
+  time  <- if ("Period" %in% names(df)) "Period" else "Year"
+  ages  <- setdiff(names(df), c(time, "Area", "Sex", "Count", "All ages"))
+  heads <- c(time, area_label, "Sex", "Count")
+  sketch <- htmltools::tags$table(
+    htmltools::tags$thead(
+      htmltools::tags$tr(
+        lapply(heads, function(h) htmltools::tags$th(rowspan = 2, h)),
+        htmltools::tags$th(colspan = length(ages), "Age group",
+                           style = "text-align: center;"),
+        htmltools::tags$th(rowspan = 2, "All ages")
+      ),
+      htmltools::tags$tr(lapply(ages, htmltools::tags$th))
+    )
+  )
+
+  # row[3], the Count column, says whether the row is events or population. A
+  # cell is highlighted when it is a population under min_population (in an
+  # age group) or an event total under min_events, suppressed totals included
+  # when the suppression threshold is no higher than min_events.
+  count <- function(total) {
+    DT::JS(sprintf(
+      "function(data, type, row) {
+         var events = row[3] === 'Events';
+         if (type !== 'display') return data === null ? -1 : data;
+         var text = data === null ? '&lt;%s' :
+           DTWidget.formatRound(data, 0, 3, ',', '.', null);
+         var short = %s ?
+           (events && %s > 0 && (data === null ? %s <= %s : data < %s)) :
+           (!events && %s > 0 && data < %s);
+         return short ? '<span class=\"dsr-short\">' + text + '</span>' : text;
+       }",
+      .fmt_count(suppress), if (total) "true" else "false",
+      min_events, suppress, min_events, min_events,
+      min_population, min_population))
+  }
+
+  long <- nrow(df) > 100
+  DT::datatable(
+    df,
+    container = sketch,
+    rownames  = FALSE,
+    selection = "none",
+    class     = "compact stripe hover",
+    style     = "bootstrap5",
+    options   = list(
+      dom        = if (long) "ftip" else "ft",
+      paging     = long,
+      pageLength = 100,
+      ordering   = FALSE,
+      scrollX    = TRUE,
+      autoWidth  = FALSE,
+      columnDefs = list(
+        list(targets = match(ages, names(df)) - 1L, render = count(FALSE),
+             className = "dt-right"),
+        list(targets = ncol(df) - 1L, render = count(TRUE),
+             className = "dt-right")
+      )
+    )
+  )
+
+}
+
+
+# .dsr_counts() as tab-separated text for pasting into a spreadsheet, with
+# suppressed events written as "<suppress"
+#' @noRd
+.dsr_counts_tsv <- function(df, area_label, suppress = 0) {
+
+  time <- if ("Period" %in% names(df)) "Period" else "Year"
+  cols <- setdiff(names(df), c(time, "Area", "Sex", "Count"))
+  # An en dash keeps Excel from reading 5-9 or 2016-2018 as a date
+  dash <- function(x) gsub("-", "\u2013", x, fixed = TRUE)
+
+  out <- list(dash(as.character(df[[time]])), as.character(df$Area),
+              df$Sex, df$Count)
+  out <- c(out, lapply(cols, function(col) {
+    ifelse(is.na(df[[col]]), paste0("<", .fmt_count(suppress)),
+           format(df[[col]], scientific = FALSE, trim = TRUE))
+  }))
+
+  lines <- c(paste(c(time, area_label, "Sex", "Count", dash(cols)),
+                   collapse = "\t"),
              do.call(paste, c(out, sep = "\t")))
   paste0(paste(lines, collapse = "\n"), "\n")
 
@@ -1106,7 +1315,9 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
     paste0(.fmt_count(row$Events[1]), " events, population ",
            .fmt_count(row$Population[1]), ", crude rate ",
            num(row$Crude[1]), ", DSR ",
-           if (is.na(row$DSR[1])) "not calculated" else paste0(
+           if (!is.null(row$DSRNote) && !is.na(row$DSRNote[1])) {
+             paste0("not presented (", row$DSRNote[1], ")")
+           } else if (is.na(row$DSR[1])) "not calculated" else paste0(
              num(row$DSR[1]), " (95% CI ", num(row$DSRLower[1]), " to ",
              num(row$DSRUpper[1]), ")"),
            ".")
@@ -1127,11 +1338,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
   # ── Check dependencies ────────────────────────────────────────────────────
   if (!requireNamespace("shiny", quietly = TRUE) ||
-      !requireNamespace("miniUI", quietly = TRUE) ||
+      !requireNamespace("bslib", quietly = TRUE) ||
       !requireNamespace("DT", quietly = TRUE)) {
     stop(
-      "The 'shiny', 'miniUI', and 'DT' packages are required for episerver_dsr().\n",
-      "Install them with: install.packages(c('shiny', 'miniUI', 'DT'))",
+      "The 'shiny', 'bslib', and 'DT' packages are required for episerver_dsr().\n",
+      "Install them with: install.packages(c('shiny', 'bslib', 'DT'))",
       call. = FALSE
     )
   }
@@ -1199,25 +1410,50 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   code_button_label <- if (in_rstudio) "Insert Code" else "Copy Code"
 
   # ── UI ────────────────────────────────────────────────────────────────────
-  ui <- miniUI::miniPage(
+  # The settings are in a sidebar, in sections that open and close, and the
+  # results in tabs on the top bar, so that the results have the rest of the
+  # window
+  ui <- bslib::page_navbar(
 
-    miniUI::gadgetTitleBar(
-      "DSR Calculator",
-      left  = NULL,
-      right = miniUI::miniTitleBarButton("done", "Done", primary = TRUE)
-    ),
+    title        = shiny::span(class = "epi-brand",
+                               .epi_logo(class = "epi-logo"), "DSR Calculator"),
+    window_title = "DSR Calculator",
+    id           = "view",
+    theme        = .epi_theme(),
+    fillable     = FALSE,
 
-    miniUI::miniContentPanel(
+    header = shiny::tagList(
 
       .epi_app_style(),
 
-      # Calculator-only rules: wrapping selector rows for the Viewer pane,
-      # slider spacing, notes, the error bar, table headings, tabs and the
-      # diagnosis code tags
+      # Calculator-only rules: the top bar, the sidebar, wrapping selector
+      # rows, notes, the error bar, table headings and the diagnosis code tags
       shiny::tags$style(shiny::HTML("
+        /* Top bar: the logo at the brand's minimum size, a crest 60px
+           across, with clear space equal to the height of its ACT
+           lettering, 22px */
+        .navbar { --bs-navbar-padding-y: 0; }
+        .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
+        .navbar-brand { display: flex; padding: 22px 0; margin-right: 22px; }
+        .epi-brand { display: flex; align-items: center; gap: 22px; }
+        .epi-logo { height: 60px; }
+        /* Sidebar: Lavender tint, with Calculate and Copy Code in view at
+           its foot across its full width. The bar stays above what
+           scrolls under it, such as a focused section heading (z-index 3)
+           and slider handles, and below open dropdowns (1000). */
+        :root { --bslib-sidebar-bg: #f7f4fd; }
+        .sidebar .accordion { --bs-accordion-bg: transparent; }
+        .dsr-actions {
+          --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
+          position: sticky; bottom: 0; z-index: 20;
+          display: flex; gap: 8px;
+          margin: 0 calc(-1 * var(--dsr-pad));
+          padding: 10px var(--dsr-pad);
+          background-color: var(--bslib-sidebar-bg);
+          border-top: 1px solid #e6e5e5;
+        }
         .dsr-row { flex-wrap: wrap; }
         .dsr-row > * { min-width: 200px; }
-        .selector-row .irs { margin-top: -4px; }
         .info-bar p { margin: 0 0 4px 0; }
         .info-bar p:last-child { margin-bottom: 0; }
         .info-bar .epi-warn { color: #8a5300; }
@@ -1229,12 +1465,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .epi-table-head h5 { color: var(--epi-primary); font-weight: 600;
                              margin: 0; }
         .tab-pane .epi-table-head + div { margin-bottom: 14px; }
-        .nav-tabs { margin: 6px 0 12px 0; }
-        .nav-tabs > li > a { color: var(--epi-accent); }
-        .nav-tabs > li > a:hover { background-color: var(--epi-info-bg); }
-        .nav-tabs > li.active > a, .nav-tabs > li.active > a:hover,
-        .nav-tabs > li.active > a:focus { color: var(--epi-primary);
-                                          font-weight: 600; }
         .selectize-control.multi .selectize-input > div {
           background: var(--epi-info-bg); color: var(--epi-primary);
           border-radius: 3px;
@@ -1259,11 +1489,19 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .help h5:first-child { margin-top: 4px; }
         .help-scroll { overflow-x: auto; }
         .help-table td, .help-table th { vertical-align: top; }
-        .help-table code { white-space: normal; overflow-wrap: anywhere; }
+        .help-table code { white-space: normal; overflow-wrap: break-word; }
         .help-formula { background: #f7f4fd; border-left: 3px solid #DCC8FA;
                         padding: 4px 10px; margin: 4px 0 8px 0;
                         font-family: Georgia, 'Times New Roman', serif; }
         .help-refs li { margin-bottom: 4px; }
+        /* Counts by age: below a minimum for a DSR (light regional yellow) */
+        .dsr-short { background: #F1ECC2; padding: 1px 4px;
+                     border-radius: 2px; }
+        /* Shown in place of Shiny's grey overlay once Done stops the app */
+        .epi-stopped { position: fixed; inset: 0; z-index: 100000;
+                       display: flex; flex-direction: column;
+                       align-items: center; justify-content: center;
+                       background: #fff; color: var(--epi-primary); }
       ")),
 
       # Clipboard handler for the code and table copy buttons
@@ -1371,95 +1609,39 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         });
       ")),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::selectInput(
-          "dataset", "Dataset",
-          choices = c("ED presentations" = "ED", "APC separations" = "APC"),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "scope", "Population",
-          choices = stats::setNames(
-            names(.dsr_scopes),
-            vapply(.dsr_scopes, `[[`, character(1), "label")
-          ),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "level", "Geographic level",
-          choices = stats::setNames(
-            names(.dsr_levels),
-            vapply(names(.dsr_levels), .dsr_area_label, character(1))
-          ),
-          width = "100%"
-        ),
-        shiny::selectInput(
-          "standard", "Standard population",
-          choices  = std_choices,
-          selected = if ("101" %in% std_choices) "101" else std_choices[1],
-          width = "100%"
-        )
-      ),
+      # Done stops the app. A browser tab stays open afterwards, so it says
+      # so instead of greying out.
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          var stopping = false;
+          $(document).on('click', '#done', function() { stopping = true; });
+          $(document).on('shiny:disconnected', function() {
+            if (!stopping) return;
+            $('<div class=\"epi-stopped\">')
+              .append('<h4>The DSR Calculator has stopped.</h4>')
+              .append('<p>Start it again with actepir::episerver_dsr().</p>')
+              .appendTo('body');
+          });
+        })();
+      ")),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::sliderInput(
-            "years", "Calendar years",
-            min = init$min, max = init$max,
-            value = .dsr_default_years(init),
-            step = 1, sep = "", ticks = FALSE, width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::sliderInput(
-            "ages", "Ages",
-            min = 1, max = length(.dsr_age_labels),
-            value = c(1, length(.dsr_age_labels)),
-            step = 1, ticks = FALSE, width = "100%"
-          )
-        )
-      ),
+      # Info bar: what is shown, what was left out, and any warnings
+      shiny::conditionalPanel("input.view !== 'help'",
+                              shiny::uiOutput("info_bar"))
+    ),
 
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 1 1 0;",
+    # Not resizable: the resize handle would cover the sidebar's scrollbar
+    sidebar = bslib::sidebar(
+      id = "settings", width = 340, open = "desktop", resizable = FALSE,
+      bslib::accordion(
+        id = "settings_sections", open = TRUE, multiple = TRUE,
+        bslib::accordion_panel(
+          "Events", value = "events",
           shiny::selectInput(
-            "pool", "Pool years",
-            choices = c("None" = "1", "2 years" = "2", "3 years" = "3",
-                        "4 years" = "4", "5 years" = "5",
-                        "All selected years" = "all"),
+            "dataset", "Dataset",
+            choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::selectInput(
-            "multiplier", "Rate per",
-            choices  = c("1,000" = "1000", "10,000" = "10000",
-                         "100,000" = "100000"),
-            selected = "100000",
-            width = "100%"
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
-          shiny::numericInput(
-            "suppress", "Suppress counts below",
-            value = 5, min = 0, step = 1, width = "100%"
-          )
-        )
-      ),
-      shiny::uiOutput("years_note"),
-
-      shiny::div(
-        class = "selector-row dsr-row",
-        shiny::div(
-          style = "flex: 3 1 0;",
+          ),
           shiny::selectizeInput(
             "codes", "Diagnosis codes",
             choices = NULL, multiple = TRUE, width = "100%",
@@ -1470,28 +1652,95 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               delimiter    = ",",
               splitOn      = I("/\\s*[,;]+\\s*/"),
               plugins      = list("remove_button"),
-              placeholder  = paste("All events. Type a code or range,",
-                                   "e.g. J45 or C13-C15.45, then Enter")
+              placeholder  = "All events. Type a code, then Enter"
             )
-          )
-        ),
-        shiny::div(
-          style = "flex: 1 1 0;",
+          ),
+          shiny::uiOutput("codes_note"),
           shiny::radioButtons(
             "diagnosis", "Search",
             choices = c("Principal diagnosis" = "principal",
                         "Any diagnosis" = "all")
           )
+        ),
+        bslib::accordion_panel(
+          "Population", value = "population",
+          shiny::selectInput(
+            "scope", "Population",
+            choices = stats::setNames(
+              names(.dsr_scopes),
+              vapply(.dsr_scopes, `[[`, character(1), "label")
+            ),
+            width = "100%"
+          ),
+          shiny::selectInput(
+            "level", "Geographic level",
+            choices = stats::setNames(
+              names(.dsr_levels),
+              vapply(names(.dsr_levels), .dsr_area_label, character(1))
+            ),
+            width = "100%"
+          )
+        ),
+        bslib::accordion_panel(
+          "Time periods", value = "time",
+          shiny::sliderInput(
+            "years", "Calendar years",
+            min = init$min, max = init$max,
+            value = .dsr_default_years(init),
+            step = 1, sep = "", ticks = FALSE, width = "100%"
+          ),
+          shiny::selectInput(
+            "pool", "Pool years",
+            choices = c("None" = "1", "2 years" = "2", "3 years" = "3",
+                        "4 years" = "4", "5 years" = "5",
+                        "All selected years" = "all"),
+            width = "100%"
+          ),
+          shiny::uiOutput("years_note")
+        ),
+        bslib::accordion_panel(
+          "Rate details", value = "rate",
+          shiny::sliderInput(
+            "ages", "Ages",
+            min = 1, max = length(.dsr_age_labels),
+            value = c(1, length(.dsr_age_labels)),
+            step = 1, ticks = FALSE, width = "100%"
+          ),
+          shiny::selectInput(
+            "standard", "Standard population",
+            choices  = std_choices,
+            selected = if ("101" %in% std_choices) "101" else std_choices[1],
+            width = "100%"
+          ),
+          shiny::selectInput(
+            "multiplier", "Rate per",
+            choices  = c("1,000" = "1000", "10,000" = "10000",
+                         "100,000" = "100000"),
+            selected = "100000",
+            width = "100%"
+          ),
+          shiny::numericInput(
+            "suppress", "Suppress counts below",
+            value = 5, min = 0, step = 1, width = "100%"
+          ),
+          shiny::numericInput(
+            "min_events", "Minimum events for a DSR",
+            value = 20, min = 0, step = 1, width = "100%"
+          ),
+          shiny::numericInput(
+            "min_population", "Minimum population per age group",
+            value = 30, min = 0, step = 1, width = "100%"
+          ),
+          shiny::div(
+            class = "epi-note",
+            "Below these, age-standardised rates are not presented (n.p.), ",
+            "as the AIHW (2011) principles advise. 0 turns a check off."
+          ),
+          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
         )
       ),
-      shiny::uiOutput("codes_note"),
-
-      # Info bar: what is shown, what was left out, and any warnings
-      shiny::uiOutput("info_bar"),
-
-      # Options row
       shiny::div(
-        class = "options-row",
+        class = "dsr-actions",
         shiny::actionButton(
           "calculate", "Calculate",
           icon  = shiny::icon("calculator"),
@@ -1501,100 +1750,93 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "insert_code", code_button_label,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
-        ),
-        # Spacer pushes the display options to the right of the row
-        shiny::div(style = "flex: 1 1 auto;"),
-        shiny::checkboxInput("by_sex", "Male and female", value = FALSE,
-                             width = "auto"),
-        shiny::checkboxInput("age_specific", "Age-specific rates", value = FALSE,
-                             width = "auto")
-      ),
-
-      shiny::tabsetPanel(
-        id = "view",
-
-        shiny::tabPanel(
-          "Tables", value = "tables",
-          shiny::div(
-            class = "epi-table-head",
-            shiny::h5("Rates"),
-            shiny::actionButton("copy_summary", "Copy table",
-                                icon = shiny::icon("copy"),
-                                class = "btn-sm btn-primary")
-          ),
-          DT::dataTableOutput("summary_table"),
-          shiny::conditionalPanel(
-            "input.age_specific",
-            shiny::div(
-              class = "epi-table-head",
-              shiny::h5("Age-specific rates"),
-              shiny::actionButton("copy_age", "Copy table",
-                                  icon = shiny::icon("copy"),
-                                  class = "btn-sm btn-primary")
-            ),
-            DT::dataTableOutput("age_table")
-          ),
-          shiny::uiOutput("footnote")
-        ),
-
-        shiny::tabPanel(
-          "Map", value = "map",
-          .dsr_map_controls("map"),
-          shiny::div(
-            class = "options-row",
-            shiny::actionButton("copy_map", "Copy map",
-                                icon = shiny::icon("copy"),
-                                class = "btn-sm btn-primary"),
-            shiny::downloadButton("map_png", "PNG",
-                                  class = "btn-sm btn-primary"),
-            shiny::downloadButton("map_pdf", "PDF",
-                                  class = "btn-sm btn-primary")
-          ),
-          shiny::uiOutput("map_note"),
-          shiny::plotOutput("map", height = "560px", click = "map_click"),
-          shiny::uiOutput("map_click_info")
-        ),
-
-        shiny::tabPanel(
-          "Explore", value = "explore",
-          .dsr_map_controls("ex"),
-          shiny::div(
-            class = "options-row",
-            shiny::selectInput(
-              "ex_colour", "Colour the map by",
-              choices = c("Value" = "value",
-                          "Position in the funnel plot" = "position"),
-              width = "220px"
-            ),
-            shiny::checkboxInput("ex_overdispersion",
-                                 "Allow for overdispersion", value = TRUE,
-                                 width = "auto"),
-            shiny::actionButton("ex_zoom", "Zoom to selected",
-                                icon = shiny::icon("magnifying-glass-plus"),
-                                class = "btn-sm btn-primary"),
-            shiny::actionButton("ex_reset", "Show all",
-                                icon = shiny::icon("expand"),
-                                class = "btn-sm btn-primary"),
-            shiny::actionButton("ex_clear", "Clear selection",
-                                icon = shiny::icon("xmark"),
-                                class = "btn-sm btn-primary")
-          ),
-          shiny::uiOutput("ex_note"),
-          shiny::uiOutput("ex_heading"),
-          shiny::div(
-            class = "explore-row",
-            shiny::div(class = "explore-panel",
-                       ggiraph::girafeOutput("ex_map")),
-            shiny::div(class = "explore-panel",
-                       ggiraph::girafeOutput("ex_funnel"))
-          ),
-          shiny::uiOutput("ex_method"),
-          shiny::uiOutput("ex_selected")
-        ),
-
-        shiny::tabPanel("Help", value = "help", .dsr_help())
+        )
       )
+    ),
 
+    bslib::nav_panel(
+      "Tables", value = "tables",
+      # The rates or the age-specific rates, with a button that copies the
+      # table shown
+      bslib::navset_pill(
+        id = "table",
+        bslib::nav_panel("Rates", value = "rates",
+                         DT::dataTableOutput("summary_table")),
+        bslib::nav_panel("Age-specific rates", value = "age",
+                         DT::dataTableOutput("age_table")),
+        bslib::nav_panel("Counts by age", value = "counts",
+                         shiny::uiOutput("counts_note"),
+                         DT::dataTableOutput("counts_table")),
+        bslib::nav_spacer(),
+        bslib::nav_item(
+          shiny::actionButton("copy_table", "Copy table",
+                              icon = shiny::icon("copy"),
+                              class = "btn-sm btn-primary")
+        )
+      ),
+      shiny::uiOutput("footnote")
+    ),
+
+    bslib::nav_panel(
+      "Map", value = "map",
+      .dsr_map_controls("map"),
+      shiny::div(
+        class = "options-row",
+        shiny::actionButton("copy_map", "Copy map",
+                            icon = shiny::icon("copy"),
+                            class = "btn-sm btn-primary"),
+        shiny::downloadButton("map_png", "PNG",
+                              class = "btn-sm btn-primary"),
+        shiny::downloadButton("map_pdf", "PDF",
+                              class = "btn-sm btn-primary")
+      ),
+      shiny::uiOutput("map_note"),
+      shiny::plotOutput("map", height = "560px", click = "map_click"),
+      shiny::uiOutput("map_click_info")
+    ),
+
+    bslib::nav_panel(
+      "Explore", value = "explore",
+      .dsr_map_controls("ex"),
+      shiny::div(
+        class = "options-row",
+        shiny::selectInput(
+          "ex_colour", "Colour the map by",
+          choices = c("Value" = "value",
+                      "Position in the funnel plot" = "position"),
+          width = "220px"
+        ),
+        shiny::checkboxInput("ex_overdispersion",
+                             "Allow for overdispersion", value = TRUE,
+                             width = "auto"),
+        shiny::actionButton("ex_zoom", "Zoom to selected",
+                            icon = shiny::icon("magnifying-glass-plus"),
+                            class = "btn-sm btn-primary"),
+        shiny::actionButton("ex_reset", "Show all",
+                            icon = shiny::icon("expand"),
+                            class = "btn-sm btn-primary"),
+        shiny::actionButton("ex_clear", "Clear selection",
+                            icon = shiny::icon("xmark"),
+                            class = "btn-sm btn-primary")
+      ),
+      shiny::uiOutput("ex_note"),
+      shiny::uiOutput("ex_heading"),
+      shiny::div(
+        class = "explore-row",
+        shiny::div(class = "explore-panel",
+                   ggiraph::girafeOutput("ex_map")),
+        shiny::div(class = "explore-panel",
+                   ggiraph::girafeOutput("ex_funnel"))
+      ),
+      shiny::uiOutput("ex_method"),
+      shiny::uiOutput("ex_selected")
+    ),
+
+    bslib::nav_panel("Help", value = "help", .dsr_help()),
+
+    bslib::nav_spacer(),
+    bslib::nav_item(
+      shiny::actionButton("done", "Done", class = "btn-sm btn-primary")
     )
   )
 
@@ -1642,13 +1884,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
     spec <- shiny::reactive(settings()$spec)
 
-    # A cleared or negative threshold means no suppression, which the info
-    # bar then states. Counts are whole numbers, so a fractional threshold is
-    # rounded up to the equivalent whole one.
-    suppress <- shiny::reactive({
-      s <- input$suppress
+    # A cleared or negative threshold means no suppression, or no check of the
+    # minimums for a DSR, which the info bar then reflects. Counts are whole
+    # numbers, so a fractional threshold is rounded up to the equivalent
+    # whole one.
+    threshold <- function(s) {
       if (is.null(s) || is.na(s) || s < 0) 0 else ceiling(s)
-    })
+    }
+    suppress       <- shiny::reactive(threshold(input$suppress))
+    min_events     <- shiny::reactive(threshold(input$min_events))
+    min_population <- shiny::reactive(threshold(input$min_population))
 
     available <- shiny::reactive({
       shiny::req(input$dataset, input$scope, input$level)
@@ -1764,11 +2009,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         summary <- suppressMessages(dsr_calculate(
           events, population, standard,
           by = by, by_sex = isTRUE(input$by_sex),
-          multiplier = mult, suppress = supp
+          multiplier = mult, suppress = supp,
+          min_events = min_events(), min_population = min_population()
         ))
         list(spec = s, summary = summary, events = events,
              population = population, standard = standard, by = by,
              multiplier = mult, suppress = supp,
+             min_events = min_events(), min_population = min_population(),
              total = sum(events$Events), error = NULL)
       }, error = function(e) list(error = conditionMessage(e)))
     })
@@ -1850,11 +2097,26 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         ))))
       }
 
-      n_na <- sum(is.na(r$summary$DSR) & !r$summary$Suppressed)
-      if (n_na) {
+      # DSRs not presented: below the minimums, which the AIHW (2011)
+      # principles advise, or undefined
+      note <- r$summary$DSRNote
+      undefined <- note %in% "events in an age group with no population"
+      short <- note[!is.na(note) & !undefined]
+      if (length(short)) {
+        n <- table(factor(short, unique(short)))
         notes <- c(notes, list(shiny::p(class = "epi-warn", paste0(
-          "The DSR could not be calculated for ", n_na, " row(s) with events ",
-          "in an age group that has no population."
+          "Age-standardised rates are not presented (n.p.) for ",
+          length(short), " of ", nrow(r$summary), " rows: ",
+          paste0(n, " with ", names(n), collapse = ", "),
+          ", as the AIHW (2011) principles advise. Pooling years or choosing ",
+          "a larger area raises the counts; the crude and age-specific rates ",
+          "are still shown."
+        ))))
+      }
+      if (any(undefined)) {
+        notes <- c(notes, list(shiny::p(class = "epi-warn", paste0(
+          "The DSR could not be calculated for ", sum(undefined), " row(s) ",
+          "with events in an age group that has no population."
         ))))
       }
 
@@ -1882,7 +2144,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     output$age_table <- DT::renderDataTable({
       r <- results()
-      shiny::req(r, is.null(r$error), isTRUE(input$age_specific))
+      shiny::req(r, is.null(r$error))
       .dsr_datatable(age_results(), .dsr_area_label(r$spec$level),
                      r$multiplier, age = TRUE, suppress = r$suppress)
     })
@@ -1895,12 +2157,59 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         style = "margin-top: 6px;",
         "Crude and age-specific rates have exact Poisson confidence intervals; ",
         "DSRs have Dobson et al. (1991) intervals. A blank rate is suppressed ",
-        "or could not be calculated. Persons include sex not stated and other sex."
+        "or could not be calculated, and n.p. marks an age-standardised rate ",
+        "that is not presented: point at it for the reason. Persons include ",
+        "sex not stated and other sex."
       )
     })
 
-    # Copy a table to the clipboard as tab-separated text, ready for Excel
-    copy_table <- function(df, age) {
+    # Events and populations by age group, with the ages across
+    counts <- shiny::reactive({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      .dsr_counts(r$events, r$population, r$by, by_sex = isTRUE(input$by_sex),
+                  suppress = r$suppress)
+    })
+
+    output$counts_table <- DT::renderDataTable({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      .dsr_counts_datatable(counts(), .dsr_area_label(r$spec$level),
+                            suppress = r$suppress, min_events = r$min_events,
+                            min_population = r$min_population)
+    })
+
+    output$counts_note <- shiny::renderUI({
+      r <- results()
+      shiny::req(r, is.null(r$error))
+      short <- c(
+        if (r$min_population > 0) {
+          paste0("populations under ", .fmt_count(r$min_population),
+                 " in an age group")
+        },
+        if (r$min_events > 0) {
+          paste0("event totals under ", .fmt_count(r$min_events))
+        }
+      )
+      shiny::div(
+        class = "epi-note", style = "margin: 8px 0 6px 0;",
+        "The events and population of each age group in the rates. ",
+        if (length(short)) {
+          shiny::tagList(
+            "Highlighted: ",
+            shiny::span(class = "dsr-short", paste(short, collapse = " and "),
+                        .noWS = "outside"),
+            ", below the minimums for an age-standardised rate. "
+          )
+        },
+        if (r$suppress > 0) {
+          paste0("Events under ", .fmt_count(r$suppress), " are suppressed.")
+        }
+      )
+    })
+
+    # Copy table copies the table shown as tab-separated text, ready for Excel
+    shiny::observeEvent(input$copy_table, {
       if (is.null(rv$fetched)) {
         shiny::showNotification("Press Calculate first.", duration = 3,
                                 type = "warning")
@@ -1908,18 +2217,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       r <- results()
       shiny::req(is.null(r$error))
-      .epi_copy_text(
-        session,
-        .dsr_tsv(df(), .dsr_area_label(r$spec$level), r$multiplier, age = age,
-                 suppress = r$suppress),
-        "Table copied to the clipboard"
-      )
-    }
-    shiny::observeEvent(input$copy_summary, {
-      copy_table(function() results()$summary, age = FALSE)
-    })
-    shiny::observeEvent(input$copy_age, {
-      copy_table(age_results, age = TRUE)
+      label <- .dsr_area_label(r$spec$level)
+      text <- if (identical(input$table, "age")) {
+        .dsr_tsv(age_results(), label, r$multiplier, age = TRUE,
+                 suppress = r$suppress)
+      } else if (identical(input$table, "counts")) {
+        .dsr_counts_tsv(counts(), label, suppress = r$suppress)
+      } else {
+        .dsr_tsv(r$summary, label, r$multiplier, suppress = r$suppress)
+      }
+      .epi_copy_text(session, text, "Table copied to the clipboard")
     })
 
     # ── Map and Explore ────────────────────────────────────────────────────
@@ -2027,15 +2334,33 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                                  stringsAsFactors = FALSE))
       })
 
+      # The age groups of the value shown: those mapped for age-specific
+      # rates, otherwise those of the rates. Titles, axes, tooltips and file
+      # names give them with the measure, and subtitles leave them out, so
+      # the map states one age range whatever it shows.
+      value_ages <- function(r) {
+        if (get("value") == "AgeRate") ages() else r$spec$ages
+      }
+      # ... in words: "aged 20 to 44", "all ages" for age-specific rates of
+      # every age, and NULL for other measures of every age
+      ages_label <- function(r) {
+        if (get("value") == "AgeRate") {
+          ages_words(ages())
+        } else if (!is.null(.dsr_ages_text(r$spec$ages))) {
+          ages_words(r$spec$ages)
+        }
+      }
+
       # The measure shown, e.g. "Age-specific rate per 100,000, aged 20 to 44"
       label <- function(r) {
         per <- paste0(" per ", .fmt_count(r$multiplier))
-        switch(get("value"),
-               DSR     = paste0("Age-standardised rate", per),
-               Crude   = paste0("Crude rate", per),
-               AgeRate = paste0("Age-specific rate", per, ", ",
-                                ages_words(ages())),
-               Events  = "Events")
+        a   <- ages_label(r)
+        paste0(switch(get("value"),
+                      DSR     = paste0("Age-standardised rate", per),
+                      Crude   = paste0("Crude rate", per),
+                      AgeRate = paste0("Age-specific rate", per),
+                      Events  = "Events"),
+               if (!is.null(a)) paste0(", ", a))
       }
 
       # Longitude and latitude limits of the map. The ACT, and the ACT and
@@ -2072,18 +2397,30 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
 
       list(get = get, ages = ages, band = band, values = values,
-           label = label, title = title, legend = legend, view = view)
+           value_ages = value_ages, ages_label = ages_label, label = label,
+           title = title, legend = legend, view = view)
     }
 
     # The note under a map on what grey areas are, and the boundaries' credit
-    map_caption <- function(r) {
+    map_caption <- function(r, value) {
+      grey <- c(
+        if (r$suppress > 0) {
+          paste0("fewer than ", .fmt_count(r$suppress), " events (suppressed)")
+        },
+        if (value == "DSR" && any(!is.na(r$summary$DSRNote))) {
+          "DSR not presented (n.p.)"
+        },
+        "no value"
+      )
       paste0(
         "Grey: ",
-        if (r$suppress > 0) {
-          paste0("fewer than ", .fmt_count(r$suppress),
-                 " events (suppressed) or ")
+        if (length(grey) > 1) {
+          paste(paste(grey[-length(grey)], collapse = ", "), "or",
+                grey[length(grey)])
+        } else {
+          grey
         },
-        "no value. Boundaries: ABS ", .dsr_asgs$name, ", CC BY 4.0."
+        ". Boundaries: ABS ", .dsr_asgs$name, ", CC BY 4.0."
       )
     }
 
@@ -2106,8 +2443,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         title    = ms$title(r),
         subtitle = .dsr_describe(s, if (input$map_value == "DSR") {
                                    std_name(s$standard)
-                                 }, years = FALSE),
-        caption  = map_caption(r),
+                                 }, years = FALSE, ages = FALSE),
+        caption  = map_caption(r, input$map_value),
         xlim = view$xlim,
         ylim = view$ylim
       )
@@ -2146,9 +2483,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       m <- map_values()
       row <- m$rows[m$rows$Area == area, ]
       name <- b$polys$Name[match(area, b$polys$Area)]
+      ages <- ms$ages_label(m$r)
       head <- paste0(area_label(m$r$spec), " ", area,
                      if (!is.na(name) && name != area) paste0(" ", name),
-                     if (m$band) paste0(", ", ages_words(map_ages())), ": ")
+                     if (!is.null(ages)) paste0(", ", ages), ": ")
       text <- .dsr_area_text(row, m$band, m$r$suppress, m$r$multiplier)
       shiny::div(class = "map-click", shiny::strong(head), text)
     })
@@ -2161,9 +2499,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     map_file <- function(ext) {
       function() {
-        ages <- if (input$map_value == "AgeRate") {
-          paste0("-", gsub(" ", "-", ages_words(map_ages())))
-        }
+        ages <- ms$ages_label(results())
+        if (!is.null(ages)) ages <- paste0("-", gsub(" ", "-", ages))
         paste0("dsr-map-", tolower(input$map_value), ages, "-", input$map_year,
                "-", tolower(input$map_sex), ".", ext)
       }
@@ -2229,13 +2566,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       nm <- ex_names()
       areas <- unique(c(names(nm), m$rows$Area))
       digits <- if (m$r$multiplier >= 100000) 1 else 2
+      ages <- ex$ages_label(m$r)
       vapply(areas, function(a) {
         row  <- m$rows[m$rows$Area %in% a, , drop = FALSE]
         name <- if (a %in% names(nm)) nm[[a]] else NA
         i    <- match(a, f$points$Area)
         head <- paste0(area_label(m$r$spec), " ", a,
                        if (!is.na(name) && name != a) paste0(" ", name),
-                       if (m$band) paste0(", ", ages_words(ex$ages())))
+                       if (!is.null(ages)) paste0(", ", ages))
         lines <- c(
           paste0("<b>", htmltools::htmlEscape(head), "</b>"),
           htmltools::htmlEscape(
@@ -2310,7 +2648,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           paste0("Grey: not in the funnel plot. Boundaries: ABS ",
                  .dsr_asgs$name, ", CC BY 4.0.")
         } else {
-          map_caption(r)
+          map_caption(r, ex$get("value"))
         },
         xlim = view$xlim, ylim = view$ylim,
         tooltips = ex_tooltips()
@@ -2328,27 +2666,25 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::div(class = "epi-note", style = "margin: 2px 0 0 0;",
                    .dsr_describe(s, if (ex$get("value") == "DSR") {
                      std_name(s$standard)
-                   }, years = FALSE))
+                   }, years = FALSE, ages = FALSE))
       )
     })
 
-    # Axis titles of the funnel plot for the measure
+    # Axis titles of the funnel plot for the measure: a rate is named as in
+    # the title, against the population of the same ages
     ex_axes <- function(f) {
-      a <- if (f$measure == "AgeRate") .dsr_ages_text(ex$ages())
+      r <- ex$values()$r
+      a <- .dsr_ages_text(ex$value_ages(r))
       year <- if (f$years > 1) " a year"
-      per <- paste0(" per ", .fmt_count(f$multiplier))
+      population <- paste0("Population", if (!is.null(a)) paste0(" aged ", a),
+                           year)
       switch(
         f$measure,
         DSR     = list(x = paste0("Population derived from events and DSR",
                                   year),
-                       y = paste0("Age-standardised rate", per)),
-        Crude   = list(x = paste0("Population", year),
-                       y = paste0("Crude rate", per)),
-        AgeRate = list(x = paste0("Population", if (!is.null(a)) {
-                                    paste0(" aged ", a)
-                                  }, year),
-                       y = paste0("Age-specific rate", per,
-                                  if (!is.null(a)) paste0(", aged ", a))),
+                       y = ex$label(r)),
+        Crude   = list(x = population, y = ex$label(r)),
+        AgeRate = list(x = population, y = ex$label(r)),
         Events  = list(x = "Expected events",
                        y = "Observed / expected events")
       )
@@ -2449,9 +2785,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       left_out <- c(
         if (f$suppressed) paste0(f$suppressed, " suppressed"),
         if (f$no_value) paste0(f$no_value, " with no value"),
-        if (f$few_events) {
-          paste0(f$few_events, " with a DSR from fewer than ",
-                 .dsr_funnel_min_dsr, " events")
+        if (f$not_presented) {
+          paste0(f$not_presented, " whose DSR is not presented (n.p.)")
         }
       )
       od <- f$od
@@ -2566,13 +2901,16 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::showNotification(st$error, duration = 6, type = "warning")
         return(invisible(NULL))
       }
+      # The code adds the age-specific rates when their table is shown
       code <- .dsr_code(
         s,
         by_sex        = isTRUE(input$by_sex),
-        age_specific  = isTRUE(input$age_specific),
+        age_specific  = identical(input$table, "age"),
         multiplier    = as.numeric(input$multiplier),
         standard_name = std_name(s$standard),
-        suppress      = suppress()
+        suppress      = suppress(),
+        min_events    = min_events(),
+        min_population = min_population()
       )
       .epi_send_code(session, code)
     })

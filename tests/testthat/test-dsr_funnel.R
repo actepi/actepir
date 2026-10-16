@@ -131,20 +131,32 @@ test_that("crude rates are compared with the overall rate of the areas plotted",
 test_that("DSRs are plotted against the population derived from their events", {
 
   rows <- funnel_rows(c(40, 9, 120, 300, 0), c(30000, 8000, 50000, 90000, 500),
-                      dsr = c(150, 95, 210, 330, 0))
+                      dsr = c(150, NA, 210, 330, 0))
+  # dsr_calculate() presents no DSR for A02, from fewer than 20 events
+  rows$DSRNote <- c(NA, "fewer than 20 events", NA, NA, NA)
   f <- .dsr_funnel(rows, "DSR", multiplier = 1e5)
 
   # OHID: population = events / DSR, and the average is total events over
-  # total derived population, including DSRs from fewer than 10 events,
-  # which are not plotted
-  derived <- rows$Events[1:4] * 1e5 / rows$DSR[1:4]
-  expect_equal(f$centre, sum(rows$Events[1:4]) / sum(derived) * 1e5)
+  # total derived population of the areas plotted. A DSR that is not
+  # presented is neither plotted nor in the average, and A05, with no
+  # events, has no derived population.
+  plotted <- c(1, 3, 4)
+  derived <- rows$Events[plotted] * 1e5 / rows$DSR[plotted]
+  expect_equal(f$centre, sum(rows$Events[plotted]) / sum(derived) * 1e5)
   expect_equal(f$points$Area, c("A01", "A03", "A04"))
-  expect_equal(f$few_events, 1)
-  expect_equal(f$points$X, derived[-2])
-  expect_equal(f$points$Value, rows$DSR[c(1, 3, 4)])
+  expect_equal(f$not_presented, 1)
+  expect_equal(f$no_value, 1)
+  expect_equal(f$points$X, derived)
+  expect_equal(f$points$Value, rows$DSR[plotted])
   expect_equal(f$points$Expected / f$points$Events,
                f$centre / f$points$Value)
+
+  # With the minimums off, every DSR from any events is plotted
+  rows$DSRNote <- NA
+  rows$DSR[2] <- 95
+  f <- .dsr_funnel(rows, "DSR", multiplier = 1e5)
+  expect_equal(f$points$Area, c("A01", "A02", "A03", "A04"))
+  expect_equal(f$not_presented, 0)
 
 })
 
@@ -218,5 +230,20 @@ test_that("the funnel plot and map identify areas for linking", {
   expect_match(svg, "Tip A03", fixed = TRUE)
   built <- ggplot2::ggplot_build(m)$data[[1]]
   expect_true(all(built$fill %in% c(.dsr_funnel_colours, "#efefec")))
+
+})
+
+test_that("positions run coral, yellow, grey, green and blue, from above to below", {
+
+  expect_equal(names(.dsr_funnel_colours), .dsr_funnel_positions)
+  expect_equal(unname(.dsr_funnel_colours),
+               c("#F15F50", "#C6B30B", "#CBCBC6", "#90A630", "#008FC5"))
+  # Triangles point up above the limits and down below, larger beyond the
+  # 99.8% limits
+  expect_equal(unname(.dsr_funnel_shapes), c(24, 24, 21, 25, 25))
+  expect_gt(.dsr_funnel_sizes[["Above 99.8% limit"]],
+            .dsr_funnel_sizes[["Above 95% limit"]])
+  expect_gt(.dsr_funnel_sizes[["Below 99.8% limit"]],
+            .dsr_funnel_sizes[["Below 95% limit"]])
 
 })
