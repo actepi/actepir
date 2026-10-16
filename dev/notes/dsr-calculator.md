@@ -11,7 +11,7 @@
 | #5 | Explore tab (ggiraph map and funnel plot, linked), funnel methods and the Help tab |
 | #6 | Sidebar layout in the browser, keyboard-only highlights, the AIHW minimums (n.p.), Counts by age, validation against PHEindicatormethods and epitools, and these notes |
 | #7 | Searching diagnosis codes by condition, with ICD-10-AM titles from `Analysis.dbo.ICD10AM`, and each code entered spelt out below the box; APC procedure codes and ACHI blocks, searched the same way, combined with diagnoses by and or or |
-| Branch `claude/peaceful-johnson-wdrmzf` | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, a Download menu (map or funnel plot, PDF or PNG) and brand-coloured toolbars on the Explore tab, a second highlight colour in Counts by age, and an add-in for each app in place of the menu (browser only) |
+| #8 | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, a Download menu (map or funnel plot, PDF or PNG) and brand-coloured toolbars on the Explore tab, a second highlight colour in Counts by age, and an add-in for each app in place of the menu (browser only) |
 
 The pull request descriptions give the detail of each change and what to check against EpiServer.
 

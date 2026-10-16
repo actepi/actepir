@@ -58,7 +58,7 @@ Pull request #7 added the diagnosis and procedure search checks to `dsr_calculat
 | `dsr_calculator.js`, procedure codes | With ED the box and both choices are disabled, and the note says ED has no procedures; with APC they are enabled. `nerve` lists [900], 39001-00 and 39001-01, and Enter adds [900]. `39001-01` and Enter, and `1-5` and Tab, add what was typed. The note spells out the three entries. With "or", the info bar reads "APC separations, principal diagnosis I25.2, I25-I27 or J4 or principal procedure [900], 39001-01 or [1] to [5], ...". |
 | `dryrun_live.R` | 12 tests, 235 expectations, 0 failed, 0 skipped. |
 
-The cleanup branch (`claude/peaceful-johnson-wdrmzf`) removed the Map tab, the menu and Australian residents, and added checks of the Explore tab and of the two highlight colours in Counts by age. The other results above were unchanged, and the new ones were:
+Pull request #8 removed the Map tab, the menu and Australian residents, and added checks of the Explore tab and of the two highlight colours in Counts by age. The other results above were unchanged, and the new ones were:
 
 | Run | Results |
 |---|---|
@@ -108,4 +108,4 @@ The cleanup branch (`claude/peaceful-johnson-wdrmzf`) removed the Map tab, the m
   - A toolbar shows only while the pointer is over its plot; hover first. Its buttons have the class `ggiraph-toolbar-icon-<key>`, such as `ggiraph-toolbar-icon-zoom_reset`, and their tooltip as `title`.
   - When a plot's `req()` fails, htmlwidgets hides the last plot drawn (`visibility: hidden`) rather than removing it, so check visibility, not the SVG elements.
 - **Network.** `www.abs.gov.au`, `www.aihw.gov.au` and `geo.abs.gov.au` are blocked unless the environment's network settings allow them; when `geo.abs.gov.au` is blocked, the ABS boundary test skips. Packages install through Posit Package Manager.
-- **Packages.** The setup script installs a later roxygen2 (8.1.1 when the cleanup branch was written) than the 8.0.0 that `DESCRIPTION` records; install that with `remotes::install_version("roxygen2", "8.0.0")`.
+- **Packages.** The setup script installs a later roxygen2 (8.1.1 at pull request #8) than the 8.0.0 that `DESCRIPTION` records; install that with `remotes::install_version("roxygen2", "8.0.0")`.
