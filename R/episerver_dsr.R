@@ -17,7 +17,14 @@
 #' RStudio Addins menu (*Open DSR Calculator*). It opens in the system web
 #' browser, so that it has the whole window: the settings are in a sidebar on
 #' the left, in sections that open and close, and the results in tabs on the
-#' top bar. The arrow at the top of the sidebar hides it.
+#' top bar. The arrow at the top of the sidebar hides it, and its right edge
+#' can be dragged to widen it. The information button beside a setting shows
+#' notes on it, and the bug button at the foot of the sidebar prepares a
+#' report of a problem to send to \email{healthinfo@act.gov.au}.
+#'
+#' Close the browser tab when finished. A background calculator keeps
+#' running, so it opens again at once, until [episerver_dsr_stop()] or the
+#' end of the R session; with `background = FALSE`, closing the tab stops it.
 #'
 #' @inheritParams episerver_browse
 #' @inheritDotParams episerver_connect encrypt trust_certificate
@@ -29,15 +36,15 @@
 #' **Options**
 #'
 #' The sidebar's sections hold the options: *Events* (dataset, diagnosis and
-#' procedure codes, and how they are searched), *Population* (population and
-#' geographic level), *Time
-#' periods* (calendar years and pooling) and *Rate details* (ages, standard
-#' population, rate per, suppression, and male and female).
+#' procedure codes, and how they are searched), *Population* (geographic
+#' scope and level, ages, and male and female), *Time
+#' periods* (calendar years and pooling) and *Rate details* (standard
+#' population, rate per, suppression and the minimums for a DSR).
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
-#' * *Population*: ACT residents, using the ACT population tables, or ACT and
-#'   surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
+#' * *Geographic scope*: ACT residents, using the ACT population tables, or
+#'   ACT and surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
 #'   Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with their SA2s,
 #'   using the Australian tables. At state level ACT and surrounds gives two
 #'   areas, the ACT and NSW (surrounds), each summed from its SA3s. Both are
@@ -1703,6 +1710,35 @@ WHERE Latest = 1"
 }
 
 
+# A problem report, as text: what the analyst says happened (left out when
+# `what` is NULL), the calculator's state (named lines), the settings by
+# input ID, written as R arguments, R code for the settings when they can be
+# used, and the session (.epi_session_report()). It holds settings but no
+# counts or rates.
+#' @noRd
+.dsr_problem_report <- function(what, state, inputs, code, session) {
+  section <- function(title, lines) {
+    c(title, strrep("-", nchar(title)), lines, "")
+  }
+  settings <- vapply(names(inputs), function(id) {
+    paste(id, "=", paste(deparse(inputs[[id]]), collapse = " "))
+  }, character(1), USE.NAMES = FALSE)
+  what <- if (!is.null(what)) trimws(paste(what, collapse = "\n"))
+  paste(c(
+    paste("DSR Calculator problem report,",
+          format(Sys.time(), "%Y-%m-%d %H:%M %Z")),
+    "",
+    if (!is.null(what)) {
+      section("What happened", if (nzchar(what)) what else "(Not described.)")
+    },
+    section("Calculator", paste0(names(state), ": ", state)),
+    section("Settings", settings),
+    if (!is.null(code)) section("R code for these settings", code),
+    section("R session", session)
+  ), collapse = "\n")
+}
+
+
 # Settings of the Explore tab's map and funnel plot: what to show, the year
 # or period, sex and the ages of age-specific rates, with input IDs that
 # start with id
@@ -1710,21 +1746,17 @@ WHERE Latest = 1"
 .dsr_map_controls <- function(id) {
   name <- function(x) paste0(id, "_", x)
   shiny::tagList(
-    shiny::div(
-      class = "selector-row dsr-row",
-      shiny::selectInput(
-        name("value"), "Show",
-        choices = c("Age-standardised rate" = "DSR",
-                    "Crude rate" = "Crude",
-                    "Age-specific rate" = "AgeRate",
-                    "Events" = "Events"),
-        width = "100%"
-      ),
-      shiny::selectInput(name("year"), "Year", choices = NULL,
-                         width = "100%"),
-      shiny::selectInput(name("sex"), "Sex", choices = "Persons",
-                         width = "100%")
+    shiny::selectInput(
+      name("value"), "Show",
+      choices = c("Age-standardised rate" = "DSR",
+                  "Crude rate" = "Crude",
+                  "Age-specific rate" = "AgeRate",
+                  "Events" = "Events"),
+      width = "100%"
     ),
+    shiny::selectInput(name("year"), "Year", choices = NULL, width = "100%"),
+    shiny::selectInput(name("sex"), "Sex", choices = "Persons",
+                       width = "100%"),
     shiny::conditionalPanel(
       sprintf("input.%s == 'AgeRate'", name("value")),
       shiny::sliderInput(
@@ -1868,8 +1900,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   # window
   ui <- bslib::page_navbar(
 
-    title        = shiny::span(class = "epi-brand",
-                               .epi_logo(class = "epi-logo"), "DSR Calculator"),
+    title        = "DSR Calculator",
     window_title = "DSR Calculator",
     id           = "view",
     theme        = .epi_theme(),
@@ -1879,40 +1910,21 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       .epi_app_style(),
 
-      # Calculator-only rules: the top bar, the sidebar, wrapping selector
-      # rows, notes, the error bar, table headings and the diagnosis code tags
+      # Calculator-only rules: the top bar, the sidebar, the problem report,
+      # table headings, the diagnosis code tags and the Explore tab
       shiny::tags$style(shiny::HTML("
-        /* Top bar: the logo at the brand's minimum size, a crest 60px
-           across, with clear space equal to the height of its ACT
-           lettering, 22px */
-        .navbar { --bs-navbar-padding-y: 0; }
-        .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
-        .navbar-brand { display: flex; padding: 22px 0; margin-right: 22px; }
-        .epi-brand { display: flex; align-items: center; gap: 22px; }
-        .epi-logo { height: 60px; }
-        /* Sidebar: Lavender tint, with Calculate and Copy Code in view at
-           its foot across its full width. The bar stays above what
-           scrolls under it, such as a focused section heading (z-index 3)
-           and slider handles, and below open dropdowns (1000). */
+        /* Sidebars: Lavender tint, with Calculate, Copy Code and the bug
+           button in view at the foot of the settings (.epi-actions) */
         :root { --bslib-sidebar-bg: #f7f4fd; }
-        .sidebar .accordion { --bs-accordion-bg: transparent; }
-        .dsr-actions {
-          --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
-          position: sticky; bottom: 0; z-index: 20;
-          display: flex; gap: 8px;
-          margin: 0 calc(-1 * var(--dsr-pad));
-          padding: 10px var(--dsr-pad);
-          background-color: var(--bslib-sidebar-bg);
-          border-top: 1px solid #e6e5e5;
-        }
-        .dsr-row { flex-wrap: wrap; }
-        .dsr-row > * { min-width: 200px; }
-        .info-bar p { margin: 0 0 4px 0; }
-        .info-bar p:last-child { margin-bottom: 0; }
-        .info-bar .epi-warn { color: #8a5300; }
-        .info-bar.epi-error { border-left-color: #b00020; color: #b00020; }
-        .epi-note { font-size: 11px; color: #777; margin: -4px 0 10px 0; }
-        .epi-note.epi-error { color: #b00020; }
+        .epi-actions #bug_report { margin-left: auto; font-size: 1.1rem; }
+        /* The problem report fits the window, and only its details scroll,
+           so the dialog does not move under the wheel */
+        .epi-report .modal-body { display: flex; flex-direction: column;
+                                  min-height: 0; }
+        #bug_details { flex: 0 1 auto; min-height: 6em; max-height: 50vh;
+                       overflow: auto;
+                       overscroll-behavior: contain; margin-bottom: 0;
+                       font-size: 11px; white-space: pre-wrap; }
         .epi-table-head { display: flex; align-items: center;
                           justify-content: space-between; margin: 4px 0 6px 0; }
         .epi-table-head h5 { color: var(--epi-primary); font-weight: 600;
@@ -1925,8 +1937,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .dsr-code { font-weight: 600; color: var(--epi-primary); }
         .dsr-codes div { margin-bottom: 2px; }
         .radio.disabled label { color: #999; }
-        .explore-row { display: flex; flex-wrap: wrap; gap: 12px; }
-        .explore-panel { flex: 1 1 400px; min-width: 0; }
+        .explore-row { display: flex; flex-wrap: wrap; gap: var(--epi-gap); }
+        .explore-panel { flex: 1 1 300px; min-width: 0; }
+        /* The plots keep their shape and fit the window below their top
+           (--ex-plot-height, from the script below). ggiraph sets the
+           SVG's max-height in its style attribute. */
+        .explore-panel svg.ggiraph-svg {
+          max-height: var(--ex-plot-height, 100vh) !important;
+        }
         .explore-panel .ex-linked { stroke: #320557 !important;
                                     stroke-width: 2px !important; }
         /* The Download menu's choices in the brand purples */
@@ -1966,7 +1984,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .dsr-short { padding: 1px 4px; border-radius: 2px; }
         .dsr-short-pop { background: #F1ECC2; }
         .dsr-short-events { background: #BFE3F1; }
-        /* Shown in place of Shiny's grey overlay once Done stops the app */
+        /* Shown in place of Shiny's grey overlay once the app has stopped */
         .epi-stopped { position: fixed; inset: 0; z-index: 100000;
                        display: flex; flex-direction: column;
                        align-items: center; justify-content: center;
@@ -2010,6 +2028,27 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           });
         })();
       ", jsonlite::toJSON(.dsr_age_labels)))),
+
+      # The Explore tab's plots fit the window, so that neither needs
+      # scrolling to be seen whole: their height is the window's less their
+      # distance from the top of the page when it is scrolled to the top
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          function fit() {
+            var row = document.querySelector('.explore-row');
+            if (!row || !row.offsetParent) return;
+            var top = row.getBoundingClientRect().top;
+            for (var el = row.parentElement; el; el = el.parentElement) {
+              top += el.scrollTop;
+            }
+            var room = Math.max(window.innerHeight - top - 16, 300);
+            row.style.setProperty('--ex-plot-height', room + 'px');
+          }
+          function soon() { setTimeout(fit, 0); }
+          $(window).on('resize', soon);
+          $(document).on('shown.bs.tab shiny:value', soon);
+        })();
+      ")),
 
       # Pointing at an area in the Explore tab's map or funnel plot outlines
       # it in both, matched on the data-id that ggiraph gives each area
@@ -2077,20 +2116,45 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       ", jsonlite::toJSON(names(Filter(function(d) !length(d$procedures),
                                        .dsr_datasets)))))),
 
-      # Done stops the app. A browser tab stays open afterwards, so it says
-      # so instead of greying out.
+      # The bug button sends what the browser knows to the problem report:
+      # its user agent and window, the errors shown in outputs (not the
+      # messages of validate() or req()) and the last script errors
       shiny::tags$script(shiny::HTML("
         (function() {
-          var stopping = false;
-          $(document).on('click', '#done', function() { stopping = true; });
-          $(document).on('shiny:disconnected', function() {
-            if (!stopping) return;
-            $('<div class=\"epi-stopped\">')
-              .append('<h4>The DSR Calculator has stopped.</h4>')
-              .append('<p>Start it again with actepir::episerver_dsr().</p>')
-              .appendTo('body');
+          var scriptErrors = [];
+          window.addEventListener('error', function(e) {
+            scriptErrors.push(e.message);
+            if (scriptErrors.length > 5) scriptErrors.shift();
+          });
+          $(document).on('click', '#bug_report', function() {
+            var shown = $('.shiny-output-error')
+              .not('.shiny-output-error-validation')
+              .map(function() {
+                var text = $(this).text().trim();
+                return text ? (this.id || 'output') + ': ' + text : null;
+              }).get();
+            Shiny.setInputValue('bug_client', {
+              agent: navigator.userAgent,
+              width: window.innerWidth, height: window.innerHeight,
+              ratio: window.devicePixelRatio,
+              errors: shown, script_errors: scriptErrors.slice(),
+              at: Date.now()
+            }, {priority: 'event'});
           });
         })();
+      ")),
+
+      # When the app stops (episerver_dsr_stop(), or the end of the R
+      # session), its browser tab says so and how to open it again, instead
+      # of greying out
+      shiny::tags$script(shiny::HTML("
+        $(document).on('shiny:disconnected', function() {
+          $('<div class=\"epi-stopped\">')
+            .append('<h4>The DSR Calculator is no longer running.</h4>')
+            .append('<p>Open it again from Addins &gt; Open DSR Calculator, ' +
+                    'or with actepir::episerver_dsr().</p>')
+            .appendTo('body');
+        });
       ")),
 
       # Info bar: what is shown, what was left out, and any warnings
@@ -2098,9 +2162,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                               shiny::uiOutput("info_bar"))
     ),
 
-    # Not resizable: the resize handle would cover the sidebar's scrollbar
+    # The resize handle is moved off the scrollbar by the CSS above
     sidebar = bslib::sidebar(
-      id = "settings", width = 340, open = "desktop", resizable = FALSE,
+      id = "settings", width = 340, open = "desktop", resizable = TRUE,
       bslib::accordion(
         id = "settings_sections", open = TRUE, multiple = TRUE,
         bslib::accordion_panel(
@@ -2110,22 +2174,63 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
           ),
-          .dsr_codes_box(
-            "codes", "Diagnosis codes", "All events. Type a code or condition",
-            paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
-                   "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")
+          .epi_with_help(
+            .dsr_codes_box(
+              "codes", "Diagnosis codes", "All events. Type a code or condition",
+              paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
+                     "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")
+            ),
+            "Leave empty for all events. A partial code such as J45 matches ",
+            "every code that starts with it, and a range such as C13-C15.45 ",
+            "includes both ends. Only ICD-10 coded records are searched.",
+            if (is.null(titles$codes)) {
+              paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
+                     "titles could not be read from Analysis.dbo.ICD10AM.")
+            } else {
+              paste0(" Type words from a condition, such as myocardial, to ",
+                     "choose from the codes whose titles contain them.")
+            }
           ),
           shiny::uiOutput("codes_note"),
-          shiny::radioButtons(
-            "diagnosis", "Diagnosis search",
-            choices = c("Principal diagnosis" = "principal",
-                        "Any diagnosis" = "all")
+          .epi_with_help(
+            shiny::radioButtons(
+              "diagnosis", "Diagnosis search",
+              choices = c("Principal diagnosis" = "principal",
+                          "Any diagnosis" = "all")
+            ),
+            unname(Map(function(key, d) {
+              n <- length(d$diagnoses)
+              if (d$principal) {
+                paste0(key, " searches the principal diagnosis (",
+                       d$diagnoses[1], ") or any diagnosis (", d$diagnoses[1],
+                       " to ", d$diagnoses[n], "). ")
+              } else {
+                paste0(key, " searches all its diagnosis fields (",
+                       paste(d$diagnoses, collapse = ", "), "), as none of ",
+                       "them holds the principal diagnosis in every year. ")
+              }
+            }, names(.dsr_datasets), .dsr_datasets))
           ),
-          .dsr_codes_box(
-            "procedures", "Procedure codes",
-            "All events. Type a code or procedure",
-            paste0("/^\\s*(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%\\u2013\\u2014-]*",
-                   "(\\s+to\\s+(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%-]*)?$/i")
+          .epi_with_help(
+            .dsr_codes_box(
+              "procedures", "Procedure codes",
+              "All events. Type a code or procedure",
+              paste0("/^\\s*(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%\\u2013\\u2014-]*",
+                     "(\\s+to\\s+(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%-]*)?$/i")
+            ),
+            "Leave empty for all events. A code such as 11012-00, or a partial ",
+            "code such as 11012, matches every code that starts with it; a ",
+            "block such as 1826, shown as [1826], matches the procedures in ",
+            "that ACHI block; and a range such as 11000-00 to 11027-00 or ",
+            "1820-1830 includes both ends.",
+            if (is.null(titles$procedures)) {
+              paste0(" Searching by procedure is unavailable, as the ACHI ",
+                     "titles could not be read from Analysis.dbo.ICD10AM.")
+            } else {
+              paste0(" Type words from a procedure, such as electromyography, ",
+                     "to choose from the codes and blocks whose titles contain ",
+                     "them.")
+            }
           ),
           shiny::uiOutput("procedures_note"),
           shiny::radioButtons(
@@ -2142,7 +2247,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         bslib::accordion_panel(
           "Population", value = "population",
           shiny::selectInput(
-            "scope", "Population",
+            "scope", "Geographic scope",
             choices = stats::setNames(
               names(.dsr_scopes),
               vapply(.dsr_scopes, `[[`, character(1), "label")
@@ -2156,7 +2261,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               vapply(names(.dsr_levels), .dsr_area_label, character(1))
             ),
             width = "100%"
-          )
+          ),
+          shiny::sliderInput(
+            "ages", "Ages",
+            min = 1, max = length(.dsr_age_labels),
+            value = c(1, length(.dsr_age_labels)),
+            step = 1, ticks = FALSE, width = "100%"
+          ),
+          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
         ),
         bslib::accordion_panel(
           "Time periods", value = "time",
@@ -2177,12 +2289,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         ),
         bslib::accordion_panel(
           "Rate details", value = "rate",
-          shiny::sliderInput(
-            "ages", "Ages",
-            min = 1, max = length(.dsr_age_labels),
-            value = c(1, length(.dsr_age_labels)),
-            step = 1, ticks = FALSE, width = "100%"
-          ),
           shiny::selectInput(
             "standard", "Standard population",
             choices  = std_choices,
@@ -2200,24 +2306,23 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             "suppress", "Suppress counts below",
             value = 5, min = 0, step = 1, width = "100%"
           ),
-          shiny::numericInput(
-            "min_events", "Minimum events for a DSR",
-            value = 20, min = 0, step = 1, width = "100%"
+          .epi_with_help(
+            shiny::numericInput(
+              "min_events", "Minimum events for a DSR",
+              value = 20, min = 0, step = 1, width = "100%"
+            ),
+            "Below this minimum or the next, age-standardised rates are not ",
+            "presented (n.p.), as the AIHW (2011) principles advise. 0 turns ",
+            "a check off."
           ),
           shiny::numericInput(
             "min_population", "Minimum population per age group",
             value = 30, min = 0, step = 1, width = "100%"
-          ),
-          shiny::div(
-            class = "epi-note",
-            "Below these, age-standardised rates are not presented (n.p.), ",
-            "as the AIHW (2011) principles advise. 0 turns a check off."
-          ),
-          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
+          )
         )
       ),
       shiny::div(
-        class = "dsr-actions",
+        class = "epi-actions",
         shiny::actionButton(
           "calculate", "Calculate",
           icon  = shiny::icon("calculator"),
@@ -2227,6 +2332,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "insert_code", code_button_label,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
+        ),
+        # Opens the problem report; the script above sends what the browser
+        # knows with the click
+        shiny::tags$button(
+          id = "bug_report", type = "button", class = "epi-icon-btn",
+          title = "Report a problem", `aria-label` = "Report a problem",
+          shiny::icon("bug")
         )
       )
     ),
@@ -2256,71 +2368,88 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     bslib::nav_panel(
       "Explore", value = "explore",
-      .dsr_map_controls("ex"),
-      shiny::div(
-        class = "options-row",
-        shiny::selectInput(
-          "ex_colour", "Colour the map by",
-          choices = c("Value" = "value",
-                      "Position in the funnel plot" = "position"),
-          width = "220px"
-        ),
-        shiny::checkboxInput("ex_overdispersion",
-                             "Allow for overdispersion", value = TRUE,
-                             width = "auto"),
-        shiny::actionButton("ex_zoom", "Zoom to selected",
-                            icon = shiny::icon("magnifying-glass-plus"),
-                            class = "btn-sm btn-primary"),
-        shiny::actionButton("ex_reset", "Show all",
-                            icon = shiny::icon("expand"),
-                            class = "btn-sm btn-primary"),
-        shiny::actionButton("ex_clear", "Clear selection",
-                            icon = shiny::icon("xmark"),
-                            class = "btn-sm btn-primary"),
-        # Download: a Bootstrap dropdown of the four files
-        shiny::div(
-          class = "dropdown",
-          shiny::tags$button(
-            id = "ex_download", type = "button",
-            class = "btn btn-sm btn-primary dropdown-toggle",
-            `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
-            shiny::icon("download"), "Download"
+      # The settings run down the left, so that the map and funnel plot
+      # take the height of the window
+      .epi_tab_settings(
+        "ex_settings",
+        shiny::tagList(
+          .dsr_map_controls("ex"),
+          shiny::selectInput(
+            "ex_colour", "Colour the map by",
+            choices = c("Value" = "value",
+                        "Position in the funnel plot" = "position"),
+            width = "100%"
           ),
-          shiny::tags$ul(
-            class = "dropdown-menu",
-            shiny::tags$li(shiny::downloadLink("ex_map_pdf", "Map as PDF",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::downloadLink("ex_map_png", "Map as PNG",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
-            shiny::tags$li(shiny::downloadLink("ex_funnel_pdf",
-                                               "Funnel plot as PDF",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::downloadLink("ex_funnel_png",
-                                               "Funnel plot as PNG",
-                                               class = "dropdown-item"))
+          shiny::checkboxInput("ex_overdispersion",
+                               "Allow for overdispersion", value = TRUE),
+          .epi_with_help(
+            shiny::div(
+              class = "form-group shiny-input-container",
+              shiny::tags$label(class = "control-label", `for` = "ex_zoom",
+                                "Selection and zoom"),
+              shiny::div(
+                class = "epi-stack",
+                shiny::actionButton("ex_zoom", "Zoom to selected",
+                                    icon = shiny::icon("magnifying-glass-plus"),
+                                    class = "btn-sm btn-primary"),
+                shiny::actionButton("ex_reset", "Show all",
+                                    icon = shiny::icon("expand"),
+                                    class = "btn-sm btn-primary"),
+                shiny::actionButton("ex_clear", "Clear selection",
+                                    icon = shiny::icon("xmark"),
+                                    class = "btn-sm btn-primary"),
+                # Download: a Bootstrap dropdown of the four files
+                shiny::div(
+                  class = "dropdown",
+                  shiny::tags$button(
+                    id = "ex_download", type = "button",
+                    class = "btn btn-sm btn-primary dropdown-toggle",
+                    `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+                    shiny::icon("download"), "Download"
+                  ),
+                  shiny::tags$ul(
+                    class = "dropdown-menu",
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_map_pdf", "Map as PDF", class = "dropdown-item")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_map_png", "Map as PNG", class = "dropdown-item")),
+                    shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_funnel_pdf", "Funnel plot as PDF",
+                      class = "dropdown-item")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_funnel_png", "Funnel plot as PNG",
+                      class = "dropdown-item"))
+                  )
+                )
+              )
+            ),
+            "Point at an area or a point for its figures. Click areas or ",
+            "points, or draw round them with the lasso in a plot's toolbar, ",
+            "to select them in both plots. The toolbar also zooms and pans. ",
+            "Download saves either plot as PDF or PNG."
           )
-        )
-      ),
-      shiny::uiOutput("ex_note"),
-      shiny::uiOutput("ex_heading"),
-      shiny::div(
-        class = "explore-row",
-        shiny::div(class = "explore-panel",
-                   ggiraph::girafeOutput("ex_map")),
-        shiny::div(class = "explore-panel",
-                   ggiraph::girafeOutput("ex_funnel"))
-      ),
-      shiny::uiOutput("ex_method"),
-      shiny::uiOutput("ex_selected")
+        ),
+        shiny::uiOutput("ex_note"),
+        shiny::uiOutput("ex_heading"),
+        shiny::div(
+          class = "explore-row",
+          shiny::div(class = "explore-panel",
+                     ggiraph::girafeOutput("ex_map")),
+          shiny::div(class = "explore-panel",
+                     ggiraph::girafeOutput("ex_funnel"))
+        ),
+        shiny::uiOutput("ex_method"),
+        shiny::uiOutput("ex_selected")
+      )
     ),
 
     bslib::nav_panel("Help", value = "help", .dsr_help()),
 
+    # The logo at the right of the top bar. The app runs in a browser tab,
+    # which closes it; no Done button is needed.
     bslib::nav_spacer(),
-    bslib::nav_item(
-      shiny::actionButton("done", "Done", class = "btn-sm btn-primary")
-    )
+    bslib::nav_item(.epi_logo(class = "epi-logo"))
   )
 
   # ── Server ────────────────────────────────────────────────────────────────
@@ -2432,34 +2561,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                  }))
     }
 
+    # The notes on how to enter codes are in the page, behind the information
+    # buttons; these say what was entered, or why it cannot be used
     output$codes_note <- shiny::renderUI({
       err <- codes_error()
       if (!is.null(err)) {
         return(shiny::div(class = "epi-note epi-error", err))
       }
-      dataset <- if (is.null(input$dataset)) "ED" else input$dataset
-      ds <- .dsr_datasets[[dataset]]
-      shiny::tagList(
-        entered(input$codes, .dsr_parse_codes, titles$codes),
-        shiny::div(
-          class = "epi-note",
-          "Leave empty for all events. A partial code such as J45 matches ",
-          "every code that starts with it, and a range such as C13-C15.45 ",
-          "includes both ends. Only ICD-10 coded records are searched.",
-          if (is.null(titles$codes)) {
-            paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
-                   "titles could not be read from Analysis.dbo.ICD10AM.")
-          } else {
-            paste0(" Type words from a condition, such as myocardial, to ",
-                   "choose from the codes whose titles contain them.")
-          },
-          if (!ds$principal) {
-            paste0(" ", dataset, " searches all its diagnosis fields (",
-                   paste(ds$diagnoses, collapse = ", "), "), as none of them ",
-                   "holds the principal diagnosis in every year.")
-          }
-        )
-      )
+      entered(input$codes, .dsr_parse_codes, titles$codes)
     })
 
     output$procedures_note <- shiny::renderUI({
@@ -2477,25 +2586,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           " only."
         )))
       }
-      shiny::tagList(
-        entered(input$procedures, .dsr_parse_procedures, titles$procedures),
-        shiny::div(
-          class = "epi-note",
-          "Leave empty for all events. A code such as 11012-00, or a partial ",
-          "code such as 11012, matches every code that starts with it; a ",
-          "block such as 1826, shown as [1826], matches the procedures in ",
-          "that ACHI block; and a range such as 11000-00 to 11027-00 or ",
-          "1820-1830 includes both ends.",
-          if (is.null(titles$procedures)) {
-            paste0(" Searching by procedure is unavailable, as the ACHI ",
-                   "titles could not be read from Analysis.dbo.ICD10AM.")
-          } else {
-            paste0(" Type words from a procedure, such as electromyography, ",
-                   "to choose from the codes and blocks whose titles contain ",
-                   "them.")
-          }
-        )
-      )
+      entered(input$procedures, .dsr_parse_procedures, titles$procedures)
     })
 
     # The periods the years will be pooled into, or why they cannot be
@@ -3273,10 +3364,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "(geo.abs.gov.au), so only the funnel plot is shown: ", b$error
         ))
       }
-      note("Point at an area or a point for its figures. Click areas or ",
-           "points, or draw round them with the lasso in a plot's toolbar, ",
-           "to select them in both plots. The toolbar also zooms and pans. ",
-           "Download saves either plot as PDF or PNG.")
+      NULL
     })
 
     # How the funnel plot is made, and how much the areas vary
@@ -3412,15 +3500,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # ── Insert / copy code button ──────────────────────────────────────────
-    shiny::observeEvent(input$insert_code, {
-      st <- settings()
-      s  <- st$spec
-      if (is.null(s)) {
-        shiny::showNotification(st$error, duration = 6, type = "warning")
-        return(invisible(NULL))
-      }
-      # The code adds the age-specific rates when their table is shown
-      code <- .dsr_code(
+    # The code for valid settings s adds the age-specific rates when their
+    # table is shown
+    settings_code <- function(s) {
+      .dsr_code(
         s,
         by_sex        = isTRUE(input$by_sex),
         age_specific  = identical(input$table, "age"),
@@ -3430,13 +3513,108 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         min_events    = min_events(),
         min_population = min_population()
       )
-      .epi_send_code(session, code)
+    }
+    shiny::observeEvent(input$insert_code, {
+      st <- settings()
+      s  <- st$spec
+      if (is.null(s)) {
+        shiny::showNotification(st$error, duration = 6, type = "warning")
+        return(invisible(NULL))
+      }
+      .epi_send_code(session, settings_code(s))
     })
 
-    # ── Done button ────────────────────────────────────────────────────────
-    shiny::observeEvent(input$done, {
-      shiny::stopApp()
+    # ── Problem report ─────────────────────────────────────────────────────
+    # The bug button sends what the browser knows (bug_client); the report
+    # adds the calculator's state, the settings and the R session
+    report <- function(what) {
+      # req() stops settings() with an empty message while inputs are unset
+      st <- tryCatch(settings(), error = function(e) {
+        msg <- conditionMessage(e)
+        list(spec = NULL, error = if (nzchar(msg)) msg else "incomplete")
+      })
+      calculated <- if (is.null(rv$fetched)) "no" else {
+        r <- tryCatch(results(), error = function(e) {
+          list(error = conditionMessage(e))
+        })
+        if (is.null(r$error)) "yes" else paste("yes, with error:", r$error)
+      }
+      count <- function(x) if (is.null(x)) 0L else sum(x$Type == "code")
+      years <- tryCatch(available(), error = function(e) NULL)
+      ids <- c("view", "table", "dataset", "codes", "diagnosis", "procedures",
+               "procedure", "combine", "scope", "level", "ages", "by_sex",
+               "years", "pool", "standard", "multiplier", "suppress",
+               "min_events", "min_population", "ex_value", "ex_year",
+               "ex_sex", "ex_ages", "ex_colour", "ex_overdispersion")
+      .dsr_problem_report(
+        what,
+        state = c(
+          "Calculated" = calculated,
+          "EpiServer error" = if (is.null(rv$error)) "none" else rv$error,
+          "Settings error" = if (is.null(st$error)) "none" else st$error,
+          "ICD-10-AM and ACHI titles" = if (is.null(icd)) "not read" else
+            paste(.fmt_count(count(titles$codes)), "diagnosis codes and",
+                  .fmt_count(count(titles$procedures)), "procedure codes"),
+          "Standard populations" = if (is.null(cache$standards)) "not read"
+            else paste(nrow(standards), "read"),
+          "Years offered" = if (is.null(years)) "not known" else
+            paste(years$min, "to", years$max),
+          "Code button" = code_button_label
+        ),
+        inputs = stats::setNames(lapply(ids, function(id) input[[id]]), ids),
+        code = if (!is.null(st$spec)) settings_code(st$spec),
+        session = .epi_session_report(input$bug_client)
+      )
+    }
+
+    # The dialog fits the window and only the details scroll (.epi-report)
+    shiny::observeEvent(input$bug_client, {
+      dialog <- shiny::modalDialog(
+        title = "Report a problem", size = "l", easyClose = TRUE,
+        shiny::p(
+          "Say what happened, then copy the report and paste it into an ",
+          "email to ",
+          shiny::tags$a(
+            href = paste0("mailto:", .epi_contact, "?subject=",
+                          utils::URLencode("DSR Calculator problem report",
+                                           reserved = TRUE)),
+            .epi_contact, .noWS = "after"
+          ),
+          "."
+        ),
+        shiny::textAreaInput("bug_what",
+                             "What happened, and what did you expect?",
+                             width = "100%", rows = 4, resize = "vertical"),
+        shiny::p(class = "epi-note",
+                 "The report adds the details below, which help to reproduce ",
+                 "the problem. It holds the settings, but no counts, rates ",
+                 "or other data."),
+        shiny::verbatimTextOutput("bug_details"),
+        footer = shiny::tagList(
+          shiny::actionButton("bug_copy", "Copy report",
+                              icon = shiny::icon("copy"),
+                              class = "btn-sm btn-primary"),
+          shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                             `data-bs-dismiss` = "modal", "Close")
+        )
+      )
+      shiny::showModal(
+        htmltools::tagQuery(dialog)$find(".modal-dialog")$
+          addClass("modal-dialog-scrollable epi-report")$allTags()
+      )
     })
+    output$bug_details <- shiny::renderText({
+      shiny::req(input$bug_client)
+      report(NULL)
+    })
+    shiny::observeEvent(input$bug_copy, {
+      .epi_copy_text(session, report(input$bug_what),
+                     "Report copied to the clipboard")
+    })
+
+    # In this R session the app holds the console, so closing its browser
+    # tab stops it; a background app keeps running for the next opening
+    if (in_rstudio) session$onSessionEnded(shiny::stopApp)
 
   }
 

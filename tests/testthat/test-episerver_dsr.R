@@ -1233,6 +1233,100 @@ test_that("the app copies the code for the current settings", {
 
 })
 
+test_that("a problem report sets out what happened, the settings and the session", {
+
+  report <- .dsr_problem_report(
+    "The map was blank.\nIt had been fine.",
+    state = c(Calculated = "yes", "EpiServer error" = "none"),
+    inputs = list(dataset = "APC", codes = c("I21", "J45"),
+                  years = c(2022, 2024), by_sex = TRUE, ex_ages = NULL),
+    code = "rates <- dsr_calculate(events, population, standard)\n",
+    session = c("actepir 0.0.18", "R version 4.4.1")
+  )
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+  expect_match(lines[1], "^DSR Calculator problem report, \\d{4}-\\d{2}-\\d{2}")
+  for (heading in c("What happened", "Calculator", "Settings",
+                    "R code for these settings", "R session")) {
+    at <- match(heading, lines)
+    expect_false(is.na(at), label = heading)
+    expect_equal(lines[at + 1], strrep("-", nchar(heading)))
+  }
+  expect_match(report, "The map was blank.\nIt had been fine.", fixed = TRUE)
+  expect_match(report, "EpiServer error: none", fixed = TRUE)
+  # Settings are written as R arguments, ready for session$setInputs()
+  expect_true(all(c("dataset = \"APC\"", "codes = c(\"I21\", \"J45\")",
+                    "years = c(2022, 2024)", "by_sex = TRUE",
+                    "ex_ages = NULL") %in% lines))
+  expect_match(report, "rates <- dsr_calculate(", fixed = TRUE)
+
+  # The preview leaves out what happened, and the code without valid settings
+  preview <- .dsr_problem_report(NULL, c(Calculated = "no"), list(),
+                                 NULL, "actepir 0.0.18")
+  expect_no_match(preview, "What happened", fixed = TRUE)
+  expect_no_match(preview, "R code for these settings", fixed = TRUE)
+  expect_match(.dsr_problem_report(" ", c(Calculated = "no"), list(), NULL,
+                                   "actepir 0.0.18"),
+               "What happened\n-------------\n(Not described.)", fixed = TRUE)
+
+})
+
+test_that("the bug button opens a report that holds the settings but no data", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  copied <- NULL
+  local_mocked_bindings(
+    .epi_copy_text = function(session, text, message) copied <<- text
+  )
+  client <- list(agent = "Mozilla/5.0 (Windows NT 10.0) Edg/130.0",
+                 width = 1920, height = 961, ratio = 1.25,
+                 errors = list("ex_map: test error"), script_errors = list(),
+                 at = 1)
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "ED", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", suppress = 5, by_sex = FALSE,
+                      codes = "J45", table = "rates")
+    session$setInputs(calculate = 1)
+    session$setInputs(bug_client = client)
+
+    details <- output$bug_details
+    expect_match(details, "Calculated: yes", fixed = TRUE)
+    expect_match(details, "Settings error: none", fixed = TRUE)
+    expect_match(details, "codes = \"J45\"", fixed = TRUE)
+    expect_match(details, "years = c(2023, 2023)", fixed = TRUE)
+    expect_match(details, "Code button: Copy Code", fixed = TRUE)
+    # Copy Code's code for the settings, the session and the browser
+    expect_match(details, "dsr_calculate(", fixed = TRUE)
+    expect_match(details, paste0("actepir ", utils::packageVersion("actepir")),
+                 fixed = TRUE)
+    expect_match(details, "Edg/130.0", fixed = TRUE)
+    expect_match(details, "Window: 1920 x 961", fixed = TRUE)
+    expect_match(details, "Errors shown in the page: ex_map: test error",
+                 fixed = TRUE)
+    expect_no_match(details, "What happened", fixed = TRUE)
+    # No counts from the results (years aside, which the settings hold)
+    r <- results()$summary
+    counts <- c(r$Events, r$Population)
+    for (v in counts[counts >= 100 & !counts %in% 1990:2030]) {
+      expect_no_match(details, format(v, big.mark = ","), fixed = TRUE)
+      expect_no_match(details, paste0("\\b", v, "\\b"))
+    }
+
+    session$setInputs(bug_what = "The rates looked high.", bug_copy = 1)
+    expect_match(copied, "What happened\n-------------\nThe rates looked high.",
+                 fixed = TRUE)
+    expect_match(copied, "codes = \"J45\"", fixed = TRUE)
+
+    # Settings that cannot be used are reported, without code
+    session$setInputs(codes = "C13-", bug_client = client)
+    expect_match(output$bug_details, "Settings error: .*is not an ICD-10 code")
+    expect_no_match(output$bug_details, "dsr_calculate(", fixed = TRUE)
+  })
+
+})
+
 test_that("the app reports a failed query instead of stopping", {
 
   fake <- fake_episerver()
@@ -1667,17 +1761,11 @@ test_that("the app searches every ED diagnosis field", {
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", codes = "J45",
                       diagnosis = "principal")
-    expect_match(strip_html(output$codes_note$html), paste0(
-      "ED searches all its diagnosis fields (EDShortListCode, Diagnosis1, ",
-      "Diagnosis2, Diagnosis3)"), fixed = TRUE)
     session$setInputs(calculate = 1)
     sql <- grep("AS Events", fake$calls(), value = TRUE, fixed = TRUE)
     expect_match(sql, "(EDShortListCode), (Diagnosis1), (Diagnosis2), (Diagnosis3)",
                  fixed = TRUE)
     expect_match(strip_html(output$info_bar$html), "any diagnosis J45")
-
-    session$setInputs(dataset = "APC")
-    expect_no_match(strip_html(output$codes_note$html), "ED searches")
   })
 
 })
@@ -1697,7 +1785,6 @@ test_that("the app spells out the diagnosis codes entered with their titles", {
     expect_match(note(output), paste(
       "I25-I27 I25 Chronic heart test condition to I27 Other pulmonary",
       "heart test condition"), fixed = TRUE)
-    expect_match(note(output), "Type words from a condition", fixed = TRUE)
 
     # An entry that is not a code is reported instead
     session$setInputs(codes = c("I21", "C13-"))
@@ -1728,7 +1815,6 @@ test_that("the app searches procedures in APC and combines them with diagnoses",
     expect_match(note(output),
                  "90001-00 Test nerve conduction study, one nerve", fixed = TRUE)
     expect_match(note(output), "[1901] Test nerve studies", fixed = TRUE)
-    expect_match(note(output), "Type words from a procedure", fixed = TRUE)
 
     session$setInputs(calculate = 1)
     sql <- grep("AS Events", fake$calls(), value = TRUE, fixed = TRUE)
@@ -1769,17 +1855,24 @@ test_that("the app takes typed codes when the titles cannot be read", {
   }
   app <- episerver_dsr_app(query = failing)
 
+  # The notes behind the information buttons say that search is unavailable
+  withr::local_options(sass.cache = FALSE)
+  page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
+                               QUERY_STRING = ""))$content
+  help <- function(id) {
+    regmatches(page, regexpr(paste0("(?s)<details id=\"", id, "\".*?</details>"),
+                             page, perl = TRUE))
+  }
+  expect_match(help("codes_help"), "Searching by condition is unavailable")
+  expect_match(help("procedures_help"), "Searching by procedure is unavailable")
+
   shiny::testServer(app, {
     session$setInputs(dataset = "APC", scope = "ACT", level = "state",
                       standard = "101", years = c(2023, 2023),
                       multiplier = "100000", codes = "I21")
-    note <- strip_html(output$codes_note$html)
-    expect_match(note, "Searching by condition is unavailable")
-    expect_no_match(note, "Acute myocardial")
+    expect_no_match(strip_html(output$codes_note$html), "Acute myocardial")
     session$setInputs(procedures = "90001-00")
-    note <- strip_html(output$procedures_note$html)
-    expect_match(note, "Searching by procedure is unavailable")
-    expect_no_match(note, "Test nerve")
+    expect_no_match(strip_html(output$procedures_note$html), "Test nerve")
     session$setInputs(calculate = 1)
     expect_null(rv$error)
     expect_match(grep("AS Events", fake$calls(), value = TRUE),
@@ -1882,29 +1975,36 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
 
   expect_match(page, "<title>DSR Calculator</title>", fixed = TRUE)
 
-  # The top bar holds the logo, the name, the tabs and Done
+  # The top bar holds the name at the left, the tabs, and the logo at the
+  # right. There is no Done button: closing the browser tab closes the app.
   navbar <- part("(?s)<nav .*?</nav>")
   expect_length(navbar, 1)
+  expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*DSR Calculator\\s*<",
+               perl = TRUE)
   expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
-  expect_match(navbar, "class=\"epi-logo\"", fixed = TRUE)
-  expect_match(navbar, "DSR Calculator", fixed = TRUE)
+  in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
   for (tab in c("tables", "explore", "help")) {
-    expect_match(navbar, paste0("data-value=\"", tab, "\""), fixed = TRUE)
+    at <- in_bar(paste0("data-value=\"", tab, "\""))
+    expect_gt(at, in_bar("DSR Calculator"))
+    expect_lt(at, in_bar("class=\"epi-logo\""))
   }
   # The static map has gone; the Explore tab maps the areas
   expect_no_match(navbar, "data-value=\"map\"", fixed = TRUE)
-  expect_true(has_id(navbar, "done"))
+  expect_false(has_id(page, "done"))
 
   # The sidebar holds every setting, in four sections that start open, and
-  # Calculate and the code button; the results are outside it. It cannot be
-  # resized, as the resize handle would cover its scrollbar.
+  # Calculate, the code button and the bug button; the results are outside
+  # it. It can be resized, with the handle moved off its scrollbar.
   sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
   expect_length(sidebar, 1)
-  expect_no_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
+  expect_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
+  # Spacing, section headings and the resize handle come from the shared
+  # style (test-epi_app.R)
+  expect_match(page, "--epi-gap:", fixed = TRUE)
   for (id in c("dataset", "codes", "diagnosis", "procedures", "procedure",
                "combine", "scope", "level", "years",
                "pool", "ages", "standard", "multiplier", "suppress",
-               "by_sex", "calculate", "insert_code")) {
+               "by_sex", "calculate", "insert_code", "bug_report")) {
     expect_true(has_id(sidebar, id), label = id)
   }
   sections <- c(events = "Events", population = "Population",
@@ -1916,14 +2016,53 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   }
   expect_equal(lengths(regmatches(sidebar, gregexpr("aria-expanded=\"true\"",
                                                     sidebar))), 4)
-  # Ages are a detail of the rates; the time periods are the years alone
+  # Ages and sex describe the population; the time periods are the years
+  # alone
   at <- function(x) regexpr(x, sidebar, fixed = TRUE)
-  expect_gt(at("id=\"ages\""), at("data-value=\"rate\""))
+  for (id in c("scope", "level", "ages", "by_sex")) {
+    expect_gt(at(paste0("id=\"", id, "\"")), at("data-value=\"population\""))
+    expect_lt(at(paste0("id=\"", id, "\"")), at("data-value=\"time\""))
+  }
   expect_lt(at("id=\"pool\""), at("data-value=\"rate\""))
+  expect_match(sidebar, "for=\"scope\">Geographic scope</label>", fixed = TRUE)
+
+  # Notes on a setting are behind an information button beside its label,
+  # and start hidden
+  help <- function(id) {
+    part(paste0("(?s)<details id=\"", id, "_help\" class=\"epi-help\">.*?</details>"))
+  }
+  for (id in c("codes", "diagnosis", "procedures", "min_events")) {
+    expect_length(help(id), 1)
+    expect_true(grepl(help(id), sidebar, fixed = TRUE), label = id)
+  }
+  expect_match(help("codes"), "Type words from a condition", fixed = TRUE)
+  expect_match(help("diagnosis"), paste0(
+    "ED searches all its diagnosis fields (EDShortListCode, Diagnosis1, ",
+    "Diagnosis2, Diagnosis3)"), fixed = TRUE)
+  expect_match(help("diagnosis"), paste(
+    "APC searches the principal diagnosis (Diagnosis1) or any diagnosis",
+    "(Diagnosis1 to Diagnosis100)."), fixed = TRUE)
+  expect_match(help("procedures"), "Type words from a procedure", fixed = TRUE)
+  expect_match(help("min_events"), "AIHW (2011)", fixed = TRUE)
   for (id in c("info_bar", "summary_table", "ex_map", "ex_funnel", "done",
-               "copy_table")) {
+               "copy_table", "ex_value")) {
     expect_false(has_id(sidebar, id), label = id)
   }
+
+  # The Explore tab's settings run down its own sidebar, beside the plots,
+  # with the notes on selecting areas behind an information button
+  explore <- part("(?s)<aside id=\"ex_settings\" class=\"sidebar.*?</aside>")
+  expect_length(explore, 1)
+  expect_match(page, "(?s)epi-tab-layout\"[^>]*>\\s*<div class=\"main\">.*?<aside id=\"ex_settings\"",
+               perl = TRUE)
+  for (id in c("ex_value", "ex_year", "ex_sex", "ex_ages", "ex_colour",
+               "ex_overdispersion", "ex_zoom", "ex_reset", "ex_clear",
+               "ex_download", "ex_map_pdf", "ex_funnel_png")) {
+    expect_true(has_id(explore, id), label = id)
+  }
+  expect_false(has_id(explore, "ex_map"))
+  expect_match(help("ex_zoom"), "lasso", fixed = TRUE)
+  expect_true(grepl(help("ex_zoom"), explore, fixed = TRUE))
 
   # The Tables tab switches between the rates and the age-specific rates,
   # with one button that copies the table shown
@@ -1944,10 +2083,8 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_true(has_id(sidebar, "min_events"))
   expect_true(has_id(sidebar, "min_population"))
 
-  # The logo is shown at the brand's minimum size with its clear space, and
-  # the page explains itself once Done has stopped the app
-  expect_match(page, ".epi-logo { height: 60px; }", fixed = TRUE)
-  expect_match(page, "The DSR Calculator has stopped.", fixed = TRUE)
+  # The page explains itself once the app has stopped
+  expect_match(page, "The DSR Calculator is no longer running.", fixed = TRUE)
 
   # The calculator opens in the web browser, with no other display offered
   expect_named(formals(episerver_dsr),

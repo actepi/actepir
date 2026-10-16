@@ -23,7 +23,7 @@ The harness shows that the apps and the test code work on synthetic data. It can
 | `fake_episerver.R` | `fake_query(sql)` answers every query the DSR Calculator and the EpiServer Browser send. The counts are synthetic, for 14 SA3s and their SA2s, 2001 to 2024. The ICD-10-AM titles are invented, for 28,600 diagnosis codes and 2,002 procedure codes in 201 blocks. |
 | `fake_abs.R` | `fake_fetch_json(url)` answers the ABS boundary requests with boxes around Canberra, coded as in `fake_episerver.R`. |
 | `run_app.R` | Installs the working tree into a temporary library, starts an app through its real background launcher with the fakes swapped in, and runs a Playwright script against it. |
-| `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, hover, Calculate, the three tables and Copy table, Copy Code, Explore (its toolbars, the Download menu and its four files, and state level), Help and Done. |
+| `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, section headings, information buttons, scrolling and resizing the sidebar, hover, Calculate, the three tables and Copy table with its notification, Copy Code, the problem report, the top bar, Explore (its settings panel, toolbars, the Download menu and its four files, and state level), Help, and the page once the app stops. |
 | `episerver_browser.js` | Baseline checks of the EpiServer Browser. |
 | `fake_live.R` | `fake(sql)` answers every query in `test-episerver_dsr_live.R`. Diagnosis conditions are applied to synthetic coded records. |
 | `dryrun_live.R` | Runs the live tests against `fake_live.R`. |
@@ -39,7 +39,7 @@ Rscript dev/harness/dryrun_live.R
 ```
 
 - The browser scripts print one line per check, in the form `LABEL: value`. They save screenshots to the output directory: look at them.
-- A run of `run_app.R` with `dsr_calculator.js` takes about 40 seconds.
+- A run of `run_app.R` with `dsr_calculator.js` takes about 90 seconds, with the install.
 - In the app's error stream, lines starting `fake ABS:` are the boundary requests the fake answered.
 
 These were the results when the harness was added (pull request #6):
@@ -68,6 +68,18 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
 | `episerver_browser.js` | Unchanged, through `episerver_browse()` with no display argument. |
 | `dryrun_live.R` | 11 tests, 192 expectations, 0 failed, 0 skipped: the test of `ERP5_STE_AUS` and the Australian residents' queries are gone. |
 
+Pull request #9 added checks of the sidebar, the notification and the problem report. The script now shows scrollbars, as Windows does. The results above were unchanged, and the new ones were:
+
+| Run | Results |
+|---|---|
+| `dsr_calculator.js`, sidebar | Sections Events, Population (Geographic scope, Geographic level, Ages, Male and female), Time periods and Rate details. Headings `rgb(234, 230, 241)`, text `rgb(50, 5, 87)`, weight 600. Each of the four information buttons (`codes_help`, `diagnosis_help`, `procedures_help`, `min_events_help`) shows its note and hides it again. With a 15px scrollbar, the wheel from the results scrolls the sidebar at 5 of 5 points across the scrollbar, dragging the thumb scrolls it, and dragging the edge 120px makes it 460px wide. |
+| `dsr_calculator.js`, notification | "Table copied to the clipboard" on `rgb(234, 230, 241)`, text and left border `rgb(50, 5, 87)`. |
+| `dsr_calculator.js`, problem report | The dialog "Report a problem" asks for an email to healthinfo@act.gov.au. In a 1440 by 650 window it fits, the wheel does not move it, and the details scroll. Copy report copies the sections What happened, Calculator, Settings, R code for these settings and R session, with the text typed, `Calculated: yes`, the settings, actepir's version and the browser. |
+| `dsr_calculator.js`, Explore | Settings down the left: Show, Year, Sex, Colour the map by, Allow for overdispersion, Selection and zoom, Zoom to selected, Show all, Clear selection and Download. The settings end at x = 596 and the map starts at 612; the plots end at y = 680 in a 900-pixel window. The panel has no right border and is 453px tall; in a 650-pixel window, scrolling 159px moves it up 112px, as it is held in view until the end of the tab's content. |
+| `dsr_calculator.js`, top bar | The name 33px from the left, the tabs 48px after it, the logo 33px from the right, 60px tall in a 104px bar, all three centred at y = 52, and no Done. Closing the page's connection shows "The DSR Calculator is no longer running." and how to open it again. |
+| `episerver_browser.js` | Unchanged results. The labels, boxes and gaps take the shared spacing (`.epi_app_style()`): 15px regular labels, 14px boxes, 10px gaps. |
+| `dryrun_live.R` | Unchanged: no query changed. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.
@@ -82,6 +94,8 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
   - Scripts set inputs through their widgets, for example `$('#id')[0].selectize.setValue()` or `$('#id').data('ionRangeSlider').update()`.
   - They click buttons, wait until Shiny is idle (no `shiny-busy` class on the page) and read the page.
   - Reading the clipboard needs `grantPermissions(['clipboard-read', 'clipboard-write'])`.
+  - Playwright hides scrollbars unless Chromium is launched with `ignoreDefaultArgs: ['--hide-scrollbars']`, as `dsr_calculator.js` is. The sidebar checks need the scrollbar.
+  - A closed `<details>` hides its content with `content-visibility`, so test whether a note shows with `checkVisibility()`, not `offsetHeight`.
 - **The dry run.**
   - `dryrun_live.R` copies the package's test helpers and the `_live` test files to a temporary directory, and adds a last helper that sources `fake_live.R`. It then runs them with `testthat::test_dir()` after `pkgload::load_all()`.
   - `fake_live.R` defines `.epi_connection()` in the test environment, where the tests find it before the package's. It also replaces it in the namespace for the apps the tests run, and turns `skip_if_no_episerver()` and `skip_if_no_abs()` into no-ops.

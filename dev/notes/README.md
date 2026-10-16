@@ -12,7 +12,7 @@ There is one file of notes per tool or feature of actepir, so that the next sess
 
 The rest of the package has no notes yet: EpiServer access and labels, the ggplot2 and gt themes, and the Quarto and R Markdown templates. Start notes for a part the next time it changes.
 
-[../harness/README.md](../harness/README.md) describes how to run the apps and the live tests offline.
+[../harness/README.md](../harness/README.md) describes how to run the apps and the live tests offline. [../reference/app-style.md](../reference/app-style.md) is the style guide for the apps' layout, spacing and components.
 
 ## Using and keeping the notes
 

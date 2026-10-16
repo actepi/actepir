@@ -11,7 +11,8 @@ const fs = require('fs');
 (async () => {
   const [url, out] = process.argv.slice(2);
   fs.mkdirSync(out, { recursive: true });
-  const browser = await chromium.launch();
+  // Scrollbars shown, as on Windows: Playwright hides them by default
+  const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   // Copy table and Copy Code write to the clipboard
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: url });
@@ -35,12 +36,83 @@ const fs = require('fs');
   await page.waitForSelector('#calculate');
   await settle();
 
-  // Layout: the tabs in the top bar, and the sidebar's sections and inputs
+  // Layout: the name at the left of the top bar, the tabs after a gap, the
+  // logo at the right and no Done; the sidebar's sections and inputs
   console.log('TABS:', JSON.stringify(await page.$$eval('.navbar-nav a.nav-link', as => as.map(a => a.textContent.trim()))));
+  console.log('TOP BAR:', JSON.stringify(await page.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    const brand = r('.navbar-brand'), tab = r('.navbar-nav a.nav-link'), logo = r('.navbar .epi-logo');
+    return { nameLeft: Math.round(brand.left), gapToTabs: Math.round(tab.left - brand.right),
+             middles: [brand, tab, logo].map(b => Math.round(b.top + b.height / 2)),
+             logoRight: Math.round(window.innerWidth - logo.right), logoHeight: Math.round(logo.height),
+             barHeight: Math.round(r('.navbar').height), done: !!document.querySelector('#done') };
+  })));
   console.log('SIDEBAR:', JSON.stringify(await page.$$eval('.accordion-item', items => items.map(i => [
     i.querySelector('.accordion-title').textContent.trim(),
     [...i.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim())
   ]))));
+
+  // Section headings: the info bar's tint, rgb(234, 230, 241), in bold
+  // Nightshade, rgb(50, 5, 87)
+  console.log('HEADINGS:', JSON.stringify(await page.$eval('.accordion-button', b => {
+    const s = getComputedStyle(b);
+    return [s.backgroundColor, s.color, s.fontWeight];
+  })));
+
+  // Each information button shows its notes and hides them again
+  for (const id of await page.$$eval('aside#settings .epi-help', ds => ds.map(d => d.id))) {
+    // A closed <details> hides its content with content-visibility, which
+    // leaves offsetHeight as it was
+    const visible = () => page.$eval(`#${id} .epi-note`, e => e.checkVisibility());
+    const before = await visible();
+    await page.click(`#${id} > summary`);
+    await page.waitForTimeout(300);
+    const open = await visible();
+    const note = (await text(`#${id} .epi-note`)).slice(0, 50);
+    if (id === 'codes_help') await shot('00_help_open');
+    await page.click(`#${id} > summary`);
+    await page.waitForTimeout(300);
+    console.log(`HELP ${id}: hidden ${!before}, shown ${open}, hidden again ${!(await visible())}:`, JSON.stringify(note));
+  }
+
+  // The wheel and the scrollbar's thumb scroll the sidebar when the pointer
+  // reaches the scrollbar from the results, and the edge widens the sidebar
+  const sidebar = await page.$eval('aside#settings', s => {
+    const r = s.getBoundingClientRect();
+    return { right: r.right, top: r.top, bottom: r.bottom,
+             scrollbar: s.offsetWidth - s.clientWidth - parseFloat(getComputedStyle(s).borderRightWidth) };
+  });
+  const sidebarState = () => page.$eval('aside#settings', s => [s.scrollTop, Math.round(s.getBoundingClientRect().width)]);
+  const y = Math.round((sidebar.top + sidebar.bottom) / 2) + 100;
+  const wheeled = [];
+  for (let off = 2; off <= sidebar.scrollbar; off += 3) {
+    await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+    await page.mouse.move(sidebar.right + 80, y);
+    await page.mouse.move(sidebar.right - off, y, { steps: 80 + off });
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(300);
+    wheeled.push((await sidebarState())[0] > 0);
+  }
+  console.log(`SIDEBAR scrollbar ${sidebar.scrollbar}px, wheel from the results scrolls it at`,
+    `${wheeled.filter(Boolean).length} of ${wheeled.length} points`);
+  await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+  await page.mouse.move(sidebar.right + 80, sidebar.top + 40);
+  await page.mouse.move(sidebar.right - 5, sidebar.top + 40, { steps: 85 });
+  await page.mouse.down();
+  await page.mouse.move(sidebar.right - 5, sidebar.top + 190, { steps: 10 });
+  await page.mouse.up();
+  console.log('SIDEBAR thumb dragged from the results: scrolled', (await sidebarState())[0] > 0);
+  await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+  await page.mouse.move(sidebar.right + 80, y);
+  await page.mouse.move(sidebar.right, y, { steps: 80 });
+  await page.mouse.down();
+  await page.mouse.move(sidebar.right + 120, y, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  console.log('SIDEBAR width after dragging its edge 120px:', (await sidebarState())[1]);
+  await page.reload();
+  await page.waitForSelector('#calculate');
+  await settle();
 
   // Primary buttons go to Iris, rgb(86, 44, 140), on hover
   const before = await background('#calculate');
@@ -70,6 +142,12 @@ const fs = require('fs');
     const lines = (await clipboard()).trim().split('\n');
     console.log(`COPY ${t}: ${lines.length - 1} rows, header`, JSON.stringify(lines[0]));
   }
+  // The notification is in the info bar's colours, not Shiny's blue
+  console.log('NOTIFICATION:', JSON.stringify(await page.$eval('#shiny-notification-panel .shiny-notification', n => {
+    const s = getComputedStyle(n);
+    return [n.textContent.replace(/\s+/g, ' ').replace('\u00d7', '').trim(), s.backgroundColor, s.color, s.borderLeftColor];
+  })));
+  await page.screenshot({ path: `${out}/02a_notification.png`, clip: { x: 1440 - 420, y: 900 - 160, width: 420, height: 160 } });
   // Populations and event totals below the minimums, each in its colour
   const highlights = cls => page.$$eval(`#counts_table tbody .${cls}`,
     es => [es.length, es.length ? getComputedStyle(es[0]).backgroundColor : null]);
@@ -83,6 +161,41 @@ const fs = require('fs');
   await page.waitForTimeout(800);
   console.log('CODE:', JSON.stringify((await clipboard()).split('\n').filter(l => /dsr_calculate|min_|suppress/.test(l))));
 
+  // The bug button opens the problem report; Copy report copies what was
+  // described and the details shown. In a short window the dialog fits,
+  // and the wheel outside the details does not move it.
+  await page.setViewportSize({ width: 1440, height: 650 });
+  await page.click('#bug_report');
+  await page.waitForSelector('#bug_details:not(:empty)');
+  await page.waitForTimeout(800);
+  console.log('REPORT dialog:', await text('.modal-title'), '|', await text('.modal-body p'));
+  const dialogTop = () => page.$eval('.modal-content', e => Math.round(e.getBoundingClientRect().top));
+  const fits = await page.$eval('.modal-content', e => e.getBoundingClientRect().bottom <= window.innerHeight);
+  const top0 = await dialogTop();
+  const what = await page.$eval('#bug_what', e => { const r = e.getBoundingClientRect(); return [r.left + 20, r.top + 20]; });
+  await page.mouse.move(what[0], what[1]);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(300);
+  const details = await page.$eval('#bug_details', e => { const r = e.getBoundingClientRect(); return [r.left + 40, r.top + 20]; });
+  await page.mouse.move(details[0], details[1]);
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(300);
+  console.log('REPORT in a 650px window: fits', fits, '| moved by the wheel', (await dialogTop()) !== top0,
+    '| details scrolled', await page.$eval('#bug_details', e => e.scrollTop > 0));
+  await page.fill('#bug_what', 'The map was blank.');
+  await page.waitForTimeout(600);
+  await shot('02b_report');
+  await page.click('#bug_copy');
+  await page.waitForTimeout(800);
+  const report = await clipboard();
+  const lines = report.split('\n');
+  console.log('REPORT headings:', JSON.stringify(lines.filter((l, i) => /^-+$/.test(lines[i + 1] || ''))));
+  console.log('REPORT lines:', JSON.stringify(lines.filter(l => /^(The map|Calculated|Settings error|Code button|codes =|level =|actepir |Browser|Window|Errors shown)/.test(l))));
+  await page.click('.modal-footer [data-bs-dismiss=modal]');
+  await page.waitForTimeout(600);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
+
   // Explore: the linked map and funnel plot
   await page.click('a[data-value=explore]');
   await page.waitForSelector('#ex_funnel svg [data-id]', { timeout: 60000 });
@@ -91,6 +204,42 @@ const fs = require('fs');
   console.log('EXPLORE heading:', await text('#ex_heading'));
   console.log('EXPLORE note:', await text('#ex_method'));
   console.log('EXPLORE areas: map', await areas('#ex_map svg [data-id]'), 'funnel', await areas('#ex_funnel svg [data-id]'));
+  // The settings run down the left of the plots, which fit the window, in a
+  // panel with no dividing border that stays in view as the page scrolls
+  const panel = () => page.$eval('#ex_settings', e => {
+    const s = getComputedStyle(e), r = e.getBoundingClientRect();
+    return { borderRight: s.borderRightStyle, top: Math.round(r.top), height: Math.round(r.height) };
+  });
+  // Scrolls the element that scrolls the tab: the first ancestor of the
+  // panel that overflows
+  const scrollTab = y => page.$eval('#ex_settings', (e, y) => {
+    for (let el = e.parentElement; el; el = el.parentElement) {
+      const o = getComputedStyle(el).overflowY;
+      if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) {
+        el.scrollTop = y === 'end' ? el.scrollHeight : y;
+        return el.scrollTop;
+      }
+    }
+    const doc = document.scrollingElement;
+    doc.scrollTop = y === 'end' ? doc.scrollHeight : y;
+    return doc.scrollTop;
+  }, y);
+  await page.setViewportSize({ width: 1440, height: 650 });
+  await page.waitForTimeout(600);
+  const panelTop = await panel();
+  const scrolled = await scrollTab('end');
+  await page.waitForTimeout(400);
+  console.log('EXPLORE panel:', JSON.stringify(panelTop), `scrolled ${scrolled}px:`, JSON.stringify(await panel()));
+  await scrollTab(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
+  console.log('EXPLORE settings:', JSON.stringify(await page.$$eval('#ex_settings label.control-label, #ex_settings .checkbox label, #ex_settings .btn',
+    ls => ls.filter(l => l.offsetParent).map(l => l.textContent.trim()))));
+  console.log('EXPLORE layout:', JSON.stringify(await page.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    return { settingsRight: Math.round(r('#ex_settings').right), mapLeft: Math.round(r('#ex_map svg').left),
+             plotsBottom: Math.round(Math.max(r('#ex_map svg').bottom, r('#ex_funnel svg').bottom)), window: window.innerHeight };
+  })));
   await shot('03_explore');
 
   // The toolbars, shown on pointing at a plot, in Iris rgb(86, 44, 140),
@@ -229,10 +378,10 @@ const fs = require('fs');
     es => es.map(e => [e.textContent, getComputedStyle(e).backgroundColor]))));
   await shot('11_counts_codes');
 
-  // Done stops the app and the page says so
-  await page.click('#done');
+  // When the app stops, the page says so: here the connection is closed
+  await page.evaluate(() => Shiny.shinyapp.$socket.close());
   await page.waitForSelector('.epi-stopped', { timeout: 15000 });
-  console.log('DONE:', await text('.epi-stopped'));
+  console.log('STOPPED:', await text('.epi-stopped'));
 
   await browser.close();
 })().catch(e => { console.log('SCRIPT ERROR:', e.message); process.exit(1); });
