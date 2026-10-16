@@ -101,6 +101,78 @@ const fs = require('fs');
   console.log('HELP sections:', JSON.stringify(await page.$$eval('.tab-pane.active h5', hs => hs.map(h => h.textContent.trim()))));
   await shot('05_help');
 
+  // Diagnosis codes: words list the codes whose titles have words starting
+  // with them, and Enter adds the code highlighted; a code or range is added
+  // as typed, by Enter or Tab; other text is not added; the note spells out
+  // each entry
+  let box = '#codes-selectized';
+  let control = '#codes ~ .selectize-control';
+  const suggestions = () => page.$$eval(`${control} .selectize-dropdown-content [data-selectable]`,
+    os => os.map(o => o.textContent.trim()));
+  const tags = () => page.$$eval(`${control} .selectize-input > [data-value]`,
+    ts => ts.map(t => [t.getAttribute('data-value'), t.getAttribute('title')]));
+  const typeCodes = async (s, key) => {
+    await page.click(box);
+    await page.type(box, s, { delay: 60 });
+    await page.waitForFunction(c => document.querySelectorAll(`${c} .selectize-dropdown-content [data-selectable]`).length > 0,
+      control, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const shown = await suggestions();
+    await page.keyboard.press(key);
+    await page.waitForTimeout(400);
+    return shown;
+  };
+  console.log('SEARCH myocard:', JSON.stringify(await typeCodes('myocard', 'Escape')));
+  await page.fill(box, '');
+  console.log('SEARCH old myoc, Enter:', JSON.stringify(await typeCodes('old myoc', 'Enter')));
+  console.log('SEARCH I25-I27, Enter:', JSON.stringify(await typeCodes('I25-I27', 'Enter')));
+  console.log('SEARCH J4, Tab:', JSON.stringify((await typeCodes('J4', 'Tab')).slice(0, 3)));
+  console.log('SEARCH zzzz, Tab:', JSON.stringify(await typeCodes('zzzz', 'Tab')));
+  await page.fill(box, '');
+  console.log('CODES tags:', JSON.stringify(await tags()));
+  await settle(800);
+  console.log('CODES note:', await text('#codes_note'));
+  // Clicking the empty box lists nothing
+  await page.click(box);
+  await page.waitForTimeout(400);
+  console.log('CODES list on clicking the empty box:',
+    await page.$eval(`${control} .selectize-dropdown`, d => getComputedStyle(d).display));
+  await shot('06_codes_note');
+  await page.click(box);
+  await page.type(box, 'acute myoc', { delay: 60 });
+  await page.waitForTimeout(800);
+  await shot('07_codes_search');
+  await page.keyboard.press('Escape');
+
+  // Procedure codes: disabled for ED. For APC, words list the codes and
+  // blocks, Enter adds the one highlighted, a code or block range is added as
+  // typed, and the note spells out each entry. Diagnoses or procedures then
+  // select the events.
+  box = '#procedures-selectized';
+  control = '#procedures ~ .selectize-control';
+  const disabled = () => page.evaluate(() => [
+    $('#procedures')[0].selectize.isDisabled,
+    $('input[name=procedure]').prop('disabled'),
+    $('input[name=combine]').prop('disabled')]);
+  console.log('PROCEDURES disabled with ED:', JSON.stringify(await disabled()));
+  console.log('PROCEDURES note with ED:', await text('#procedures_note'));
+  await select('dataset', 'APC');
+  await settle();
+  console.log('PROCEDURES disabled with APC:', JSON.stringify(await disabled()));
+  console.log('SEARCH nerve, Enter:', JSON.stringify(await typeCodes('nerve', 'Enter')));
+  console.log('SEARCH 39001-01, Enter:', JSON.stringify(await typeCodes('39001-01', 'Enter')));
+  console.log('SEARCH 1-5, Tab:', JSON.stringify((await typeCodes('1-5', 'Tab')).slice(0, 3)));
+  await page.fill(box, '');
+  console.log('PROCEDURES tags:', JSON.stringify(await tags()));
+  await settle(800);
+  console.log('PROCEDURES note:', await text('#procedures_note'));
+  await page.check('input[name=combine][value=or]');
+  await page.click('a[data-value=tables]');
+  await page.click('#calculate');
+  await settle(2000);
+  console.log('INFO BAR with codes:', (await text('#info_bar')).split('. ')[0]);
+  await shot('08_procedures');
+
   // Done stops the app and the page says so
   await page.click('#done');
   await page.waitForSelector('.epi-stopped', { timeout: 15000 });

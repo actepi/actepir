@@ -43,8 +43,7 @@
     )
   }
 
-  fields <- function(d) {
-    f <- d$diagnoses
+  fields <- function(f) {
     if (length(f) > 4) paste(f[1], "to", f[length(f)]) else paste(f, collapse = ", ")
   }
   surrounds <- paste0(names(.dsr_surrounds), " ", .dsr_surrounds,
@@ -73,10 +72,17 @@
     shiny::h5("Events"),
     table(
       c("Dataset", "Table", "Calendar year of", "Age in years",
-        "Diagnosis fields", "ICD-10 records"),
+        "Diagnosis fields", "Procedure fields", "ICD-10 records"),
       lapply(.dsr_datasets, function(d) {
         list(d$label, code(paste0("Analysis.dbo.", d$table)), code(d$date),
-             code(d$age), fields(d), code(d$icd10))
+             code(d$age), fields(d$diagnoses),
+             if (length(d$procedures)) {
+               paste0(fields(d$procedures), ", with their blocks in ",
+                      fields(d$blocks))
+             } else {
+               "None"
+             },
+             code(d$icd10))
       })
     ),
     para(
@@ -88,7 +94,26 @@
       "first code to its last and includes every code that starts with the ",
       "last. For APC the principal diagnosis is ",
       code(.dsr_datasets$APC$diagnoses[1]), ". ED has no field that holds the ",
-      "principal diagnosis in every year, so all its fields are searched."
+      "principal diagnosis in every year, so all its fields are searched. ",
+      "Searching by condition finds the codes whose titles have a word ",
+      "starting with each word typed. The titles come from ",
+      code("Analysis.dbo.ICD10AM"), ", each from the latest edition that ",
+      "holds the code, and a code that some editions lack is labelled with ",
+      "the editions that hold it."
+    ),
+    para(
+      "Procedure codes are ACHI codes, compared without hyphens, dots or ",
+      "spaces, and match as diagnosis codes do. A number of up to four ",
+      "digits, shown as [1826], is an ACHI block, matched against the block ",
+      "recorded with each procedure; a range of blocks runs from its first ",
+      "block to its last. For APC the principal procedure is ",
+      code(.dsr_datasets$APC$procedures[1]), ", with its block in ",
+      code(.dsr_datasets$APC$blocks[1]), ". ED records hold no procedures, ",
+      "so procedure codes apply to APC only. When diagnosis and procedure ",
+      "codes are both given, events are counted that have a diagnosis and a ",
+      "procedure, or either, as chosen. Block titles come from the codes' ",
+      "rows in ", code("Analysis.dbo.ICD10AM"), ", from the latest edition ",
+      "that holds the block."
     ),
 
     shiny::h5("Populations and areas"),

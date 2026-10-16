@@ -20,7 +20,7 @@ The harness shows that the apps and the test code work on synthetic data. It can
 
 | File | Does |
 |---|---|
-| `fake_episerver.R` | `fake_query(sql)` answers every query the DSR Calculator and the EpiServer Browser send. The counts are synthetic, for 14 SA3s and their SA2s, 2001 to 2024. |
+| `fake_episerver.R` | `fake_query(sql)` answers every query the DSR Calculator and the EpiServer Browser send. The counts are synthetic, for 14 SA3s and their SA2s, 2001 to 2024. The ICD-10-AM titles are invented, for 28,600 diagnosis codes and 2,002 procedure codes in 201 blocks. |
 | `fake_abs.R` | `fake_fetch_json(url)` answers the ABS boundary requests with boxes around Canberra, coded as in `fake_episerver.R`. |
 | `run_app.R` | Installs the working tree into a temporary library, starts an app through its real background launcher with the fakes swapped in, and runs a Playwright script against it. |
 | `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, hover, Calculate, the three tables and Copy table, Copy Code, Map, Explore, Help and Done. |
@@ -52,6 +52,14 @@ These were the results when the harness was added (pull request #6):
 | `episerver_browser.js` | 5 columns listed, and Iris on hover. |
 | `run_menu.R` | The dialog returns `tool = "dsr"`, `display = "browser"`. |
 | `dryrun_live.R` | 10 tests, 214 expectations, 0 failed, 0 skipped. |
+
+Pull request #7 added the diagnosis and procedure search checks to `dsr_calculator.js` and two live tests. The results above were unchanged, and the new ones were:
+
+| Run | Results |
+|---|---|
+| `dsr_calculator.js`, diagnosis codes | `myocard` lists I21, I21.0, I21.4, I22 and I25.2. `old myoc` and Enter adds I25.2, with its title on hover. `I25-I27` and Enter, and `J4` and Tab, add what was typed. `zzzz` and Tab adds nothing. The note spells out the three entries. Clicking the empty box opens no list. |
+| `dsr_calculator.js`, procedure codes | With ED the box and both choices are disabled, and the note says ED has no procedures; with APC they are enabled. `nerve` lists [900], 39001-00 and 39001-01, and Enter adds [900]. `39001-01` and Enter, and `1-5` and Tab, add what was typed. The note spells out the three entries. With "or", the info bar reads "APC separations, principal diagnosis I25.2, I25-I27 or J4 or principal procedure [900], 39001-01 or [1] to [5], ...". |
+| `dryrun_live.R` | 12 tests, 235 expectations, 0 failed, 0 skipped. |
 
 ## How it works
 

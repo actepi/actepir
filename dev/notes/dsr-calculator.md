@@ -10,6 +10,7 @@
 | #4 | Age ranges (truncated DSRs), an age-specific map, the three-year default and ASGS 2021 labels |
 | #5 | Explore tab (ggiraph map and funnel plot, linked), funnel methods and the Help tab |
 | #6 | Sidebar layout in the browser, keyboard-only highlights, the AIHW minimums (n.p.), Counts by age, validation against PHEindicatormethods and epitools, and these notes |
+| #7 | Searching diagnosis codes by condition, with ICD-10-AM titles from `Analysis.dbo.ICD10AM`, and each code entered spelt out below the box; APC procedure codes and ACHI blocks, searched the same way, combined with diagnoses by and or or |
 
 The pull request descriptions give the detail of each change and what to check against EpiServer.
 
@@ -18,7 +19,7 @@ The pull request descriptions give the detail of each change and what to check a
 | File | Holds |
 |---|---|
 | `R/dsr_calculate.R` | `dsr_calculate()` and `dsr_age_specific()`; strata (`.dsr_strata()`), exact Poisson limits (`.pois_lower()`, `.pois_upper()`), suppression and argument checks |
-| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); map controls; the app factory `episerver_dsr_app()` |
+| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`) and map controls; the app factory `episerver_dsr_app()` |
 | `R/dsr_map.R` | ABS boundaries (`.dsr_boundaries()`, `.dsr_fetch_json()`, the cache) and the static map (`.dsr_map_plot()`) |
 | `R/dsr_funnel.R` | Funnel statistics (`.dsr_funnel()`, limits, overdispersion) and the funnel plot |
 | `R/dsr_help.R` | The Help tab, built from the definitions so that it follows the code |
@@ -72,6 +73,32 @@ The pull request descriptions give the detail of each change and what to check a
 - **Ages on maps.** Maps and the funnel plot state the ages of the value shown in the title, axis labels, tooltips, click text and file names. Subtitles never state ages, so a map cannot give two age ranges.
 - **Not presented.** A DSR below the minimums reads n.p., and pointing at it gives the reason. The info bar counts n.p. rows by reason and names the remedies (pool years, choose a larger area).
 
+### Diagnosis and procedure search
+
+- **Titles.** They come from `Analysis.dbo.ICD10AM`, which the maintainer moved there from a reference database that analysts cannot reach.
+  - The table stacks every edition it holds (3 to 11), with diagnoses and procedures told apart by `VarType` (`'Diagnosis'`, `'Procedure'`).
+  - `.dsr_sql_icd()` reads both once, when the app starts, and `.dsr_icd_titles()` splits them by type. Each code takes its title from the latest edition that holds it, and a code that some editions lack is labelled with the editions that hold it, for example "(editions 3 to 9)".
+  - Editions come from `ICD10AMVersion`. The maintainer advised that `StartDate` and `EndDate` are not reliable.
+  - `ProcedureBlock` and `BlockDescription` are empty for diagnoses, so no diagnosis blocks (such as I20-I25) are offered.
+- **Not in the package.** ICD-10-AM is licensed by IHACPA and the repository is public, so the titles stay on EpiServer. Tests and fakes use invented titles only.
+- **Searching.**
+  - The browser holds only the suggestions for what has been typed, at most 100, fetched from a URL registered with `session$registerDataObj()`. The full list stays in R, so its size is not limited by the browser.
+  - Each word typed must match the start of a word in the code or title (`.dsr_icd_words()`). Codes match with or without the dot, and suggestions are in code order, each code before the codes under it.
+  - Accents are dropped from both sides, by code point, so the session's locale does not matter. Titles the driver returns in Windows-1252 are converted to UTF-8.
+- **The box's value is unchanged.** It is still the code text, so `.dsr_parse_codes()`, the SQL and Copy Code are untouched.
+  - A code or range is added as typed, by Enter, Tab or a comma, because the add option takes precedence for anything shaped like a code (`createFilter`).
+  - Other text is never made into a tag. Enter or Tab adds the suggestion highlighted.
+- **Ranges** are typed, as before. The note under the box spells out each entry: a code's title, the first and last codes under a partial code, or the codes at both ends of a range, and any code that is not in the table.
+- **Without the table,** the note says the search is unavailable and the box takes typed codes as before.
+- **Procedures** have a box of their own, with *Procedure search* (principal or any) and the and/or choice below it.
+  - Only APC holds procedures: `Procedure1` to `Procedure50`, with each one's ACHI block in `BlockProcedure1` to `BlockProcedure50` (`.dsr_datasets`). `Procedure1` is the principal procedure.
+  - For ED the box and both choices are disabled, and `.dsr_spec()` drops any procedure codes, so ED rates ignore them. The entries stay in the box for when APC is chosen again.
+  - Codes are ACHI codes (`11012-00`), compared without hyphens or dots, so the SQL works whether the data hold them with or without the hyphen. Partial codes need the five-digit stem (`11012`).
+  - **Blocks** are searched in the `BlockProcedure` fields, not expanded into codes, so a block keeps the codes the coder's edition put in it. A number of up to four digits is a block (`1826`, shown as `[1826]`) and five or more a code, so the two cannot be confused.
+  - **Ranges** of codes take "to" (`11000-00 to 11027-00`), as codes contain a hyphen; a hyphen between two stems (`11000-11027`) or two blocks (`1820-1830`) also makes a range.
+  - The search lists blocks and codes in block order, each block before its codes, and a block takes its description from the latest edition that holds it. The descriptions in the table are abbreviated to about 40 characters.
+- **And or or.** With both diagnoses and procedures, the events SQL has one `EXISTS` for each, joined by `AND`, or by `OR` inside brackets. With only one of them the condition is as before, so the diagnosis-only SQL did not change.
+
 ### Funnel plots
 
 - **DSRs** follow OHID's Fingertips method. Each DSR is plotted against the population derived as events / DSR, and the average is total events over total derived population. Areas whose DSR is not presented are left out, replacing OHID's rule of fewer than 10 events.
@@ -109,6 +136,10 @@ The pull request descriptions give the detail of each change and what to check a
   - The ACT Health release rules should set the method.
 - **Consistent time series.** The minimums apply row by row, so a series can have n.p. years. The principles ask for one method across a series. A warning when a series has gaps would help; pooling stays the analyst's choice.
 - **Counts by age width.** The table fits a 1920-pixel window, but at 1440 pixels it scrolls sideways.
+- **ICD-10-AM editions 12 and 13.** `Analysis.dbo.ICD10AM` stops at edition 11. Codes new in later editions have no titles: the search does not offer them and the note under the box calls them not in editions 3 to 11. Typed, they still select events. Adding the editions to the table needs no code change.
+- **Start-up time.** The titles query runs when the app starts. Its time on EpiServer has not been measured.
+- **Procedure code format.** The data's `Procedure` fields are `varchar(8)`, so they may hold `11012-00` or `1101200`; the SQL handles both. The live test "the ICD-10-AM and ACHI titles cover the codes recorded" checks that the codes and blocks of 2018 meet the table's.
+- **Wording of mixed searches.** The info bar joins the two lists with "and" or "or", for example "principal diagnosis I21 or J46 or any procedure [1826]". With several codes on each side it can read ambiguously.
 - **R CMD check notes,** also on `main`:
   - "Namespace in Imports field not imported from: 'labelled'";
   - the examples write two files to the sass cache.
@@ -116,7 +147,7 @@ The pull request descriptions give the detail of each change and what to check a
 ## How to check a change
 
 **Offline:**
-- Run the three commands in CLAUDE.md. With no EpiServer, 19 tests skip: 17 that need EpiServer, 1 that needs an ODBC driver and 1 that needs the ABS service.
+- Run the three commands in CLAUDE.md. With no EpiServer, these tests skip: 19 that need EpiServer, 1 that needs an ODBC driver, and 1 that needs the ABS service when it cannot be reached.
 - `test-dsr_validation.R` needs `PHEindicatormethods` and `epitools`, and skips without them.
 - For the app in a browser, run `Rscript dev/harness/run_app.R dev/harness/dsr_calculator.js <output dir>`. Compare the output with the results recorded in `dev/harness/README.md`, and look at the screenshots.
 - For the live tests, run `Rscript dev/harness/dryrun_live.R`.
