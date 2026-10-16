@@ -167,9 +167,10 @@ and procedure codes are entered, events with a diagnosis and a procedure
 The \emph{Tables} tab shows the rates, the \emph{Age-specific rates} by 5-year age
 group for the ages chosen, or the \emph{Counts by age}: the events and the
 population of each age group, one row of each for every year or period,
-area and sex, with populations under the minimum per age group and event
-totals under the minimum for a DSR highlighted. \emph{Copy table} copies the
-table shown as tab-separated text that pastes into Excel.
+area and sex, with populations under the minimum per age group highlighted
+in yellow and event totals under the minimum for a DSR in blue. \emph{Copy
+table} copies the table shown as tab-separated text that pastes into
+Excel.
 
 The \emph{Explore} tab compares the SA3s or SA2s in an interactive map and a
 funnel plot, side by side, of the age-standardised rate, crude rate,
@@ -187,13 +188,13 @@ Pointing at an area or a point shows its figures. Clicking areas or
 points, or drawing round them with the lasso in a plot's toolbar, selects
 them in both plots and lists them below; \emph{Zoom to selected} zooms the map
 to them, and the magnifier in the toolbar zooms and pans. The map can be
-coloured by value or by each area's position in the funnel plot. Each
-plot's toolbar downloads it as a PNG. \emph{Map PDF} and \emph{Funnel plot PDF}
-save them as PDF, titled with the measure and settings; the map PDF
-follows \emph{Zoom to selected} but not the toolbar's zoom. Boundaries are the
-ASGS Edition 3 (2021) boundaries, downloaded from the ABS boundary service
-(\code{geo.abs.gov.au}) the first time a level is mapped and kept in the folder
-given by \code{tools::R_user_dir("actepir", "cache")}.
+coloured by value or by each area's position in the funnel plot.
+\emph{Download} saves the map or the funnel plot as PDF or PNG, titled with the
+measure and settings; the map follows \emph{Zoom to selected} but not the
+toolbar's zoom. Boundaries are the ASGS Edition 3 (2021) boundaries,
+downloaded from the ABS boundary service (\code{geo.abs.gov.au}) the first time
+a level is mapped and kept in the folder given by
+\code{tools::R_user_dir("actepir", "cache")}.
 
 The funnel plot compares each area with the average of the areas plotted,
 allowing for the size of its population, so that areas can be compared

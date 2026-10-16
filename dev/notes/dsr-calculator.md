@@ -11,7 +11,7 @@
 | #5 | Explore tab (ggiraph map and funnel plot, linked), funnel methods and the Help tab |
 | #6 | Sidebar layout in the browser, keyboard-only highlights, the AIHW minimums (n.p.), Counts by age, validation against PHEindicatormethods and epitools, and these notes |
 | #7 | Searching diagnosis codes by condition, with ICD-10-AM titles from `Analysis.dbo.ICD10AM`, and each code entered spelt out below the box; APC procedure codes and ACHI blocks, searched the same way, combined with diagnoses by and or or |
-| Branch `claude/peaceful-johnson-wdrmzf` | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, PDF downloads and brand-coloured toolbars on the Explore tab, and an add-in for each app in place of the menu (browser only) |
+| Branch `claude/peaceful-johnson-wdrmzf` | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, a Download menu (map or funnel plot, PDF or PNG) and brand-coloured toolbars on the Explore tab, a second highlight colour in Counts by age, and an add-in for each app in place of the menu (browser only) |
 
 The pull request descriptions give the detail of each change and what to check against EpiServer.
 
@@ -73,6 +73,7 @@ The pull request descriptions give the detail of each change and what to check a
 - **Opening.** The app opens in the web browser only, from its add-in or `episerver_dsr()` (see `shared-apps.md`).
 - **Tables.** The Tables tab switches between Rates, Age-specific rates and Counts by age, with one Copy table button for the table shown.
   - Copied tables use en dashes in age groups and periods, so Excel keeps them as text.
+  - Counts by age highlights populations under the minimum in Tuggeranong yellow and event totals under the minimum in Inner North blue, each mixed 75% with white (`#F1ECC2`, `#BFE3F1`; classes `dsr-short-pop` and `dsr-short-events`). The note above the table shows each in its colour. The blue was chosen from the regional and district colours, mixed the same way: it differs from the yellow by OKLab ΔE 8.3 or more in normal vision and simulated deuteranopia, protanopia and tritanopia, stands out from the white and striped rows more than the yellow does, and dark text on it has 9.3:1 contrast. Coral and pink tints came within 4.3 to 5.3 of the yellow under colour-vision deficiency, and Bluebell and Orchid tints within 3.5.
 - **Ages on maps.** The map and the funnel plot state the ages of the value shown in the title, axis labels, tooltips and file names. Subtitles never state ages, so a map cannot give two age ranges.
 - **Not presented.** A DSR below the minimums reads n.p., and pointing at it gives the reason. The info bar counts n.p. rows by reason and names the remedies (pool years, choose a larger area).
 
@@ -126,10 +127,11 @@ The pull request descriptions give the detail of each change and what to check a
 - **One map.** The Explore tab is the only map. A static Map tab, with Copy map, PNG and PDF, was removed as the Explore tab does what it did and more.
 - **Libraries.** The Explore tab uses ggiraph: SVG with tooltips and selection, with no map tiles. Leaflet was rejected: it adds about 19 packages, including sf, terra and raster, and its tiles would go through the proxy.
 - **Exports.**
-  - ggiraph's toolbar, shown on pointing at a plot, downloads a PNG of what is on screen. Its file name (`pngname`) follows `ex_file()`, as the PDFs' do.
-  - Map PDF and Funnel plot PDF give vector copies: `ggsave()` of the same ggplot, with the heading over the plots as title and subtitle. ggiraph's interactive layers draw as plain layers in a PDF device.
-  - The map PDF follows Zoom to selected (server side), not the toolbar's pan and zoom, which the server does not see.
-  - The map PDF takes the shape of the area in view, but is at least 8 inches wide, as the funnel plot PDF is. Narrower, the subtitle (wrapped at 70 characters) was cut off beside the ACT, which is taller than it is wide.
+  - One Download menu saves the map or the funnel plot as PDF or PNG. It is a Bootstrap dropdown written in HTML (bslib already loads Bootstrap's JavaScript), so it adds no package. Its four links are `downloadLink()`s, with `suspendWhenHidden = FALSE` because they sit in a closed menu, and Shiny leaves a download link disabled until it has its address.
+  - Each file is `ggsave()` of the same ggplot as on the page, with the heading over the plots as title and subtitle; PNGs at 200 dpi. ggiraph's interactive layers draw as plain layers outside the browser. File names come from `ex_file()`.
+  - ggiraph's own PNG button is hidden with `opts_toolbar(hidden = "saveaspng")`, so there is one way to save. `saveaspng = FALSE` does not hide it: `girafe()` merges the toolbar options by the arguments named in the call and drops the `hidden` entry that `saveaspng = FALSE` sets.
+  - The map follows Zoom to selected (server side), not the toolbar's pan and zoom, which the server does not see.
+  - The map takes the shape of the area in view, but is at least 8 inches wide, as the funnel plot is. Narrower, the subtitle (wrapped at 70 characters) was cut off beside the ACT, which is taller than it is wide.
   - The toolbar icons are Iris, Nightshade on hover, by CSS on `.ggiraph-toolbar-icon.neutral`; ggiraph's default is blue `#069`. Lasso deselection stays red.
 
 ## Open items
@@ -151,7 +153,7 @@ The pull request descriptions give the detail of each change and what to check a
 - **Start-up time.** The titles query runs when the app starts. Its time on EpiServer has not been measured.
 - **Procedure code format.** The data's `Procedure` fields are `varchar(8)`, so they may hold `11012-00` or `1101200`; the SQL handles both. The live test "the ICD-10-AM and ACHI titles cover the codes recorded" checks that the codes and blocks of 2018 meet the table's.
 - **Wording of mixed searches.** The info bar joins the two lists with "and" or "or", for example "principal diagnosis I21 or J46 or any procedure [1826]". With several codes on each side it can read ambiguously.
-- **PDF buttons with nothing to save.** Map PDF and Funnel plot PDF stay on the Explore tab before Calculate, at state level and, for the map, when the boundaries cannot be downloaded. A click then fails in the browser's downloads. Disabling them would need the server to tell the page when each plot exists.
+- **Download with nothing to save.** The Download menu's choices stay available before Calculate, at state level and, for the map, when the boundaries cannot be downloaded. A choice then fails in the browser's downloads. Disabling them would need the server to tell the page when each plot exists.
 - **R CMD check notes,** also on `main`:
   - "Namespace in Imports field not imported from: 'labelled'";
   - the examples write two files to the sass cache.

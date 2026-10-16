@@ -1423,7 +1423,11 @@ test_that("counts by age set events and populations out with the ages across", {
   expect_match(renders[1], "!events && 10200 > 0 && data < 10200",
                fixed = TRUE)
   expect_match(renders[2], "events && 600 > 0", fixed = TRUE)
-  expect_match(renders[2], "dsr-short", fixed = TRUE)
+  # Each in its own colour: dsr-short-events or dsr-short-pop
+  for (render in renders) {
+    expect_match(render, "'<span class=\"dsr-short dsr-short-' +", fixed = TRUE)
+    expect_match(render, "(events ? 'events' : 'pop')", fixed = TRUE)
+  }
 
 })
 
@@ -1448,7 +1452,18 @@ test_that("the app shows counts by age and explains the highlights", {
                  paste("Highlighted: populations under 10,200 in an age group",
                        "and event totals under 600, below the minimums"),
                  fixed = TRUE)
-    expect_match(output$counts_table, "dsr-short", fixed = TRUE)
+    # Each in the colour it has in the table
+    html <- output$counts_note$html
+    expect_match(html, paste0("<span class=\"dsr-short dsr-short-pop\">",
+                              "populations under 10,200"), fixed = TRUE)
+    expect_match(html, paste0("<span class=\"dsr-short dsr-short-events\">",
+                              "event totals under 600</span>"), fixed = TRUE)
+    expect_match(output$counts_table, "dsr-short dsr-short-", fixed = TRUE)
+
+    session$setInputs(min_population = 0)
+    note <- gsub("\\s+", " ", strip_html(output$counts_note$html))
+    expect_match(note, "Highlighted: event totals under 600, below the minimums",
+                 fixed = TRUE)
 
     session$setInputs(min_events = 0, min_population = 0, suppress = 0)
     expect_no_match(strip_html(output$counts_note$html), "Highlighted")
@@ -1491,13 +1506,16 @@ test_that("the Explore map shows the rates and saves them with the heading", {
     expect_match(heading, t$title, fixed = TRUE)
     expect_match(heading, t$subtitle, fixed = TRUE)
 
-    # The PDF is titled with the heading and named for what it shows
+    # Downloads are titled with the heading and named for what they show
     p <- ex_map_plot(t$title, t$subtitle)
     expect_equal(p$labels$title, t$title)
     expect_equal(gsub("\n", " ", p$labels$subtitle), t$subtitle)
     file <- output$ex_map_pdf
     expect_equal(basename(file), "dsr-map-dsr-2023-persons.pdf")
     expect_equal(readBin(file, "raw", 4), charToRaw("%PDF"))
+    file <- output$ex_map_png
+    expect_equal(basename(file), "dsr-map-dsr-2023-persons.png")
+    expect_equal(readBin(file, "raw", 4), as.raw(c(0x89, 0x50, 0x4e, 0x47)))
 
     session$setInputs(ex_value = "Events")
     p <- ex_map_plot()
@@ -1821,16 +1839,27 @@ test_that("the app starts on three years and all ages, with ASGS 2021 levels", {
   expect_match(page, "<option value=\"sa3\">SA3 (ASGS 2021)</option>",
                fixed = TRUE)
 
-  # The Explore tab has the map settings, the PDF downloads and toolbars in
-  # the brand purples; the Population choice has no Australian residents
+  # The Explore tab has the map settings, one Download menu of the four
+  # files, and toolbars in the brand purples; the Population choice has no
+  # Australian residents
   for (input in c("value", "year", "sex", "ages")) {
     expect_match(page, paste0("id=\"ex_", input, "\""), fixed = TRUE)
   }
   expect_match(page, "data-value=\"explore\"", fixed = TRUE)
   expect_match(page, "id=\"ex_funnel\"", fixed = TRUE)
   expect_match(page, "id=\"ex_overdispersion\"[^>]*checked")
-  expect_match(page, "id=\"ex_map_pdf\"", fixed = TRUE)
-  expect_match(page, "id=\"ex_funnel_pdf\"", fixed = TRUE)
+  menu <- regmatches(page, regexpr("(?s)<div class=\"dropdown\">.*?</ul>",
+                                   page, perl = TRUE))
+  expect_length(menu, 1)
+  expect_match(menu, "id=\"ex_download\"[^>]*data-bs-toggle=\"dropdown\"")
+  links <- regmatches(menu, gregexpr(
+    "<a [^>]*class=\"shiny-download-link[^\"]*dropdown-item\"[^>]*>[^<]*",
+    menu))[[1]]
+  expect_equal(sub(".*id=\"([a-z_]+)\".*", "\\1", links),
+               c("ex_map_pdf", "ex_map_png", "ex_funnel_pdf", "ex_funnel_png"))
+  expect_equal(sub(".*>", "", links),
+               c("Map as PDF", "Map as PNG", "Funnel plot as PDF",
+                 "Funnel plot as PNG"))
   expect_match(page, paste0("(?s)\\.ggiraph-toolbar-icon\\.neutral \\{\\s*",
                             "stroke: var\\(--epi-accent\\)"), perl = TRUE)
   expect_match(page, "data-value=\"help\"", fixed = TRUE)
@@ -2005,7 +2034,8 @@ test_that("the Explore tab maps age-specific rates for the ages chosen", {
     expect_match(t$subtitle, "residents of the ACT and surrounds, by SA3",
                  fixed = TRUE)
     expect_no_match(t$subtitle, "aged")
-    expect_equal(ex_file("map"), "dsr-map-agerate-aged-20-to-44-2023-persons")
+    expect_equal(ex_file("map", "png"),
+                 "dsr-map-agerate-aged-20-to-44-2023-persons.png")
 
     tip <- strip_html(ex_tooltips()[["ACT"]])
     expect_match(tip, "SA3 ACT Area ACT, aged 20 to 44", fixed = TRUE)
@@ -2026,7 +2056,8 @@ test_that("the Explore tab maps age-specific rates for the ages chosen", {
     expect_equal(ex_titles()$title,
                  "Age-standardised rate per 100,000, aged 20 to 74, 2023, persons")
     expect_no_match(ex_titles()$subtitle, "aged")
-    expect_equal(ex_file("funnel"), "dsr-funnel-dsr-aged-20-to-74-2023-persons")
+    expect_equal(ex_file("funnel", "pdf"),
+                 "dsr-funnel-dsr-aged-20-to-74-2023-persons.pdf")
     expect_match(strip_html(ex_tooltips()[["ACT"]]), "Area ACT, aged 20 to 74",
                  fixed = TRUE)
     session$setInputs(ex_value = "Events")
@@ -2146,14 +2177,17 @@ test_that("the Explore tab plots the areas in a funnel plot of the measure", {
     expect_match(html, "Funnel plot: Above 99.8% limit", fixed = TRUE)
     expect_match(output$ex_funnel, "data-id='80105'", fixed = TRUE)
 
-    # The toolbars download PNGs named as the PDFs are, and the funnel plot
-    # PDF is titled with the heading
-    expect_match(html, "dsr-map-dsr-2023-persons", fixed = TRUE)
-    expect_match(output$ex_funnel, "dsr-funnel-dsr-2023-persons", fixed = TRUE)
-    expect_no_match(output$ex_funnel, "saveaspng", fixed = TRUE)
+    # The toolbars have no PNG download: Download saves both plots, titled
+    # with the heading
+    for (plot in list(html, output$ex_funnel)) {
+      expect_match(plot, "\"hidden\":\\[?\"saveaspng\"")
+    }
     file <- output$ex_funnel_pdf
     expect_equal(basename(file), "dsr-funnel-dsr-2023-persons.pdf")
     expect_equal(readBin(file, "raw", 4), charToRaw("%PDF"))
+    file <- output$ex_funnel_png
+    expect_equal(basename(file), "dsr-funnel-dsr-2023-persons.png")
+    expect_equal(readBin(file, "raw", 4), as.raw(c(0x89, 0x50, 0x4e, 0x47)))
     t <- ex_titles()
     expect_equal(ex_funnel_plot(t$title, t$subtitle)$labels$title, t$title)
   })

@@ -121,9 +121,10 @@
 #' The *Tables* tab shows the rates, the *Age-specific rates* by 5-year age
 #' group for the ages chosen, or the *Counts by age*: the events and the
 #' population of each age group, one row of each for every year or period,
-#' area and sex, with populations under the minimum per age group and event
-#' totals under the minimum for a DSR highlighted. *Copy table* copies the
-#' table shown as tab-separated text that pastes into Excel.
+#' area and sex, with populations under the minimum per age group highlighted
+#' in yellow and event totals under the minimum for a DSR in blue. *Copy
+#' table* copies the table shown as tab-separated text that pastes into
+#' Excel.
 #'
 #' The *Explore* tab compares the SA3s or SA2s in an interactive map and a
 #' funnel plot, side by side, of the age-standardised rate, crude rate,
@@ -141,13 +142,13 @@
 #' points, or drawing round them with the lasso in a plot's toolbar, selects
 #' them in both plots and lists them below; *Zoom to selected* zooms the map
 #' to them, and the magnifier in the toolbar zooms and pans. The map can be
-#' coloured by value or by each area's position in the funnel plot. Each
-#' plot's toolbar downloads it as a PNG. *Map PDF* and *Funnel plot PDF*
-#' save them as PDF, titled with the measure and settings; the map PDF
-#' follows *Zoom to selected* but not the toolbar's zoom. Boundaries are the
-#' ASGS Edition 3 (2021) boundaries, downloaded from the ABS boundary service
-#' (`geo.abs.gov.au`) the first time a level is mapped and kept in the folder
-#' given by `tools::R_user_dir("actepir", "cache")`.
+#' coloured by value or by each area's position in the funnel plot.
+#' *Download* saves the map or the funnel plot as PDF or PNG, titled with the
+#' measure and settings; the map follows *Zoom to selected* but not the
+#' toolbar's zoom. Boundaries are the ASGS Edition 3 (2021) boundaries,
+#' downloaded from the ABS boundary service (`geo.abs.gov.au`) the first time
+#' a level is mapped and kept in the folder given by
+#' `tools::R_user_dir("actepir", "cache")`.
 #'
 #' The funnel plot compares each area with the average of the areas plotted,
 #' allowing for the size of its population, so that areas can be compared
@@ -1536,7 +1537,7 @@ WHERE Latest = 1"
 
 # DataTable of .dsr_counts(): suppressed events read "<suppress", and
 # populations under min_population and event totals under min_events, the
-# minimums for a DSR, are highlighted
+# minimums for a DSR, are highlighted, each in its own colour
 #' @noRd
 .dsr_counts_datatable <- function(df, area_label, suppress = 0,
                                   min_events = 0, min_population = 0) {
@@ -1570,7 +1571,9 @@ WHERE Latest = 1"
          var short = %s ?
            (events && %s > 0 && (data === null ? %s <= %s : data < %s)) :
            (!events && %s > 0 && data < %s);
-         return short ? '<span class=\"dsr-short\">' + text + '</span>' : text;
+         if (!short) return text;
+         return '<span class=\"dsr-short dsr-short-' +
+           (events ? 'events' : 'pop') + '\">' + text + '</span>';
        }",
       .fmt_count(suppress), if (total) "true" else "false",
       min_events, suppress, min_events, min_events,
@@ -1926,6 +1929,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .explore-panel { flex: 1 1 400px; min-width: 0; }
         .explore-panel .ex-linked { stroke: #320557 !important;
                                     stroke-width: 2px !important; }
+        /* The Download menu's choices in the brand purples */
+        .dropdown-menu {
+          --bs-dropdown-link-hover-bg: var(--epi-info-bg);
+          --bs-dropdown-link-active-bg: var(--epi-accent);
+        }
         /* The plots' toolbars in Iris, Nightshade on hover, in place of
            ggiraph's blue; lasso deselection stays red */
         .explore-panel .ggiraph-toolbar-icon.neutral {
@@ -1952,9 +1960,12 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                         padding: 4px 10px; margin: 4px 0 8px 0;
                         font-family: Georgia, 'Times New Roman', serif; }
         .help-refs li { margin-bottom: 4px; }
-        /* Counts by age: below a minimum for a DSR (light regional yellow) */
-        .dsr-short { background: #F1ECC2; padding: 1px 4px;
-                     border-radius: 2px; }
+        /* Counts by age: below a minimum for a DSR. Populations in
+           Tuggeranong yellow, event totals in Inner North blue, each mixed
+           75% with white. */
+        .dsr-short { padding: 1px 4px; border-radius: 2px; }
+        .dsr-short-pop { background: #F1ECC2; }
+        .dsr-short-events { background: #BFE3F1; }
         /* Shown in place of Shiny's grey overlay once Done stops the app */
         .epi-stopped { position: fixed; inset: 0; z-index: 100000;
                        display: flex; flex-direction: column;
@@ -2266,10 +2277,30 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         shiny::actionButton("ex_clear", "Clear selection",
                             icon = shiny::icon("xmark"),
                             class = "btn-sm btn-primary"),
-        shiny::downloadButton("ex_map_pdf", "Map PDF",
-                              class = "btn-sm btn-primary"),
-        shiny::downloadButton("ex_funnel_pdf", "Funnel plot PDF",
-                              class = "btn-sm btn-primary")
+        # Download: a Bootstrap dropdown of the four files
+        shiny::div(
+          class = "dropdown",
+          shiny::tags$button(
+            id = "ex_download", type = "button",
+            class = "btn btn-sm btn-primary dropdown-toggle",
+            `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+            shiny::icon("download"), "Download"
+          ),
+          shiny::tags$ul(
+            class = "dropdown-menu",
+            shiny::tags$li(shiny::downloadLink("ex_map_pdf", "Map as PDF",
+                                               class = "dropdown-item")),
+            shiny::tags$li(shiny::downloadLink("ex_map_png", "Map as PNG",
+                                               class = "dropdown-item")),
+            shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
+            shiny::tags$li(shiny::downloadLink("ex_funnel_pdf",
+                                               "Funnel plot as PDF",
+                                               class = "dropdown-item")),
+            shiny::tags$li(shiny::downloadLink("ex_funnel_png",
+                                               "Funnel plot as PNG",
+                                               class = "dropdown-item"))
+          )
+        )
       ),
       shiny::uiOutput("ex_note"),
       shiny::uiOutput("ex_heading"),
@@ -2725,13 +2756,20 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     output$counts_note <- shiny::renderUI({
       r <- results()
       shiny::req(r, is.null(r$error))
+      # Each in the colour it has in the table
+      key <- function(type, text) {
+        shiny::span(class = paste0("dsr-short dsr-short-", type), text,
+                    .noWS = "outside")
+      }
       short <- c(
         if (r$min_population > 0) {
-          paste0("populations under ", .fmt_count(r$min_population),
-                 " in an age group")
+          list(key("pop", paste0("populations under ",
+                                 .fmt_count(r$min_population),
+                                 " in an age group")))
         },
         if (r$min_events > 0) {
-          paste0("event totals under ", .fmt_count(r$min_events))
+          list(key("events", paste0("event totals under ",
+                                    .fmt_count(r$min_events))))
         }
       )
       shiny::div(
@@ -2740,8 +2778,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         if (length(short)) {
           shiny::tagList(
             "Highlighted: ",
-            shiny::span(class = "dsr-short", paste(short, collapse = " and "),
-                        .noWS = "outside"),
+            if (length(short) == 2) {
+              list(short[[1]], " and ", short[[2]])
+            } else {
+              short
+            },
             ", below the minimums for an age-standardised rate. "
           )
         },
@@ -3011,17 +3052,19 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # File names of the saved plots, e.g.
-    # dsr-map-agerate-aged-20-to-44-2023-persons
-    ex_file <- function(what) {
+    # dsr-map-agerate-aged-20-to-44-2023-persons.pdf
+    ex_file <- function(what, ext) {
       ages <- ex$ages_label(results())
       if (!is.null(ages)) ages <- paste0("-", gsub(" ", "-", ages))
       paste0("dsr-", what, "-", tolower(ex$get("value")), ages, "-",
-             ex$get("year"), "-", tolower(ex$get("sex")))
+             ex$get("year"), "-", tolower(ex$get("sex")), ".", ext)
     }
 
-    # Both plots are SVG drawn by ggiraph, with the same selection, hover,
-    # zoom and PNG download
-    ex_girafe <- function(p, what) {
+    # Both plots are SVG drawn by ggiraph, with the same selection, hover and
+    # zoom. The toolbar's PNG download is hidden, as Download saves both
+    # plots; saveaspng = FALSE would not hide it, as girafe() drops the
+    # setting.
+    ex_girafe <- function(p) {
       p <- p + ggplot2::theme(plot.margin = ggplot2::margin(26, 12, 8, 8))
       ggiraph::girafe(
         ggobj = p, width_svg = 6.5, height_svg = 6,
@@ -3033,7 +3076,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           ggiraph::opts_selection_inv(css = "opacity:0.35;"),
           ggiraph::opts_hover(css = "stroke:#320557;stroke-width:2px;"),
           ggiraph::opts_zoom(min = 1, max = 10),
-          ggiraph::opts_toolbar(position = "topright", pngname = ex_file(what)),
+          ggiraph::opts_toolbar(position = "topright", hidden = "saveaspng"),
           ggiraph::opts_tooltip(
             css = paste0("background:#ffffff;color:#333740;",
                          "border:1px solid #c8c3dd;border-radius:4px;",
@@ -3105,7 +3148,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    output$ex_map <- ggiraph::renderGirafe(ex_girafe(ex_map_plot(), "map"))
+    output$ex_map <- ggiraph::renderGirafe(ex_girafe(ex_map_plot()))
 
     # Axis titles of the funnel plot for the measure: a rate is named as in
     # the title, against the population of the same ages
@@ -3143,15 +3186,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    output$ex_funnel <- ggiraph::renderGirafe(
-      ex_girafe(ex_funnel_plot(), "funnel")
-    )
+    output$ex_funnel <- ggiraph::renderGirafe(ex_girafe(ex_funnel_plot()))
 
-    # Map PDF and Funnel plot PDF: vector copies of the plots, titled with
+    # Download: the map or the funnel plot as PDF (vector) or PNG, titled with
     # the heading. The map takes the shape of the area in view.
-    ex_pdf <- function(what) {
+    ex_download <- function(what, ext) {
       shiny::downloadHandler(
-        filename = function() paste0(ex_file(what), ".pdf"),
+        filename = function() ex_file(what, ext),
         content  = function(file) {
           t <- ex_titles()
           if (what == "map") {
@@ -3163,13 +3204,20 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             size <- c(width = 8, height = 7)
           }
           ggplot2::ggsave(file, p, width = size[["width"]],
-                          height = size[["height"]], bg = "white",
-                          device = "pdf")
+                          height = size[["height"]], dpi = 200, bg = "white",
+                          device = ext)
         }
       )
     }
-    output$ex_map_pdf    <- ex_pdf("map")
-    output$ex_funnel_pdf <- ex_pdf("funnel")
+    output$ex_map_pdf    <- ex_download("map", "pdf")
+    output$ex_map_png    <- ex_download("map", "png")
+    output$ex_funnel_pdf <- ex_download("funnel", "pdf")
+    output$ex_funnel_png <- ex_download("funnel", "png")
+    # The links are in a closed menu: they need their addresses while hidden
+    downloads <- c("ex_map_pdf", "ex_map_png", "ex_funnel_pdf", "ex_funnel_png")
+    for (id in downloads) {
+      shiny::outputOptions(output, id, suspendWhenHidden = FALSE)
+    }
 
     # A selection in either plot is made in the other too
     ex_select <- function(ids) {
@@ -3223,8 +3271,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       note("Point at an area or a point for its figures. Click areas or ",
            "points, or draw round them with the lasso in a plot's toolbar, ",
-           "to select them in both plots. The toolbar also zooms and pans, ",
-           "and downloads the plot as a PNG.")
+           "to select them in both plots. The toolbar also zooms and pans. ",
+           "Download saves either plot as PDF or PNG.")
     })
 
     # How the funnel plot is made, and how much the areas vary

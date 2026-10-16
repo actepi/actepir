@@ -23,7 +23,7 @@ The harness shows that the apps and the test code work on synthetic data. It can
 | `fake_episerver.R` | `fake_query(sql)` answers every query the DSR Calculator and the EpiServer Browser send. The counts are synthetic, for 14 SA3s and their SA2s, 2001 to 2024. The ICD-10-AM titles are invented, for 28,600 diagnosis codes and 2,002 procedure codes in 201 blocks. |
 | `fake_abs.R` | `fake_fetch_json(url)` answers the ABS boundary requests with boxes around Canberra, coded as in `fake_episerver.R`. |
 | `run_app.R` | Installs the working tree into a temporary library, starts an app through its real background launcher with the fakes swapped in, and runs a Playwright script against it. |
-| `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, hover, Calculate, the three tables and Copy table, Copy Code, Explore (its toolbars, the PNG and PDF downloads, and state level), Help and Done. |
+| `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, hover, Calculate, the three tables and Copy table, Copy Code, Explore (its toolbars, the Download menu and its four files, and state level), Help and Done. |
 | `episerver_browser.js` | Baseline checks of the EpiServer Browser. |
 | `fake_live.R` | `fake(sql)` answers every query in `test-episerver_dsr_live.R`. Diagnosis conditions are applied to synthetic coded records. |
 | `dryrun_live.R` | Runs the live tests against `fake_live.R`. |
@@ -58,12 +58,13 @@ Pull request #7 added the diagnosis and procedure search checks to `dsr_calculat
 | `dsr_calculator.js`, procedure codes | With ED the box and both choices are disabled, and the note says ED has no procedures; with APC they are enabled. `nerve` lists [900], 39001-00 and 39001-01, and Enter adds [900]. `39001-01` and Enter, and `1-5` and Tab, add what was typed. The note spells out the three entries. With "or", the info bar reads "APC separations, principal diagnosis I25.2, I25-I27 or J4 or principal procedure [900], 39001-01 or [1] to [5], ...". |
 | `dryrun_live.R` | 12 tests, 235 expectations, 0 failed, 0 skipped. |
 
-The cleanup branch (`claude/peaceful-johnson-wdrmzf`) removed the Map tab, the menu and Australian residents, and added checks of the Explore tab. The other results above were unchanged, and the new ones were:
+The cleanup branch (`claude/peaceful-johnson-wdrmzf`) removed the Map tab, the menu and Australian residents, and added checks of the Explore tab and of the two highlight colours in Counts by age. The other results above were unchanged, and the new ones were:
 
 | Run | Results |
 |---|---|
 | `dsr_calculator.js`, tabs | Tables, Explore and Help. |
-| `dsr_calculator.js`, Explore | The map's toolbar icons are Iris, `rgb(86, 44, 140)`, except lasso deselection, which stays red. The toolbar downloads `dsr-map-dsr-2023-persons.png`; Map PDF and Funnel plot PDF download `dsr-map-dsr-2023-persons.pdf` and `dsr-funnel-dsr-2023-persons.pdf`. The console reports one 404 (see Pitfalls). With the ACT and surrounds by state, the note reads "Choose SA3 or SA2 to compare areas within the ACT and surrounds." and neither plot is shown. |
+| `dsr_calculator.js`, Counts by age | 40 populations highlighted `rgb(241, 236, 194)` and no event totals. With the diagnosis and procedure codes, 40 populations and 4 event totals, these `rgb(191, 227, 241)`; the note shows each in its colour. |
+| `dsr_calculator.js`, Explore | The map's toolbar icons are Iris, `rgb(86, 44, 140)`, except lasso deselection, which stays red, and there is no PNG button. The Download menu lists Map as PDF, Map as PNG, Funnel plot as PDF and Funnel plot as PNG, all enabled, and each downloads `dsr-map-dsr-2023-persons.pdf`, `.png`, `dsr-funnel-dsr-2023-persons.pdf` or `.png`. With the ACT and surrounds by state, the note reads "Choose SA3 or SA2 to compare areas within the ACT and surrounds." and neither plot is shown. |
 | `episerver_browser.js` | Unchanged, through `episerver_browse()` with no display argument. |
 | `dryrun_live.R` | 11 tests, 192 expectations, 0 failed, 0 skipped: the test of `ERP5_STE_AUS` and the Australian residents' queries are gone. |
 
@@ -102,9 +103,9 @@ The cleanup branch (`claude/peaceful-johnson-wdrmzf`) removed the Map tab, the m
   - R CMD check's examples write two files to it. This is true on `main` too.
 - **rcmdcheck.** When scripting it, give `check_dir` an explicit temporary path. An unset shell variable once put the check directory at the root of the file system.
 - **DataTables.** With `scrollX`, the header is drawn in a separate table, so `thead` matches twice. Read rows with `#<output id> tbody tr`, and scroll with `#<output id> .dataTables_scrollBody`.
+- **Download menu.** Choosing a file closes the menu, so open it (`#ex_download`) again before the next. Shiny marks a download link `disabled` until it has its address; the script reports it.
 - **ggiraph.** Map areas and funnel points are SVG elements whose `data-id` is the area code. Tooltips are separate `div`s shown on hover; find them by their text.
-  - A toolbar shows only while the pointer is over its plot; hover first. Its buttons have the class `ggiraph-toolbar-icon-<key>`, such as `ggiraph-toolbar-icon-saveaspng`, and their tooltip as `title`.
+  - A toolbar shows only while the pointer is over its plot; hover first. Its buttons have the class `ggiraph-toolbar-icon-<key>`, such as `ggiraph-toolbar-icon-zoom_reset`, and their tooltip as `title`.
   - When a plot's `req()` fails, htmlwidgets hides the last plot drawn (`visibility: hidden`) rather than removing it, so check visibility, not the SVG elements.
-  - The PNG download fetches the fonts named in the page's CSS. One, `glyphicons-halflings-regular.woff`, is not served, so the console reports a 404. The PNG is unaffected.
 - **Network.** `www.abs.gov.au`, `www.aihw.gov.au` and `geo.abs.gov.au` are blocked unless the environment's network settings allow them; when `geo.abs.gov.au` is blocked, the ABS boundary test skips. Packages install through Posit Package Manager.
 - **Packages.** The setup script installs a later roxygen2 (8.1.1 when the cleanup branch was written) than the 8.0.0 that `DESCRIPTION` records; install that with `remotes::install_version("roxygen2", "8.0.0")`.
