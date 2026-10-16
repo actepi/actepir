@@ -67,22 +67,25 @@ default so that the console stays free, and it can be opened from the
 RStudio Addins menu (\emph{Open DSR Calculator}). It opens in the system web
 browser, so that it has the whole window: the settings are in a sidebar on
 the left, in sections that open and close, and the results in tabs on the
-top bar. The arrow at the top of the sidebar hides it.
+top bar. The arrow at the top of the sidebar hides it, and its right edge
+can be dragged to widen it. The information button beside a setting shows
+notes on it, and the bug button at the foot of the sidebar prepares a
+report of a problem to send to the maintainer.
 }
 \details{
 \strong{Options}
 
 The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis and
-procedure codes, and how they are searched), \emph{Population} (population and
-geographic level), \emph{Time
-periods} (calendar years and pooling) and \emph{Rate details} (ages, standard
-population, rate per, suppression, and male and female).
+procedure codes, and how they are searched), \emph{Population} (geographic
+scope and level, ages, and male and female), \emph{Time
+periods} (calendar years and pooling) and \emph{Rate details} (standard
+population, rate per, suppression and the minimums for a DSR).
 \itemize{
 \item \emph{Dataset}: ED presentations, counted by the calendar year of
 \code{PresentationDateTime}, or APC separations, counted by the calendar year
 of \code{SeparationDate}.
-\item \emph{Population}: ACT residents, using the ACT population tables, or ACT and
-surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
+\item \emph{Geographic scope}: ACT residents, using the ACT population tables, or
+ACT and surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
 Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with their SA2s,
 using the Australian tables. At state level ACT and surrounds gives two
 areas, the ACT and NSW (surrounds), each summed from its SA3s. Both are

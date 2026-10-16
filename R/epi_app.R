@@ -301,6 +301,93 @@
 }
 
 
+# The maintainer named in DESCRIPTION, as list(name, email), for problem
+# reports. Either is NA when DESCRIPTION does not give it. The Maintainer
+# field is written from Authors@R when the package is installed, so it is
+# read from Authors@R when the package is loaded from source.
+#' @noRd
+.epi_maintainer <- function() {
+  desc <- utils::packageDescription("actepir")
+  m <- desc$Maintainer
+  if (is.null(m) && !is.null(desc[["Authors@R"]])) {
+    authors <- tryCatch(eval(parse(text = desc[["Authors@R"]])),
+                        error = function(e) NULL)
+    cre <- authors[vapply(unclass(authors), function(p) "cre" %in% p$role,
+                          logical(1))]
+    if (length(cre)) m <- format(cre[1], include = c("given", "family", "email"))
+  }
+  if (is.null(m) || is.na(m) || !nzchar(m)) {
+    return(list(name = NA_character_, email = NA_character_))
+  }
+  email <- regmatches(m, regexpr("(?<=<)[^>]+(?=>)", m, perl = TRUE))
+  list(name  = trimws(sub("<.*", "", m)),
+       email = if (length(email)) email else NA_character_)
+}
+
+
+# Lines on the R session for a problem report, enough to reproduce it: where
+# actepir was installed from, R, the operating system, locale and time zone,
+# the library paths, proxy variables, ODBC drivers and the packages loaded.
+# `client` is what the browser sent: its user agent and window, the errors
+# shown in the page and any script errors. Proxy variables are named but not
+# given, as they can hold a password.
+#' @noRd
+.epi_session_report <- function(client = NULL) {
+  desc <- utils::packageDescription("actepir")
+  from <- if (identical(desc$RemoteType, "github")) {
+    paste0(", from GitHub ", desc$RemoteUsername, "/", desc$RemoteRepo,
+           if (!is.null(desc$RemoteRef)) paste0(", ", desc$RemoteRef),
+           if (!is.null(desc$RemoteSha)) paste0(", commit ", desc$RemoteSha))
+  } else if (!is.null(desc$RemoteType)) {
+    paste0(", from ", desc$RemoteType)
+  } else {
+    ""
+  }
+
+  proxies <- c("http_proxy", "https_proxy", "no_proxy",
+               "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
+  proxies <- proxies[nzchar(Sys.getenv(proxies))]
+  drivers <- tryCatch(unique(odbc::odbcListDrivers()$name),
+                      error = function(e) character())
+  pkgs <- loadedNamespaces()
+  pkgs <- pkgs[order(tolower(pkgs))]
+  versions <- vapply(pkgs, function(p) {
+    tryCatch(as.character(utils::packageVersion(p)),
+             error = function(e) "?")
+  }, character(1))
+  listed <- function(x) if (length(x)) paste(x, collapse = ", ") else "none"
+
+  lines <- c(
+    paste0("actepir ", desc$Version, from),
+    paste0(R.version.string, ", ", R.version$platform),
+    if (!is.null(utils::osVersion)) utils::osVersion,
+    paste0("Locale: ", Sys.getlocale("LC_CTYPE"),
+           if (isTRUE(l10n_info()[["UTF-8"]])) " (UTF-8)",
+           "; time zone ", Sys.timezone()),
+    paste0("Library paths: ", paste(.libPaths(), collapse = "; ")),
+    paste0("Proxy variables set: ", listed(proxies)),
+    paste0("ODBC drivers: ", listed(drivers)),
+    paste0("Started from RStudio: ",
+           if (nzchar(Sys.getenv("RSTUDIO"))) "yes" else "no")
+  )
+  if (!is.null(client)) {
+    lines <- c(
+      lines,
+      paste0("Browser: ", client$agent),
+      paste0("Window: ", client$width, " x ", client$height,
+             " pixels, device pixel ratio ", client$ratio),
+      paste0("Errors shown in the page: ", listed(unlist(client$errors))),
+      paste0("Script errors: ", listed(unlist(client$script_errors)))
+    )
+  }
+  # Package names hold no underscore, which keeps each name on the line of
+  # its version while the list is wrapped
+  c(lines, "Packages loaded:",
+    gsub("_", " ", strwrap(paste(pkgs, versions, sep = "_", collapse = ", "),
+                           width = 76, indent = 2, exdent = 2), fixed = TRUE))
+}
+
+
 # The reversed (white) ACT Government logo as an <img>, or NULL if the file
 # is not installed. The image is embedded as a data URI, which avoids
 # addResourcePath() and so works in foreground and background apps alike.
@@ -391,6 +478,26 @@
     }
     .options-row .form-group { margin-bottom: 0; }
     .radio-inline { margin-top: 0; padding-top: 0; }
+    /* Notifications, such as Copied and the progress of a query, look like
+       the info bar in place of Shiny's blue and grey boxes. Warnings and
+       errors take the info bar's amber and red. */
+    #shiny-notification-panel .shiny-notification {
+      background-color: var(--epi-info-bg); color: var(--epi-primary);
+      border: 0; border-left: 3px solid var(--epi-primary);
+      border-radius: 0; opacity: 1;
+      box-shadow: 0 2px 6px rgba(50, 5, 87, 0.25);
+    }
+    #shiny-notification-panel .shiny-notification-warning {
+      color: #8a5300; border-left-color: #8a5300;
+    }
+    #shiny-notification-panel .shiny-notification-error {
+      color: #b00020; border-left-color: #b00020;
+    }
+    #shiny-notification-panel .shiny-notification-close { color: inherit; }
+    #shiny-notification-panel .progress { background-color: #fff; }
+    #shiny-notification-panel .progress-bar {
+      background-color: var(--epi-primary);
+    }
     /* Recolour native radios and checkboxes */
     input[type=radio], input[type=checkbox] {
       accent-color: var(--epi-accent);

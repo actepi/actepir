@@ -17,7 +17,10 @@
 #' RStudio Addins menu (*Open DSR Calculator*). It opens in the system web
 #' browser, so that it has the whole window: the settings are in a sidebar on
 #' the left, in sections that open and close, and the results in tabs on the
-#' top bar. The arrow at the top of the sidebar hides it.
+#' top bar. The arrow at the top of the sidebar hides it, and its right edge
+#' can be dragged to widen it. The information button beside a setting shows
+#' notes on it, and the bug button at the foot of the sidebar prepares a
+#' report of a problem to send to the maintainer.
 #'
 #' @inheritParams episerver_browse
 #' @inheritDotParams episerver_connect encrypt trust_certificate
@@ -29,15 +32,15 @@
 #' **Options**
 #'
 #' The sidebar's sections hold the options: *Events* (dataset, diagnosis and
-#' procedure codes, and how they are searched), *Population* (population and
-#' geographic level), *Time
-#' periods* (calendar years and pooling) and *Rate details* (ages, standard
-#' population, rate per, suppression, and male and female).
+#' procedure codes, and how they are searched), *Population* (geographic
+#' scope and level, ages, and male and female), *Time
+#' periods* (calendar years and pooling) and *Rate details* (standard
+#' population, rate per, suppression and the minimums for a DSR).
 #' * *Dataset*: ED presentations, counted by the calendar year of
 #'   `PresentationDateTime`, or APC separations, counted by the calendar year
 #'   of `SeparationDate`.
-#' * *Population*: ACT residents, using the ACT population tables, or ACT and
-#'   surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
+#' * *Geographic scope*: ACT residents, using the ACT population tables, or
+#'   ACT and surrounds: the ACT and the four NSW SA3s that border it (Queanbeyan,
 #'   Snowy Mountains, Young - Yass and Tumut - Tumbarumba) with their SA2s,
 #'   using the Australian tables. At state level ACT and surrounds gives two
 #'   areas, the ACT and NSW (surrounds), each summed from its SA3s. Both are
@@ -1703,6 +1706,62 @@ WHERE Latest = 1"
 }
 
 
+# A setting with notes (...) that an information button at the right of its
+# label shows and hides. The notes start hidden and open below the label.
+# They are a Bootstrap collapse, so they open and close in the browser.
+#' @noRd
+.dsr_with_help <- function(input, ...) {
+  label <- htmltools::tagQuery(input)$find("label.control-label")
+  id <- paste0(label$selectedTags()[[1]]$attribs$`for`, "_help")
+  about <- paste("About",
+                 tolower(paste(unlist(label$selectedTags()[[1]]$children),
+                               collapse = "")))
+  shiny::div(
+    class = "dsr-field",
+    shiny::tags$button(
+      type = "button", class = "dsr-icon-btn dsr-help-toggle collapsed",
+      `data-bs-toggle` = "collapse", `data-bs-target` = paste0("#", id),
+      `aria-controls` = id, `aria-expanded` = "false",
+      title = about, `aria-label` = about,
+      shiny::icon("circle-info")
+    ),
+    label$after(
+      shiny::div(id = id, class = "collapse dsr-help",
+                 shiny::div(class = "epi-note", ...))
+    )$allTags()
+  )
+}
+
+
+# A problem report for the maintainer, as text: what the analyst says
+# happened (left out when `what` is NULL), the calculator's state (named
+# lines), the settings by input ID, written as R arguments, R code for the
+# settings when they can be used, and the session (.epi_session_report()).
+# It holds settings but no counts or rates.
+#' @noRd
+.dsr_problem_report <- function(what, state, inputs, code, session) {
+  section <- function(title, lines) {
+    c(title, strrep("-", nchar(title)), lines, "")
+  }
+  settings <- vapply(names(inputs), function(id) {
+    paste(id, "=", paste(deparse(inputs[[id]]), collapse = " "))
+  }, character(1), USE.NAMES = FALSE)
+  what <- if (!is.null(what)) trimws(paste(what, collapse = "\n"))
+  paste(c(
+    paste("DSR Calculator problem report,",
+          format(Sys.time(), "%Y-%m-%d %H:%M %Z")),
+    "",
+    if (!is.null(what)) {
+      section("What happened", if (nzchar(what)) what else "(Not described.)")
+    },
+    section("Calculator", paste0(names(state), ": ", state)),
+    section("Settings", settings),
+    if (!is.null(code)) section("R code for these settings", code),
+    section("R session", session)
+  ), collapse = "\n")
+}
+
+
 # Settings of the Explore tab's map and funnel plot: what to show, the year
 # or period, sex and the ages of age-specific rates, with input IDs that
 # start with id
@@ -1895,16 +1954,91 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
            scrolls under it, such as a focused section heading (z-index 3)
            and slider handles, and below open dropdowns (1000). */
         :root { --bslib-sidebar-bg: #f7f4fd; }
-        .sidebar .accordion { --bs-accordion-bg: transparent; }
+        /* Section headings in the info bar's tint, in bold Nightshade, so
+           that they stand apart from the settings under them */
+        .sidebar .accordion {
+          --bs-accordion-bg: transparent;
+          --bs-accordion-btn-bg: var(--epi-info-bg);
+          --bs-accordion-active-bg: var(--epi-info-bg);
+          --bs-accordion-btn-color: var(--epi-primary);
+          --bs-accordion-active-color: var(--epi-primary);
+          --bs-accordion-btn-icon: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23320557' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e\");
+          --bs-accordion-btn-active-icon: var(--bs-accordion-btn-icon);
+        }
+        .sidebar .accordion-button { font-weight: 600; }
+        /* Spacing in the sidebar, set by these variables: the text size,
+           the space between settings, the padding of section headings and
+           of sections, and the padding and text size of boxes */
+        aside#settings {
+          --dsr-font: 15px;
+          --dsr-gap: 10px;
+          --dsr-head-pad: 10px 16px;
+          --dsr-body-pad: 8px 16px 12px;
+          --dsr-box-pad: 4px 10px;
+          --dsr-box-font: 14px;
+          font-size: var(--dsr-font);
+        }
+        aside#settings > .sidebar-content { gap: 0; padding-bottom: 0; }
+        aside#settings > .sidebar-content > .accordion { margin-bottom: 0; }
+        aside#settings .accordion-button { padding: var(--dsr-head-pad);
+                                           font-size: var(--dsr-font); }
+        aside#settings .accordion-body { padding: var(--dsr-body-pad); }
+        aside#settings .shiny-input-container { margin-bottom: var(--dsr-gap); }
+        aside#settings .accordion-body > :last-child,
+        aside#settings .accordion-body > :last-child .shiny-input-container {
+          margin-bottom: 0;
+        }
+        aside#settings .control-label { line-height: 1.4; }
+        aside#settings .radio, aside#settings .checkbox { margin-bottom: 2px; }
+        aside#settings .radio label, aside#settings .checkbox label {
+          line-height: 1.4;
+        }
+        aside#settings input.form-control, aside#settings .selectize-input {
+          padding: var(--dsr-box-pad); font-size: var(--dsr-box-font);
+          min-height: 0;
+        }
+        aside#settings .selectize-input input { font-size: var(--dsr-box-font); }
+        aside#settings .selectize-dropdown { font-size: var(--dsr-box-font); }
         .dsr-actions {
           --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
           position: sticky; bottom: 0; z-index: 20;
-          display: flex; gap: 8px;
+          display: flex; align-items: center; gap: 8px;
           margin: 0 calc(-1 * var(--dsr-pad));
-          padding: 10px var(--dsr-pad);
+          padding: 8px var(--dsr-pad);
           background-color: var(--bslib-sidebar-bg);
           border-top: 1px solid #e6e5e5;
         }
+        /* The resize handle sits just outside the sidebar's right edge.
+           bslib puts the handle, and the strip that activates it, over the
+           sidebar's last 12px, where they cover the scrollbar and stop the
+           wheel and the scrollbar's thumb working. */
+        aside#settings ~ .bslib-sidebar-resize-handle { left: 0; }
+        aside#settings ~ .bslib-sidebar-resize-handle::before,
+        aside#settings ~ .bslib-sidebar-resize-handle.handle-active::before {
+          left: 0; right: auto; width: 100%;
+        }
+        aside#settings ~ .bslib-sidebar-resize-handle .resize-indicator {
+          right: auto; left: 3px; transform: translateY(-50%);
+        }
+        /* Icon buttons in Iris, Nightshade on hover: the information button
+           beside a setting's label, Nightshade while its notes show, and
+           the problem report at the right of the foot */
+        .dsr-icon-btn { border: 0; background: none; padding: 0 2px;
+                        color: var(--epi-accent); line-height: 1; }
+        .dsr-icon-btn:hover, .dsr-help-toggle:not(.collapsed) {
+          color: var(--epi-primary);
+        }
+        .dsr-icon-btn:focus:not(:focus-visible) { outline: none; }
+        .dsr-icon-btn:focus-visible { outline: 2px solid var(--epi-accent);
+                                      outline-offset: 1px; border-radius: 2px; }
+        .dsr-field { position: relative; }
+        .dsr-field .control-label { padding-right: 22px; }
+        .dsr-help-toggle { position: absolute; top: 0; right: 0; z-index: 1;
+                           height: 1.4em; }
+        .dsr-help .epi-note { margin: 0 0 4px 0; }
+        .dsr-actions .dsr-icon-btn { margin-left: auto; font-size: 1.1rem; }
+        #bug_details { max-height: 260px; overflow: auto; font-size: 11px;
+                       white-space: pre-wrap; }
         .dsr-row { flex-wrap: wrap; }
         .dsr-row > * { min-width: 200px; }
         .info-bar p { margin: 0 0 4px 0; }
@@ -2077,6 +2211,34 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       ", jsonlite::toJSON(names(Filter(function(d) !length(d$procedures),
                                        .dsr_datasets)))))),
 
+      # The bug button sends what the browser knows to the problem report:
+      # its user agent and window, the errors shown in outputs (not the
+      # messages of validate() or req()) and the last script errors
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          var scriptErrors = [];
+          window.addEventListener('error', function(e) {
+            scriptErrors.push(e.message);
+            if (scriptErrors.length > 5) scriptErrors.shift();
+          });
+          $(document).on('click', '#bug_report', function() {
+            var shown = $('.shiny-output-error')
+              .not('.shiny-output-error-validation')
+              .map(function() {
+                var text = $(this).text().trim();
+                return text ? (this.id || 'output') + ': ' + text : null;
+              }).get();
+            Shiny.setInputValue('bug_client', {
+              agent: navigator.userAgent,
+              width: window.innerWidth, height: window.innerHeight,
+              ratio: window.devicePixelRatio,
+              errors: shown, script_errors: scriptErrors.slice(),
+              at: Date.now()
+            }, {priority: 'event'});
+          });
+        })();
+      ")),
+
       # Done stops the app. A browser tab stays open afterwards, so it says
       # so instead of greying out.
       shiny::tags$script(shiny::HTML("
@@ -2098,9 +2260,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                               shiny::uiOutput("info_bar"))
     ),
 
-    # Not resizable: the resize handle would cover the sidebar's scrollbar
+    # The resize handle is moved off the scrollbar by the CSS above
     sidebar = bslib::sidebar(
-      id = "settings", width = 340, open = "desktop", resizable = FALSE,
+      id = "settings", width = 340, open = "desktop", resizable = TRUE,
       bslib::accordion(
         id = "settings_sections", open = TRUE, multiple = TRUE,
         bslib::accordion_panel(
@@ -2110,22 +2272,63 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
           ),
-          .dsr_codes_box(
-            "codes", "Diagnosis codes", "All events. Type a code or condition",
-            paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
-                   "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")
+          .dsr_with_help(
+            .dsr_codes_box(
+              "codes", "Diagnosis codes", "All events. Type a code or condition",
+              paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
+                     "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")
+            ),
+            "Leave empty for all events. A partial code such as J45 matches ",
+            "every code that starts with it, and a range such as C13-C15.45 ",
+            "includes both ends. Only ICD-10 coded records are searched.",
+            if (is.null(titles$codes)) {
+              paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
+                     "titles could not be read from Analysis.dbo.ICD10AM.")
+            } else {
+              paste0(" Type words from a condition, such as myocardial, to ",
+                     "choose from the codes whose titles contain them.")
+            }
           ),
           shiny::uiOutput("codes_note"),
-          shiny::radioButtons(
-            "diagnosis", "Diagnosis search",
-            choices = c("Principal diagnosis" = "principal",
-                        "Any diagnosis" = "all")
+          .dsr_with_help(
+            shiny::radioButtons(
+              "diagnosis", "Diagnosis search",
+              choices = c("Principal diagnosis" = "principal",
+                          "Any diagnosis" = "all")
+            ),
+            unname(Map(function(key, d) {
+              n <- length(d$diagnoses)
+              if (d$principal) {
+                paste0(key, " searches the principal diagnosis (",
+                       d$diagnoses[1], ") or any diagnosis (", d$diagnoses[1],
+                       " to ", d$diagnoses[n], "). ")
+              } else {
+                paste0(key, " searches all its diagnosis fields (",
+                       paste(d$diagnoses, collapse = ", "), "), as none of ",
+                       "them holds the principal diagnosis in every year. ")
+              }
+            }, names(.dsr_datasets), .dsr_datasets))
           ),
-          .dsr_codes_box(
-            "procedures", "Procedure codes",
-            "All events. Type a code or procedure",
-            paste0("/^\\s*(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%\\u2013\\u2014-]*",
-                   "(\\s+to\\s+(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%-]*)?$/i")
+          .dsr_with_help(
+            .dsr_codes_box(
+              "procedures", "Procedure codes",
+              "All events. Type a code or procedure",
+              paste0("/^\\s*(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%\\u2013\\u2014-]*",
+                     "(\\s+to\\s+(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%-]*)?$/i")
+            ),
+            "Leave empty for all events. A code such as 11012-00, or a partial ",
+            "code such as 11012, matches every code that starts with it; a ",
+            "block such as 1826, shown as [1826], matches the procedures in ",
+            "that ACHI block; and a range such as 11000-00 to 11027-00 or ",
+            "1820-1830 includes both ends.",
+            if (is.null(titles$procedures)) {
+              paste0(" Searching by procedure is unavailable, as the ACHI ",
+                     "titles could not be read from Analysis.dbo.ICD10AM.")
+            } else {
+              paste0(" Type words from a procedure, such as electromyography, ",
+                     "to choose from the codes and blocks whose titles contain ",
+                     "them.")
+            }
           ),
           shiny::uiOutput("procedures_note"),
           shiny::radioButtons(
@@ -2142,7 +2345,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         bslib::accordion_panel(
           "Population", value = "population",
           shiny::selectInput(
-            "scope", "Population",
+            "scope", "Geographic scope",
             choices = stats::setNames(
               names(.dsr_scopes),
               vapply(.dsr_scopes, `[[`, character(1), "label")
@@ -2156,7 +2359,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               vapply(names(.dsr_levels), .dsr_area_label, character(1))
             ),
             width = "100%"
-          )
+          ),
+          shiny::sliderInput(
+            "ages", "Ages",
+            min = 1, max = length(.dsr_age_labels),
+            value = c(1, length(.dsr_age_labels)),
+            step = 1, ticks = FALSE, width = "100%"
+          ),
+          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
         ),
         bslib::accordion_panel(
           "Time periods", value = "time",
@@ -2177,12 +2387,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         ),
         bslib::accordion_panel(
           "Rate details", value = "rate",
-          shiny::sliderInput(
-            "ages", "Ages",
-            min = 1, max = length(.dsr_age_labels),
-            value = c(1, length(.dsr_age_labels)),
-            step = 1, ticks = FALSE, width = "100%"
-          ),
           shiny::selectInput(
             "standard", "Standard population",
             choices  = std_choices,
@@ -2200,20 +2404,19 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             "suppress", "Suppress counts below",
             value = 5, min = 0, step = 1, width = "100%"
           ),
-          shiny::numericInput(
-            "min_events", "Minimum events for a DSR",
-            value = 20, min = 0, step = 1, width = "100%"
+          .dsr_with_help(
+            shiny::numericInput(
+              "min_events", "Minimum events for a DSR",
+              value = 20, min = 0, step = 1, width = "100%"
+            ),
+            "Below this minimum or the next, age-standardised rates are not ",
+            "presented (n.p.), as the AIHW (2011) principles advise. 0 turns ",
+            "a check off."
           ),
           shiny::numericInput(
             "min_population", "Minimum population per age group",
             value = 30, min = 0, step = 1, width = "100%"
-          ),
-          shiny::div(
-            class = "epi-note",
-            "Below these, age-standardised rates are not presented (n.p.), ",
-            "as the AIHW (2011) principles advise. 0 turns a check off."
-          ),
-          shiny::checkboxInput("by_sex", "Male and female", value = FALSE)
+          )
         )
       ),
       shiny::div(
@@ -2227,6 +2430,13 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "insert_code", code_button_label,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
+        ),
+        # Opens the problem report; the script above sends what the browser
+        # knows with the click
+        shiny::tags$button(
+          id = "bug_report", type = "button", class = "dsr-icon-btn",
+          title = "Report a problem", `aria-label` = "Report a problem",
+          shiny::icon("bug")
         )
       )
     ),
@@ -2432,34 +2642,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                  }))
     }
 
+    # The notes on how to enter codes are in the page, behind the information
+    # buttons; these say what was entered, or why it cannot be used
     output$codes_note <- shiny::renderUI({
       err <- codes_error()
       if (!is.null(err)) {
         return(shiny::div(class = "epi-note epi-error", err))
       }
-      dataset <- if (is.null(input$dataset)) "ED" else input$dataset
-      ds <- .dsr_datasets[[dataset]]
-      shiny::tagList(
-        entered(input$codes, .dsr_parse_codes, titles$codes),
-        shiny::div(
-          class = "epi-note",
-          "Leave empty for all events. A partial code such as J45 matches ",
-          "every code that starts with it, and a range such as C13-C15.45 ",
-          "includes both ends. Only ICD-10 coded records are searched.",
-          if (is.null(titles$codes)) {
-            paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
-                   "titles could not be read from Analysis.dbo.ICD10AM.")
-          } else {
-            paste0(" Type words from a condition, such as myocardial, to ",
-                   "choose from the codes whose titles contain them.")
-          },
-          if (!ds$principal) {
-            paste0(" ", dataset, " searches all its diagnosis fields (",
-                   paste(ds$diagnoses, collapse = ", "), "), as none of them ",
-                   "holds the principal diagnosis in every year.")
-          }
-        )
-      )
+      entered(input$codes, .dsr_parse_codes, titles$codes)
     })
 
     output$procedures_note <- shiny::renderUI({
@@ -2477,25 +2667,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           " only."
         )))
       }
-      shiny::tagList(
-        entered(input$procedures, .dsr_parse_procedures, titles$procedures),
-        shiny::div(
-          class = "epi-note",
-          "Leave empty for all events. A code such as 11012-00, or a partial ",
-          "code such as 11012, matches every code that starts with it; a ",
-          "block such as 1826, shown as [1826], matches the procedures in ",
-          "that ACHI block; and a range such as 11000-00 to 11027-00 or ",
-          "1820-1830 includes both ends.",
-          if (is.null(titles$procedures)) {
-            paste0(" Searching by procedure is unavailable, as the ACHI ",
-                   "titles could not be read from Analysis.dbo.ICD10AM.")
-          } else {
-            paste0(" Type words from a procedure, such as electromyography, ",
-                   "to choose from the codes and blocks whose titles contain ",
-                   "them.")
-          }
-        )
-      )
+      entered(input$procedures, .dsr_parse_procedures, titles$procedures)
     })
 
     # The periods the years will be pooled into, or why they cannot be
@@ -3412,15 +3584,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # ── Insert / copy code button ──────────────────────────────────────────
-    shiny::observeEvent(input$insert_code, {
-      st <- settings()
-      s  <- st$spec
-      if (is.null(s)) {
-        shiny::showNotification(st$error, duration = 6, type = "warning")
-        return(invisible(NULL))
-      }
-      # The code adds the age-specific rates when their table is shown
-      code <- .dsr_code(
+    # The code for valid settings s adds the age-specific rates when their
+    # table is shown
+    settings_code <- function(s) {
+      .dsr_code(
         s,
         by_sex        = isTRUE(input$by_sex),
         age_specific  = identical(input$table, "age"),
@@ -3430,7 +3597,101 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         min_events    = min_events(),
         min_population = min_population()
       )
-      .epi_send_code(session, code)
+    }
+    shiny::observeEvent(input$insert_code, {
+      st <- settings()
+      s  <- st$spec
+      if (is.null(s)) {
+        shiny::showNotification(st$error, duration = 6, type = "warning")
+        return(invisible(NULL))
+      }
+      .epi_send_code(session, settings_code(s))
+    })
+
+    # ── Problem report ─────────────────────────────────────────────────────
+    # The bug button sends what the browser knows (bug_client); the report
+    # adds the calculator's state, the settings and the R session
+    report <- function(what) {
+      # req() stops settings() with an empty message while inputs are unset
+      st <- tryCatch(settings(), error = function(e) {
+        msg <- conditionMessage(e)
+        list(spec = NULL, error = if (nzchar(msg)) msg else "incomplete")
+      })
+      calculated <- if (is.null(rv$fetched)) "no" else {
+        r <- tryCatch(results(), error = function(e) {
+          list(error = conditionMessage(e))
+        })
+        if (is.null(r$error)) "yes" else paste("yes, with error:", r$error)
+      }
+      count <- function(x) if (is.null(x)) 0L else sum(x$Type == "code")
+      years <- tryCatch(available(), error = function(e) NULL)
+      ids <- c("view", "table", "dataset", "codes", "diagnosis", "procedures",
+               "procedure", "combine", "scope", "level", "ages", "by_sex",
+               "years", "pool", "standard", "multiplier", "suppress",
+               "min_events", "min_population", "ex_value", "ex_year",
+               "ex_sex", "ex_ages", "ex_colour", "ex_overdispersion")
+      .dsr_problem_report(
+        what,
+        state = c(
+          "Calculated" = calculated,
+          "EpiServer error" = if (is.null(rv$error)) "none" else rv$error,
+          "Settings error" = if (is.null(st$error)) "none" else st$error,
+          "ICD-10-AM and ACHI titles" = if (is.null(icd)) "not read" else
+            paste(.fmt_count(count(titles$codes)), "diagnosis codes and",
+                  .fmt_count(count(titles$procedures)), "procedure codes"),
+          "Standard populations" = if (is.null(cache$standards)) "not read"
+            else paste(nrow(standards), "read"),
+          "Years offered" = if (is.null(years)) "not known" else
+            paste(years$min, "to", years$max),
+          "Code button" = code_button_label
+        ),
+        inputs = stats::setNames(lapply(ids, function(id) input[[id]]), ids),
+        code = if (!is.null(st$spec)) settings_code(st$spec),
+        session = .epi_session_report(input$bug_client)
+      )
+    }
+
+    shiny::observeEvent(input$bug_client, {
+      maint <- .epi_maintainer()
+      to <- if (!is.na(maint$email)) {
+        shiny::tags$a(
+          href = paste0("mailto:", maint$email, "?subject=",
+                        utils::URLencode("DSR Calculator problem report",
+                                         reserved = TRUE)),
+          if (is.na(maint$name)) maint$email else maint$name,
+          .noWS = "after"
+        )
+      } else {
+        "the maintainer"
+      }
+      shiny::showModal(shiny::modalDialog(
+        title = "Report a problem", size = "l", easyClose = TRUE,
+        shiny::p("Say what happened, then copy the report and paste it into ",
+                 "an email to ", to, "."),
+        shiny::textAreaInput("bug_what",
+                             "What happened, and what did you expect?",
+                             width = "100%", rows = 4, resize = "vertical"),
+        shiny::p(class = "epi-note",
+                 "The report adds the details below, which help to reproduce ",
+                 "the problem. It holds the settings, but no counts, rates ",
+                 "or other data."),
+        shiny::verbatimTextOutput("bug_details"),
+        footer = shiny::tagList(
+          shiny::actionButton("bug_copy", "Copy report",
+                              icon = shiny::icon("copy"),
+                              class = "btn-sm btn-primary"),
+          shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                             `data-bs-dismiss` = "modal", "Close")
+        )
+      ))
+    })
+    output$bug_details <- shiny::renderText({
+      shiny::req(input$bug_client)
+      report(NULL)
+    })
+    shiny::observeEvent(input$bug_copy, {
+      .epi_copy_text(session, report(input$bug_what),
+                     "Report copied to the clipboard")
     })
 
     # ── Done button ────────────────────────────────────────────────────────

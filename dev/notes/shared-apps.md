@@ -10,11 +10,12 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 | `.stop_app()` | Stops a background app. |
 | `.epi_connection()` | Opens one EpiServer connection per app through `episerver_connect()`. It checks the connection before each query and reconnects once after an error. Returns `list(query, disconnect)`. |
 | `.epi_send_code()`, `.epi_copy_text()`, `.epi_copy_script()` | Insert generated code at the cursor in RStudio, or copy text to the clipboard from the page. |
+| `.epi_maintainer()`, `.epi_session_report()` | The maintainer's name and email, and lines on the R session, for problem reports. The DSR Calculator's report uses them (see `dsr-calculator.md`). |
 | `.epi_logo()` | The white ACT Government logo as a data URI. |
 | `.epi_theme()` | The bslib (Bootstrap 5) theme in the brand purples and fonts of `dev/reference/act-brand.md`. |
-| `.epi_app_style()` | CSS for what Bootstrap's variables do not reach: buttons, focus, DataTables and sliders. |
+| `.epi_app_style()` | CSS for what Bootstrap's variables do not reach: buttons, focus, notifications, DataTables and sliders. |
 
-`test-epi_app.R` tests the theme against `dev/reference/act-brand.md`, the hover and focus rules, the logo, and the add-ins.
+`test-epi_app.R` tests the theme against `dev/reference/act-brand.md`, the hover and focus rules, the notifications, the problem report's session lines, the logo, and the add-ins.
 
 ## Decisions
 
@@ -25,6 +26,8 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 - **bslib, not shinydashboard,** for the DSR Calculator's layout (pull request #6). shinydashboard is Bootstrap 3 with AdminLTE skins, which would need CSS overrides for the brand colours. bslib gives a sidebar, collapsible sections and a Sass theme, and comes with shiny. The EpiServer Browser still uses miniUI.
 - **The web browser only.** Both apps open in the system web browser, and neither function has a `display` argument. The maintainer chose one place to open: the Viewer is too small for the DSR Calculator, and the RStudio window is modal over the IDE. With `background = FALSE` the gadget opens in the browser too.
 - **An add-in for each app.** Each add-in is bound directly to the app's function, which needs no arguments. The ACT Epidemiology menu, a dialog in the Viewer offering each app in three displays, was removed: it added a step before each app.
+- **Notifications** (Copied, the progress of a query, warnings) look like the info bar: its tint with a Nightshade left border and text, in place of Shiny's blue and grey boxes. Warnings and errors take the info bar's amber (`#8a5300`) and red (`#b00020`). The rules are scoped by `#shiny-notification-panel`, so they win over Shiny's stylesheet whatever the order.
+- **Problem reports.** `.epi_session_report()` gives what is needed to reproduce a user's session and nothing that identifies data. Proxy variables are named, never given. `.epi_maintainer()` reads the Maintainer field, or Authors@R when the package is loaded from source, where R has not yet written the field.
 - **Hover and focus.** Buttons go to Iris (`#562C8C`) on hover and on keyboard focus. Focus rings show only for keyboard focus (`:focus-visible`), so a mouse click leaves no highlight.
 - **Fonts are named, not downloaded.** Montserrat and Source Sans 3 are used where installed, otherwise the brand's alternatives, Arial and Calibri.
 - **The logo is a data URI,** so it works in background apps without `addResourcePath()`.
@@ -42,5 +45,6 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 ## Open items
 
 - The EpiServer Browser still uses miniUI. Moving it to the bslib layout would make the apps consistent.
+- The EpiServer Browser has no problem report. `.epi_session_report()` is shared so that it can have one.
 - The EpiServer Browser has no offline tests. `episerver_browse_app()` has no `query` argument, so the harness runs it by replacing `.epi_connection()`.
 - Done in the EpiServer Browser leaves its browser tab greyed out. The DSR Calculator says that it has stopped and how to start it again (the Done script in `episerver_dsr_app()`); the Browser, now always in the browser, could do the same.

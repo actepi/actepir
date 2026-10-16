@@ -12,6 +12,7 @@
 | #6 | Sidebar layout in the browser, keyboard-only highlights, the AIHW minimums (n.p.), Counts by age, validation against PHEindicatormethods and epitools, and these notes |
 | #7 | Searching diagnosis codes by condition, with ICD-10-AM titles from `Analysis.dbo.ICD10AM`, and each code entered spelt out below the box; APC procedure codes and ACHI blocks, searched the same way, combined with diagnoses by and or or |
 | #8 | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, a Download menu (map or funnel plot, PDF or PNG) and brand-coloured toolbars on the Explore tab, a second highlight colour in Counts by age, and an add-in for each app in place of the menu (browser only) |
+| Pending | Sidebar: tinted section headings, ages and male and female under Population, Geographic scope, tighter spacing, notes behind information buttons, a resizable sidebar with the handle off the scrollbar, and a problem report; notifications in the brand colours |
 
 The pull request descriptions give the detail of each change and what to check against EpiServer.
 
@@ -20,7 +21,7 @@ The pull request descriptions give the detail of each change and what to check a
 | File | Holds |
 |---|---|
 | `R/dsr_calculate.R` | `dsr_calculate()` and `dsr_age_specific()`; strata (`.dsr_strata()`), exact Poisson limits (`.pois_lower()`, `.pois_upper()`), suppression and argument checks |
-| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`) and map controls; the app factory `episerver_dsr_app()` |
+| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`), settings with notes (`.dsr_with_help()`) and map controls; the problem report (`.dsr_problem_report()`); the app factory `episerver_dsr_app()` |
 | `R/dsr_map.R` | ABS boundaries of SA3s and SA2s (`.dsr_boundaries()`, `.dsr_fetch_json()`, the cache) and the Explore tab's map (`.dsr_map_plot()`, with `.dsr_map_size()` for the size of a saved map) |
 | `R/dsr_funnel.R` | Funnel statistics (`.dsr_funnel()`, limits, overdispersion) and the funnel plot |
 | `R/dsr_help.R` | The Help tab, built from the definitions so that it follows the code |
@@ -68,8 +69,35 @@ The pull request descriptions give the detail of each change and what to check a
 ### Interface
 
 - **Layout.** bslib, not shinydashboard (see `shared-apps.md`).
-  - The sidebar has the sections Events, Population, Time periods and Rate details, with Calculate and Copy Code held at its foot.
-  - The sidebar cannot be resized, as the resize handle covered its scrollbar.
+  - The sidebar has the sections Events, Population (Geographic scope, Geographic level, Ages, Male and female), Time periods and Rate details (standard, rate per, suppression, minimums), with Calculate, Copy Code and the bug button held at its foot.
+  - The population select is labelled Geographic scope, so that it does not repeat its section's name. Its input ID is still `scope`.
+  - Section headings are in the info bar's tint (`#eae6f1`) in bold Nightshade, so that open sections can be told from their settings. The chevrons are Nightshade too (`--bs-accordion-btn-icon`).
+- **Spacing (waiting on the maintainer).** Six CSS variables on `aside#settings` set the sidebar's spacing: `--dsr-font`, `--dsr-gap`, `--dsr-head-pad`, `--dsr-body-pad`, `--dsr-box-pad` and `--dsr-box-font`. Three sets were compared by the height of the sidebar with every section open, against 2,105 pixels before:
+
+  | Option | Text, boxes | Gap | Headings, sections | Height |
+  |---|---|---|---|---|
+  | A Light | 16px, 15px | 12px | 12px 20px; 10px 20px 14px | 1,664 |
+  | B Compact (current) | 15px, 14px | 10px | 10px 16px; 8px 16px 12px | 1,520 |
+  | C Dense | 14px, 13px | 7px | 7px 14px; 6px 14px 10px | 1,336 |
+
+  Box padding is 6px 12px, 4px 10px and 2px 8px. All three include moving the notes behind information buttons and removing the empty band above the foot. The maintainer chooses; changing option is changing the six values.
+- **Resizing.** The sidebar can be resized by dragging its right edge (`resizable = TRUE`).
+  - Pull request #6 turned resizing off because the handle covered the scrollbar. Tested in headless Chromium with a 15px scrollbar:
+    - bslib 0.10.0: the handle covers the scrollbar's right 13px; the wheel and the thumb do nothing there.
+    - bslib 0.11.0 and 0.12.0: the handle activates when the pointer crosses the sidebar's edge, and its active strip then covers the scrollbar's right 12px. Reaching the scrollbar from the results, the usual way, crosses the edge, so the wheel and the thumb fail. From inside the sidebar they work.
+    - On a device with a touch screen (`any-pointer: coarse`), bslib's CSS makes the handle 26px wide and clickable over the scrollbar. This was read from the CSS, not tested.
+  - CSS in `episerver_dsr_app()` moves the handle, its strip and its grip just outside the sidebar's edge (`aside#settings ~ .bslib-sidebar-resize-handle`). With it, the wheel and the thumb work across the scrollbar from either side, dragging the edge still resizes, and the sidebar's collapse arrow is not covered, in all three versions.
+  - The rules depend on bslib's class names (`.bslib-sidebar-resize-handle`, its `::before` and `.resize-indicator`). A bslib release that renames them would put the handle back over the scrollbar; the harness check "SIDEBAR scrollbar" shows it.
+- **Notes behind information buttons.** Guidance that does not change with the settings is hidden under an information button at the right of the setting's label (`.dsr_with_help()`): Diagnosis codes, Diagnosis search (which fields each dataset searches), Procedure codes, and Minimum events for a DSR (the AIHW minimums).
+  - A click shows the note below the label and a second click hides it, so a note can stay open while codes are typed. A tooltip was rejected because it closes when the pointer moves.
+  - The notes are a Bootstrap collapse written into the page when the app starts, so they need no server round trip. Their text depends only on whether the titles could be read, which is known then.
+  - What answers the settings stays in view: errors, the codes entered with their titles, that ED has no procedures (which explains the disabled box), and the periods of pooled years.
+  - The ED diagnosis note moved from Diagnosis codes to Diagnosis search, the setting it explains, and now describes both datasets.
+- **Problem report.** The bug button at the right of the foot opens a dialog in which the analyst says what happened. Copy report copies that and the details shown below it through `.epi_copy_text()`, and the dialog names the maintainer (from DESCRIPTION, `.epi_maintainer()`) with an email link.
+  - The details: the calculator's state (calculated or not, the last EpiServer and settings errors, how many titles and standards were read, the years offered, the code button), every setting by input ID as R arguments for `session$setInputs()`, the Copy Code code for valid settings, and the session (`.epi_session_report()` in `R/epi_app.R`): actepir's version and the GitHub ref and commit it was installed from, R, the operating system, locale and time zone, library paths, which proxy variables are set, the ODBC drivers, the browser and window, errors shown in outputs and script errors, and every package loaded with its version.
+  - No counts, rates or other data are included, and proxy variables are named but not given, as they can hold a password. A test checks both.
+  - The report is copied rather than put in the email link: `mailto:` links are commonly limited to about 2,000 characters on Windows, and a report runs to several thousand. Opening a GitHub issue was rejected: the repository is public and analysts may not have accounts.
+  - The browser's part (`bug_client`) is sent by the button's click; the dialog opens when the server receives it.
 - **Opening.** The app opens in the web browser only, from its add-in or `episerver_dsr()` (see `shared-apps.md`).
 - **Tables.** The Tables tab switches between Rates, Age-specific rates and Counts by age, with one Copy table button for the table shown.
   - Copied tables use en dashes in age groups and periods, so Excel keeps them as text.
@@ -138,6 +166,8 @@ The pull request descriptions give the detail of each change and what to check a
 
 ## Open items
 
+- **Sidebar spacing (waiting on the maintainer).** Option B is in place; see Decisions, Spacing.
+
 - **Funnel colours and colour vision (waiting on the maintainer).** On the map, colour is the only cue for an area's position.
   - In normal vision, yellow (above 95%) and green (below 95%) differ by OKLab ΔE 8.8; pairs below about 10 are hard to tell apart.
   - With deuteranopia, coral and green differ by 1.9.
@@ -156,6 +186,7 @@ The pull request descriptions give the detail of each change and what to check a
 - **Procedure code format.** The data's `Procedure` fields are `varchar(8)`, so they may hold `11012-00` or `1101200`; the SQL handles both. The live test "the ICD-10-AM and ACHI titles cover the codes recorded" checks that the codes and blocks of 2018 meet the table's.
 - **Wording of mixed searches.** The info bar joins the two lists with "and" or "or", for example "principal diagnosis I21 or J46 or any procedure [1826]". With several codes on each side it can read ambiguously.
 - **Download with nothing to save.** The Download menu's choices stay available before Calculate, at state level and, for the map, when the boundaries cannot be downloaded. A choice then fails in the browser's downloads. Disabling them would need the server to tell the page when each plot exists.
+- **Boundary cache in tests.** `testthat::test_local()` writes `asgs2021_sa3_ACT_v1.rds` to the user's cache folder (`R_USER_CACHE_DIR`), on `main` too. No test file does so when run alone, and the test responsible was not found.
 - **R CMD check notes,** also on `main`:
   - "Namespace in Imports field not imported from: 'labelled'";
   - the examples write two files to the sass cache.

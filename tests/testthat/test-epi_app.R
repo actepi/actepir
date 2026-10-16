@@ -39,6 +39,58 @@ test_that("a click leaves no highlight, but the keyboard's focus shows", {
 
 })
 
+test_that("notifications look like the info bar, not Shiny's blue and grey", {
+
+  css <- as.character(.epi_app_style())
+  rule <- function(selector) {
+    regmatches(css, regexpr(paste0(selector, "\\s*\\{[^}]*\\}"), css))
+  }
+
+  base <- rule("#shiny-notification-panel \\.shiny-notification")
+  expect_match(base, "background-color: var\\(--epi-info-bg\\)")
+  expect_match(base, "border-left: 3px solid var\\(--epi-primary\\)")
+  expect_match(rule("#shiny-notification-panel \\.shiny-notification-warning"),
+               "#8a5300")
+  expect_match(rule("#shiny-notification-panel \\.shiny-notification-error"),
+               "#b00020")
+  expect_match(rule("#shiny-notification-panel \\.progress-bar"),
+               "var\\(--epi-primary\\)")
+
+})
+
+test_that("problem reports name the maintainer and describe the session", {
+
+  m <- .epi_maintainer()
+  expect_equal(m$name, "Warren Holroyd")
+  expect_match(m$email, "^[^@<> ]+@[^@<> ]+$")
+
+  # Proxy variables are named, never given, as they can hold a password
+  withr::local_envvar(https_proxy = "http://user:secret@proxy.example:8080")
+  lines <- .epi_session_report()
+  expect_match(lines[1], paste0("^actepir ", utils::packageVersion("actepir")))
+  expect_match(lines[2], R.version.string, fixed = TRUE)
+  expect_true(any(grepl("^Proxy variables set: .*https_proxy", lines)))
+  expect_false(any(grepl("secret", lines, fixed = TRUE)))
+  expect_true(any(grepl("^Library paths: ", lines)))
+  expect_true(any(grepl("^ODBC drivers: ", lines)))
+  # Every package loaded, each with its version on the same line
+  at <- match("Packages loaded:", lines)
+  packages <- paste(lines[-seq_len(at)], collapse = " ")
+  expect_match(packages, paste0("shiny ", utils::packageVersion("shiny")),
+               fixed = TRUE)
+  expect_no_match(packages, "_", fixed = TRUE)
+  expect_true(all(nchar(lines[-seq_len(at)]) <= 76))
+  expect_false(any(grepl("^Browser: ", lines)))
+
+  client <- list(agent = "Mozilla/5.0 Edg/130.0", width = 1440, height = 900,
+                 ratio = 1, errors = list(), script_errors = list("x is null"))
+  lines <- .epi_session_report(client)
+  expect_true("Browser: Mozilla/5.0 Edg/130.0" %in% lines)
+  expect_true("Errors shown in the page: none" %in% lines)
+  expect_true("Script errors: x is null" %in% lines)
+
+})
+
 test_that("table sort arrows have a fixed size, so they cannot overlap", {
 
   css <- as.character(.epi_app_style())

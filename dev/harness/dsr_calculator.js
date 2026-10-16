@@ -11,7 +11,8 @@ const fs = require('fs');
 (async () => {
   const [url, out] = process.argv.slice(2);
   fs.mkdirSync(out, { recursive: true });
-  const browser = await chromium.launch();
+  // Scrollbars shown, as on Windows: Playwright hides them by default
+  const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   // Copy table and Copy Code write to the clipboard
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: url });
@@ -42,6 +43,66 @@ const fs = require('fs');
     [...i.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim())
   ]))));
 
+  // Section headings: the info bar's tint, rgb(234, 230, 241), in bold
+  // Nightshade, rgb(50, 5, 87)
+  console.log('HEADINGS:', JSON.stringify(await page.$eval('.accordion-button', b => {
+    const s = getComputedStyle(b);
+    return [s.backgroundColor, s.color, s.fontWeight];
+  })));
+
+  // Each information button shows its notes and hides them again
+  for (const id of await page.$$eval('.dsr-help-toggle', bs => bs.map(b => b.getAttribute('aria-controls')))) {
+    const visible = () => page.$eval('#' + id, e => e.offsetHeight > 0);
+    const before = await visible();
+    await page.click(`[aria-controls=${id}]`);
+    await page.waitForTimeout(600);
+    const open = await visible();
+    const note = (await text('#' + id)).slice(0, 50);
+    if (id === 'codes_help') await shot('00_help_open');
+    await page.click(`[aria-controls=${id}]`);
+    await page.waitForTimeout(600);
+    console.log(`HELP ${id}: hidden ${!before}, shown ${open}, hidden again ${!(await visible())}:`, JSON.stringify(note));
+  }
+
+  // The wheel and the scrollbar's thumb scroll the sidebar when the pointer
+  // reaches the scrollbar from the results, and the edge widens the sidebar
+  const sidebar = await page.$eval('aside#settings', s => {
+    const r = s.getBoundingClientRect();
+    return { right: r.right, top: r.top, bottom: r.bottom,
+             scrollbar: s.offsetWidth - s.clientWidth - parseFloat(getComputedStyle(s).borderRightWidth) };
+  });
+  const sidebarState = () => page.$eval('aside#settings', s => [s.scrollTop, Math.round(s.getBoundingClientRect().width)]);
+  const y = Math.round((sidebar.top + sidebar.bottom) / 2) + 100;
+  const wheeled = [];
+  for (let off = 2; off <= sidebar.scrollbar; off += 3) {
+    await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+    await page.mouse.move(sidebar.right + 80, y);
+    await page.mouse.move(sidebar.right - off, y, { steps: 80 + off });
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(300);
+    wheeled.push((await sidebarState())[0] > 0);
+  }
+  console.log(`SIDEBAR scrollbar ${sidebar.scrollbar}px, wheel from the results scrolls it at`,
+    `${wheeled.filter(Boolean).length} of ${wheeled.length} points`);
+  await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+  await page.mouse.move(sidebar.right + 80, sidebar.top + 40);
+  await page.mouse.move(sidebar.right - 5, sidebar.top + 40, { steps: 85 });
+  await page.mouse.down();
+  await page.mouse.move(sidebar.right - 5, sidebar.top + 190, { steps: 10 });
+  await page.mouse.up();
+  console.log('SIDEBAR thumb dragged from the results: scrolled', (await sidebarState())[0] > 0);
+  await page.$eval('aside#settings', s => { s.scrollTop = 0; });
+  await page.mouse.move(sidebar.right + 80, y);
+  await page.mouse.move(sidebar.right, y, { steps: 80 });
+  await page.mouse.down();
+  await page.mouse.move(sidebar.right + 120, y, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  console.log('SIDEBAR width after dragging its edge 120px:', (await sidebarState())[1]);
+  await page.reload();
+  await page.waitForSelector('#calculate');
+  await settle();
+
   // Primary buttons go to Iris, rgb(86, 44, 140), on hover
   const before = await background('#calculate');
   await page.hover('#calculate');
@@ -70,6 +131,12 @@ const fs = require('fs');
     const lines = (await clipboard()).trim().split('\n');
     console.log(`COPY ${t}: ${lines.length - 1} rows, header`, JSON.stringify(lines[0]));
   }
+  // The notification is in the info bar's colours, not Shiny's blue
+  console.log('NOTIFICATION:', JSON.stringify(await page.$eval('#shiny-notification-panel .shiny-notification', n => {
+    const s = getComputedStyle(n);
+    return [n.textContent.replace(/\s+/g, ' ').replace('\u00d7', '').trim(), s.backgroundColor, s.color, s.borderLeftColor];
+  })));
+  await page.screenshot({ path: `${out}/02a_notification.png`, clip: { x: 1440 - 420, y: 900 - 160, width: 420, height: 160 } });
   // Populations and event totals below the minimums, each in its colour
   const highlights = cls => page.$$eval(`#counts_table tbody .${cls}`,
     es => [es.length, es.length ? getComputedStyle(es[0]).backgroundColor : null]);
@@ -82,6 +149,24 @@ const fs = require('fs');
   await page.click('#insert_code');
   await page.waitForTimeout(800);
   console.log('CODE:', JSON.stringify((await clipboard()).split('\n').filter(l => /dsr_calculate|min_|suppress/.test(l))));
+
+  // The bug button opens the problem report; Copy report copies what was
+  // described and the details shown
+  await page.click('#bug_report');
+  await page.waitForSelector('#bug_details:not(:empty)');
+  await page.waitForTimeout(800);
+  console.log('REPORT dialog:', await text('.modal-title'), '|', (await text('.modal-body p')).slice(0, 80));
+  await page.fill('#bug_what', 'The map was blank.');
+  await page.waitForTimeout(600);
+  await shot('02b_report');
+  await page.click('#bug_copy');
+  await page.waitForTimeout(800);
+  const report = await clipboard();
+  const lines = report.split('\n');
+  console.log('REPORT headings:', JSON.stringify(lines.filter((l, i) => /^-+$/.test(lines[i + 1] || ''))));
+  console.log('REPORT lines:', JSON.stringify(lines.filter(l => /^(The map|Calculated|Settings error|Code button|codes =|level =|actepir |Browser|Window|Errors shown)/.test(l))));
+  await page.click('.modal-footer [data-bs-dismiss=modal]');
+  await page.waitForTimeout(600);
 
   // Explore: the linked map and funnel plot
   await page.click('a[data-value=explore]');
