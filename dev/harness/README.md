@@ -68,7 +68,7 @@ Pull request #8 removed the Map tab, the menu and Australian residents, and adde
 | `episerver_browser.js` | Unchanged, through `episerver_browse()` with no display argument. |
 | `dryrun_live.R` | 11 tests, 192 expectations, 0 failed, 0 skipped: the test of `ERP5_STE_AUS` and the Australian residents' queries are gone. |
 
-The sidebar change (pending) added checks of the sidebar, the notification and the problem report. The script now shows scrollbars, as Windows does. The results above were unchanged, and the new ones were:
+Pull request #9 added checks of the sidebar, the notification and the problem report. The script now shows scrollbars, as Windows does. The results above were unchanged, and the new ones were:
 
 | Run | Results |
 |---|---|

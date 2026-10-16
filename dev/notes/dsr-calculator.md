@@ -12,7 +12,7 @@
 | #6 | Sidebar layout in the browser, keyboard-only highlights, the AIHW minimums (n.p.), Counts by age, validation against PHEindicatormethods and epitools, and these notes |
 | #7 | Searching diagnosis codes by condition, with ICD-10-AM titles from `Analysis.dbo.ICD10AM`, and each code entered spelt out below the box; APC procedure codes and ACHI blocks, searched the same way, combined with diagnoses by and or or |
 | #8 | Cleanup: no map or funnel plot at state level, the static Map tab and Australian residents removed, a Download menu (map or funnel plot, PDF or PNG) and brand-coloured toolbars on the Explore tab, a second highlight colour in Counts by age, and an add-in for each app in place of the menu (browser only) |
-| Pending | Sidebar: tinted section headings, ages and male and female under Population, Geographic scope, tighter spacing, notes behind information buttons, a resizable sidebar with the handle off the scrollbar, and a problem report to healthinfo@act.gov.au; the Explore tab's settings down its left with the plots fitted to the window; the spacing and components moved to the shared style (`dev/reference/app-style.md`) |
+| #9 | Sidebar: tinted section headings, ages and male and female under Population, Geographic scope, tighter spacing, notes behind information buttons, a resizable sidebar with the handle off the scrollbar, and a problem report to healthinfo@act.gov.au; the Explore tab's settings in a panel down its left with the plots fitted to the window; the name at the left of the top bar, the logo at the right, and no Done; the spacing and components moved to the shared style (`dev/reference/app-style.md`) |
 
 The pull request descriptions give the detail of each change and what to check against EpiServer.
 
