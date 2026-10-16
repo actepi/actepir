@@ -71,6 +71,10 @@ top bar. The arrow at the top of the sidebar hides it, and its right edge
 can be dragged to widen it. The information button beside a setting shows
 notes on it, and the bug button at the foot of the sidebar prepares a
 report of a problem to send to \email{healthinfo@act.gov.au}.
+
+Close the browser tab when finished. A background calculator keeps
+running, so it opens again at once, until \code{\link[=episerver_dsr_stop]{episerver_dsr_stop()}} or the
+end of the R session; with \code{background = FALSE}, closing the tab stops it.
 }
 \details{
 \strong{Options}

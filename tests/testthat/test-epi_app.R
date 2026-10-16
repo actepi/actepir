@@ -133,6 +133,44 @@ test_that("controls and sections take their spacing and type from shared tokens"
 
 })
 
+test_that("the top bar has the name at the left and the logo at the right", {
+
+  css <- as.character(.epi_app_style())
+  # The logo at the brand's minimum size, a crest 60px across, with 22px
+  # clear space; the name stands apart from the tabs
+  expect_match(css, ".navbar .epi-logo { display: block; height: 60px; margin: 22px 0 22px 22px; }",
+               fixed = TRUE)
+  expect_match(css, ".navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }",
+               fixed = TRUE)
+  expect_match(css, ".navbar-brand { margin-right: 48px; }", fixed = TRUE)
+
+})
+
+test_that("a tab's own settings are a panel, distinct from the app's sidebar", {
+
+  layout <- .epi_tab_settings(
+    "tab_settings", shiny::tagList(shiny::selectInput("a", "A", 1:2)),
+    shiny::div(id = "tab_results")
+  )
+  html <- as.character(layout)
+  # The class is on the layout itself, where the CSS looks for it
+  expect_match(html, "^<div class=\"bslib-sidebar-layout[^\"]* epi-tab-layout\"")
+  expect_match(html, "<aside id=\"tab_settings\" class=\"sidebar")
+  expect_match(html, "data-open-desktop=\"always\"", fixed = TRUE)
+  expect_match(html, "--_sidebar-width:240px", fixed = TRUE)
+  expect_no_match(html, "data-resizable", fixed = TRUE)
+  expect_match(html, "id=\"tab_results\"", fixed = TRUE)
+
+  # Without the sidebar's dividing border, as tall as its settings and held
+  # in view while the results scroll
+  css <- as.character(.epi_app_style())
+  expect_match(css, ".epi-tab-layout { --bslib-sidebar-vert-border: none; }",
+               fixed = TRUE)
+  expect_match(css, "(?s)\\.epi-tab-layout > \\.sidebar \\{[^}]*position: sticky",
+               perl = TRUE)
+
+})
+
 test_that("a setting's notes sit behind an information button beside its label", {
 
   field <- .epi_with_help(

@@ -1975,18 +1975,22 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
 
   expect_match(page, "<title>DSR Calculator</title>", fixed = TRUE)
 
-  # The top bar holds the logo, the name, the tabs and Done
+  # The top bar holds the name at the left, the tabs, and the logo at the
+  # right. There is no Done button: closing the browser tab closes the app.
   navbar <- part("(?s)<nav .*?</nav>")
   expect_length(navbar, 1)
+  expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*DSR Calculator\\s*<",
+               perl = TRUE)
   expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
-  expect_match(navbar, "class=\"epi-logo\"", fixed = TRUE)
-  expect_match(navbar, "DSR Calculator", fixed = TRUE)
+  in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
   for (tab in c("tables", "explore", "help")) {
-    expect_match(navbar, paste0("data-value=\"", tab, "\""), fixed = TRUE)
+    at <- in_bar(paste0("data-value=\"", tab, "\""))
+    expect_gt(at, in_bar("DSR Calculator"))
+    expect_lt(at, in_bar("class=\"epi-logo\""))
   }
   # The static map has gone; the Explore tab maps the areas
   expect_no_match(navbar, "data-value=\"map\"", fixed = TRUE)
-  expect_true(has_id(navbar, "done"))
+  expect_false(has_id(page, "done"))
 
   # The sidebar holds every setting, in four sections that start open, and
   # Calculate, the code button and the bug button; the results are outside
@@ -2049,6 +2053,8 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   # with the notes on selecting areas behind an information button
   explore <- part("(?s)<aside id=\"ex_settings\" class=\"sidebar.*?</aside>")
   expect_length(explore, 1)
+  expect_match(page, "(?s)epi-tab-layout\"[^>]*>\\s*<div class=\"main\">.*?<aside id=\"ex_settings\"",
+               perl = TRUE)
   for (id in c("ex_value", "ex_year", "ex_sex", "ex_ages", "ex_colour",
                "ex_overdispersion", "ex_zoom", "ex_reset", "ex_clear",
                "ex_download", "ex_map_pdf", "ex_funnel_png")) {
@@ -2077,10 +2083,8 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_true(has_id(sidebar, "min_events"))
   expect_true(has_id(sidebar, "min_population"))
 
-  # The logo is shown at the brand's minimum size with its clear space, and
-  # the page explains itself once Done has stopped the app
-  expect_match(page, ".epi-logo { height: 60px; }", fixed = TRUE)
-  expect_match(page, "The DSR Calculator has stopped.", fixed = TRUE)
+  # The page explains itself once the app has stopped
+  expect_match(page, "The DSR Calculator is no longer running.", fixed = TRUE)
 
   # The calculator opens in the web browser, with no other display offered
   expect_named(formals(episerver_dsr),

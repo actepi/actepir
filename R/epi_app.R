@@ -184,8 +184,8 @@
 
   message(
     title, " running in a background process at ", url, "\n",
-    "The console remains free. Stop it with the Done button or ",
-    fn, "_stop()."
+    "The console remains free. Closing the browser tab leaves it running, ",
+    "so ", fn, "() opens it again at once; ", fn, "_stop() stops it."
   )
 
   invisible(proc)
@@ -303,6 +303,23 @@
 
 # Where analysts send problem reports from the apps
 .epi_contact <- "healthinfo@act.gov.au"
+
+
+# A tab's own settings, in a panel down the left of the tab's results (...),
+# as distinct from the app's sidebar of settings. `settings` is a tagList of
+# inputs; the panel is 240px wide, always open and not resizable, and the
+# CSS of .epi-tab-layout in .epi_app_style() gives it its look.
+#' @noRd
+.epi_tab_settings <- function(id, settings, ...) {
+  layout <- bslib::layout_sidebar(
+    sidebar = bslib::sidebar(settings, id = id, width = 240,
+                             open = "always", resizable = FALSE),
+    ...,
+    border = FALSE, border_radius = FALSE, fillable = FALSE
+  )
+  # layout_sidebar() puts named attributes on its main area, not on itself
+  htmltools::tagAppendAttributes(layout, class = "epi-tab-layout")
+}
 
 
 # A setting with notes (...) behind an information button at the right of
@@ -533,6 +550,19 @@
     .accordion-body > :last-child .shiny-input-container,
     .box-body > :last-child,
     .box-body > :last-child .shiny-input-container { margin-bottom: 0; }
+    /* Top bar of a bslib page_navbar: the app's name at the left, its tabs
+       after a gap, and the logo at the right (.epi-logo), at the brand's
+       minimum size, a crest 60px across, with clear space equal to the
+       height of its ACT lettering, 22px */
+    .navbar { --bs-navbar-padding-y: 0; }
+    .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
+    .navbar-brand { margin-right: 48px; }
+    .navbar .epi-logo { display: block; height: 60px; margin: 22px 0 22px 22px; }
+    /* The tabs centred on the logo's height, where the bar is not collapsed:
+       bslib collapses it below Bootstrap's lg breakpoint, 992px */
+    @media (min-width: 992px) {
+      .navbar .navbar-nav { align-items: center; }
+    }
     /* Sidebars: settings are spaced by their own margins (--epi-gap), so
        bslib's gaps between them are removed */
     .bslib-sidebar-layout > .sidebar > .sidebar-content { gap: 0; }
@@ -553,6 +583,16 @@
     }
     .accordion + .epi-actions { margin-top: calc(-1 * var(--epi-gap)); }
     .sidebar-content:has(> .epi-actions:last-child) { padding-bottom: 0; }
+    /* A tab's own settings (.epi_tab_settings()): a panel at the left of
+       the tab's results, without the app sidebar's dividing border, as
+       tall as its settings and held in view while the results scroll */
+    .epi-tab-layout { --bslib-sidebar-vert-border: none; }
+    @media (min-width: 576px) {
+      .epi-tab-layout > .sidebar {
+        align-self: start; position: sticky; top: var(--epi-pad);
+        border-radius: var(--bs-border-radius, 6px);
+      }
+    }
     /* Buttons stacked down a sidebar, each its full width */
     .epi-stack { display: flex; flex-direction: column;
                  gap: var(--epi-gap-small); margin-bottom: var(--epi-gap); }

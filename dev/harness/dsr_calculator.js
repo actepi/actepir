@@ -36,8 +36,17 @@ const fs = require('fs');
   await page.waitForSelector('#calculate');
   await settle();
 
-  // Layout: the tabs in the top bar, and the sidebar's sections and inputs
+  // Layout: the name at the left of the top bar, the tabs after a gap, the
+  // logo at the right and no Done; the sidebar's sections and inputs
   console.log('TABS:', JSON.stringify(await page.$$eval('.navbar-nav a.nav-link', as => as.map(a => a.textContent.trim()))));
+  console.log('TOP BAR:', JSON.stringify(await page.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    const brand = r('.navbar-brand'), tab = r('.navbar-nav a.nav-link'), logo = r('.navbar .epi-logo');
+    return { nameLeft: Math.round(brand.left), gapToTabs: Math.round(tab.left - brand.right),
+             middles: [brand, tab, logo].map(b => Math.round(b.top + b.height / 2)),
+             logoRight: Math.round(window.innerWidth - logo.right), logoHeight: Math.round(logo.height),
+             barHeight: Math.round(r('.navbar').height), done: !!document.querySelector('#done') };
+  })));
   console.log('SIDEBAR:', JSON.stringify(await page.$$eval('.accordion-item', items => items.map(i => [
     i.querySelector('.accordion-title').textContent.trim(),
     [...i.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim())
@@ -195,7 +204,35 @@ const fs = require('fs');
   console.log('EXPLORE heading:', await text('#ex_heading'));
   console.log('EXPLORE note:', await text('#ex_method'));
   console.log('EXPLORE areas: map', await areas('#ex_map svg [data-id]'), 'funnel', await areas('#ex_funnel svg [data-id]'));
-  // The settings run down the left of the plots, which fit the window
+  // The settings run down the left of the plots, which fit the window, in a
+  // panel with no dividing border that stays in view as the page scrolls
+  const panel = () => page.$eval('#ex_settings', e => {
+    const s = getComputedStyle(e), r = e.getBoundingClientRect();
+    return { borderRight: s.borderRightStyle, top: Math.round(r.top), height: Math.round(r.height) };
+  });
+  // Scrolls the element that scrolls the tab: the first ancestor of the
+  // panel that overflows
+  const scrollTab = y => page.$eval('#ex_settings', (e, y) => {
+    for (let el = e.parentElement; el; el = el.parentElement) {
+      const o = getComputedStyle(el).overflowY;
+      if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) {
+        el.scrollTop = y === 'end' ? el.scrollHeight : y;
+        return el.scrollTop;
+      }
+    }
+    const doc = document.scrollingElement;
+    doc.scrollTop = y === 'end' ? doc.scrollHeight : y;
+    return doc.scrollTop;
+  }, y);
+  await page.setViewportSize({ width: 1440, height: 650 });
+  await page.waitForTimeout(600);
+  const panelTop = await panel();
+  const scrolled = await scrollTab('end');
+  await page.waitForTimeout(400);
+  console.log('EXPLORE panel:', JSON.stringify(panelTop), `scrolled ${scrolled}px:`, JSON.stringify(await panel()));
+  await scrollTab(0);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
   console.log('EXPLORE settings:', JSON.stringify(await page.$$eval('#ex_settings label.control-label, #ex_settings .checkbox label, #ex_settings .btn',
     ls => ls.filter(l => l.offsetParent).map(l => l.textContent.trim()))));
   console.log('EXPLORE layout:', JSON.stringify(await page.evaluate(() => {
@@ -341,10 +378,10 @@ const fs = require('fs');
     es => es.map(e => [e.textContent, getComputedStyle(e).backgroundColor]))));
   await shot('11_counts_codes');
 
-  // Done stops the app and the page says so
-  await page.click('#done');
+  // When the app stops, the page says so: here the connection is closed
+  await page.evaluate(() => Shiny.shinyapp.$socket.close());
   await page.waitForSelector('.epi-stopped', { timeout: 15000 });
-  console.log('DONE:', await text('.epi-stopped'));
+  console.log('STOPPED:', await text('.epi-stopped'));
 
   await browser.close();
 })().catch(e => { console.log('SCRIPT ERROR:', e.message); process.exit(1); });

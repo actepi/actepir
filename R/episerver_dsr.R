@@ -22,6 +22,10 @@
 #' notes on it, and the bug button at the foot of the sidebar prepares a
 #' report of a problem to send to \email{healthinfo@act.gov.au}.
 #'
+#' Close the browser tab when finished. A background calculator keeps
+#' running, so it opens again at once, until [episerver_dsr_stop()] or the
+#' end of the R session; with `background = FALSE`, closing the tab stops it.
+#'
 #' @inheritParams episerver_browse
 #' @inheritDotParams episerver_connect encrypt trust_certificate
 #'
@@ -1896,8 +1900,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   # window
   ui <- bslib::page_navbar(
 
-    title        = shiny::span(class = "epi-brand",
-                               .epi_logo(class = "epi-logo"), "DSR Calculator"),
+    title        = "DSR Calculator",
     window_title = "DSR Calculator",
     id           = "view",
     theme        = .epi_theme(),
@@ -1910,14 +1913,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       # Calculator-only rules: the top bar, the sidebar, the problem report,
       # table headings, the diagnosis code tags and the Explore tab
       shiny::tags$style(shiny::HTML("
-        /* Top bar: the logo at the brand's minimum size, a crest 60px
-           across, with clear space equal to the height of its ACT
-           lettering, 22px */
-        .navbar { --bs-navbar-padding-y: 0; }
-        .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
-        .navbar-brand { display: flex; padding: 22px 0; margin-right: 22px; }
-        .epi-brand { display: flex; align-items: center; gap: 22px; }
-        .epi-logo { height: 60px; }
         /* Sidebars: Lavender tint, with Calculate, Copy Code and the bug
            button in view at the foot of the settings (.epi-actions) */
         :root { --bslib-sidebar-bg: #f7f4fd; }
@@ -1989,7 +1984,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .dsr-short { padding: 1px 4px; border-radius: 2px; }
         .dsr-short-pop { background: #F1ECC2; }
         .dsr-short-events { background: #BFE3F1; }
-        /* Shown in place of Shiny's grey overlay once Done stops the app */
+        /* Shown in place of Shiny's grey overlay once the app has stopped */
         .epi-stopped { position: fixed; inset: 0; z-index: 100000;
                        display: flex; flex-direction: column;
                        align-items: center; justify-content: center;
@@ -2149,20 +2144,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # Done stops the app. A browser tab stays open afterwards, so it says
-      # so instead of greying out.
+      # When the app stops (episerver_dsr_stop(), or the end of the R
+      # session), its browser tab says so and how to open it again, instead
+      # of greying out
       shiny::tags$script(shiny::HTML("
-        (function() {
-          var stopping = false;
-          $(document).on('click', '#done', function() { stopping = true; });
-          $(document).on('shiny:disconnected', function() {
-            if (!stopping) return;
-            $('<div class=\"epi-stopped\">')
-              .append('<h4>The DSR Calculator has stopped.</h4>')
-              .append('<p>Start it again with actepir::episerver_dsr().</p>')
-              .appendTo('body');
-          });
-        })();
+        $(document).on('shiny:disconnected', function() {
+          $('<div class=\"epi-stopped\">')
+            .append('<h4>The DSR Calculator is no longer running.</h4>')
+            .append('<p>Open it again from Addins &gt; Open DSR Calculator, ' +
+                    'or with actepir::episerver_dsr().</p>')
+            .appendTo('body');
+        });
       ")),
 
       # Info bar: what is shown, what was left out, and any warnings
@@ -2378,11 +2370,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       "Explore", value = "explore",
       # The settings run down the left, so that the map and funnel plot
       # take the height of the window
-      bslib::layout_sidebar(
-        border = FALSE, border_radius = FALSE, fillable = FALSE,
-        sidebar = bslib::sidebar(
-          id = "ex_settings", width = 240, open = "always",
-          resizable = FALSE,
+      .epi_tab_settings(
+        "ex_settings",
+        shiny::tagList(
           .dsr_map_controls("ex"),
           shiny::selectInput(
             "ex_colour", "Colour the map by",
@@ -2456,10 +2446,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     bslib::nav_panel("Help", value = "help", .dsr_help()),
 
+    # The logo at the right of the top bar. The app runs in a browser tab,
+    # which closes it; no Done button is needed.
     bslib::nav_spacer(),
-    bslib::nav_item(
-      shiny::actionButton("done", "Done", class = "btn-sm btn-primary")
-    )
+    bslib::nav_item(.epi_logo(class = "epi-logo"))
   )
 
   # ── Server ────────────────────────────────────────────────────────────────
@@ -3622,10 +3612,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                      "Report copied to the clipboard")
     })
 
-    # ── Done button ────────────────────────────────────────────────────────
-    shiny::observeEvent(input$done, {
-      shiny::stopApp()
-    })
+    # In this R session the app holds the console, so closing its browser
+    # tab stops it; a background app keeps running for the next opening
+    if (in_rstudio) session$onSessionEnded(shiny::stopApp)
 
   }
 

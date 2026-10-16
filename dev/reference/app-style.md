@@ -8,7 +8,7 @@ The rules were set on the DSR Calculator and are implemented once, for every app
 |---|---|
 | `.epi_theme()` in `R/epi_app.R` | The bslib (Bootstrap 5) theme: brand purples, fonts, focus colours and the dialog margin. |
 | `.epi_app_style()` in `R/epi_app.R` | CSS for every app, whatever its framework: the tokens below, and rules on the classes of Shiny, Bootstrap 3 and 5, bslib and shinydashboard. |
-| `.epi_with_help()`, `.epi_copy_text()`, `.epi_session_report()`, `.epi_contact` | Shared components: a setting's notes behind an information button, copying to the clipboard, and the session lines and address of a problem report. |
+| `.epi_with_help()`, `.epi_tab_settings()`, `.epi_copy_text()`, `.epi_session_report()`, `.epi_contact` | Shared components: a setting's notes behind an information button, a tab's own settings panel, copying to the clipboard, and the session lines and address of a problem report. |
 
 `test-epi_app.R` checks the tokens and the rules that apply them. The browser scripts in `dev/harness/` check them in a page.
 
@@ -58,10 +58,12 @@ The brand purples are in `act-brand.md`. In the apps:
 
 ### bslib apps (Bootstrap 5)
 
-- **Page.** `bslib::page_navbar()` with `.epi_theme()`, `.epi_app_style()` and `.epi_logo()`; result views are tabs in the top bar, with Done at its right. See "Adding a tool" in `dev/notes/shared-apps.md`.
+- **Page.** `bslib::page_navbar()` with `.epi_theme()`, `.epi_app_style()` and `.epi_logo()`. See "Adding a tool" in `dev/notes/shared-apps.md`.
+- **Top bar.** The app's name (`title`) at the left; its result views as tabs, 48px after the name; then `bslib::nav_spacer()` and `bslib::nav_item(.epi_logo(class = "epi-logo"))`, which puts the logo at the right at the brand's minimum size (a crest 60px across) with 22px clear space. The bar is 104px tall.
+- **No Done button.** The apps open in a browser tab, which the analyst closes. A background app keeps running, so it opens again at once, until its `_stop()` function or the end of the R session. When it stops, the tab says so and how to open it again. In the foreground (`background = FALSE`), closing the tab stops the app, which frees the console.
 - **Settings sidebar.** `bslib::sidebar()`, 340px wide, resizable, open on desktop. Settings are grouped in `bslib::accordion()` sections that start open.
 - **Actions at the foot.** The sidebar's actions (Calculate, Copy Code, the bug button) are in a `div(class = "epi-actions")` as its last child, held in view at the foot.
-- **A tab's own settings.** Settings that belong to one tab, such as the Explore tab's, go in a `bslib::layout_sidebar()` inside the tab: 240px wide, `open = "always"`, `resizable = FALSE`, with `border = FALSE` and `border_radius = FALSE`. They run down the left of the results, so the results take the window's height.
+- **A tab's own settings.** Settings that belong to one tab, such as the Explore tab's, go in `.epi_tab_settings(id, settings, ...)`, with the tab's results in `...`. It is a panel down the left of the results, distinct from the app's sidebar: the same tint and spacing, 240px wide, always open and not resizable, but with no dividing border, rounded corners, as tall as its settings, and held in view while the results scroll (`.epi-tab-layout`). The results take the window's height beside it.
 - **Plots that must be seen whole** fit the window below their top. The Explore tab sets `--ex-plot-height` from a short script and caps each plot's SVG at it; ggiraph keeps the plot's shape.
 - **Resizing.** `.epi_app_style()` moves the resize handle of every left-hand bslib sidebar just outside its edge, as bslib puts it over the scrollbar (see the DSR Calculator's notes).
 

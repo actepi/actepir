@@ -12,6 +12,7 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 | `.epi_send_code()`, `.epi_copy_text()`, `.epi_copy_script()` | Insert generated code at the cursor in RStudio, or copy text to the clipboard from the page. |
 | `.epi_contact`, `.epi_session_report()` | Where problem reports go (healthinfo@act.gov.au), and lines on the R session for them. The DSR Calculator's report uses them (see `dsr-calculator.md`). |
 | `.epi_with_help()` | A setting's notes behind an information button beside its label. |
+| `.epi_tab_settings()` | A tab's own settings in a panel down the left of its results, distinct from the app's sidebar. |
 | `.epi_logo()` | The white ACT Government logo as a data URI. |
 | `.epi_theme()` | The bslib (Bootstrap 5) theme in the brand purples and fonts of `dev/reference/act-brand.md`, with Bootstrap's dialog margin. |
 | `.epi_app_style()` | CSS for every app: the spacing and type tokens and the rules that apply them to controls and sections, buttons, focus, notes, information and icon buttons, sidebar feet and button stacks, the sidebar resize handle, notifications, DataTables and sliders. |
@@ -35,6 +36,9 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 - **Hover and focus.** Buttons go to Iris (`#562C8C`) on hover and on keyboard focus. Focus rings show only for keyboard focus (`:focus-visible`), so a mouse click leaves no highlight.
 - **Fonts are named, not downloaded.** Montserrat and Source Sans 3 are used where installed, otherwise the brand's alternatives, Arial and Calibri.
 - **The logo is a data URI,** so it works in background apps without `addResourcePath()`.
+- **Top bar.** In a bslib app the name is at the left, the tabs 48px after it, and the logo at the right. The rules are in `.epi_app_style()` (`.navbar`, `.navbar-brand`, `.epi-logo`).
+- **No Done in the DSR Calculator.** It runs in a browser tab, which the analyst closes. The background process keeps running until `episerver_dsr_stop()` or the end of the R session, and the add-in or `episerver_dsr()` reopens it at once (`.run_app()` reuses a running app). In the foreground, closing the tab stops the app (`session$onSessionEnded()`), as the app holds the console. The EpiServer Browser still has its miniUI Done button; see Open items.
+- **A tab's own settings** go in `.epi_tab_settings()`, a nested bslib `layout_sidebar()` with the class `epi-tab-layout`. The shared style gives it the sidebar's tint and spacing but no dividing border, a height that follows its settings, and a sticky position, so that it reads as a panel within the tab rather than a second app sidebar. `layout_sidebar()` puts named attributes on its main area, so the class is added to the layout afterwards.
 - **Theme tests turn off the sass cache.** Tests that compile the theme set `withr::local_options(sass.cache = FALSE)`, or sass writes to the user's cache folder.
 
 ## Adding a tool
@@ -52,4 +56,4 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 - The EpiServer Browser has no problem report. `.epi_session_report()` is shared so that it can have one.
 - shinydashboard's colours are not themed (see `dev/reference/app-style.md`).
 - The EpiServer Browser has no offline tests. `episerver_browse_app()` has no `query` argument, so the harness runs it by replacing `.epi_connection()`.
-- Done in the EpiServer Browser leaves its browser tab greyed out. The DSR Calculator says that it has stopped and how to start it again (the Done script in `episerver_dsr_app()`); the Browser, now always in the browser, could do the same.
+- **The EpiServer Browser's Done button (waiting on the maintainer).** The Browser now also opens in the browser only, so its Done button is redundant for the same reason as the DSR Calculator's. Done leaves its tab greyed out; the DSR Calculator says that it has stopped and how to open it again (the `shiny:disconnected` script in `episerver_dsr_app()`).
