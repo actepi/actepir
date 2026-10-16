@@ -78,8 +78,9 @@ tabs on the top bar. The arrow at the top of the sidebar hides it.
 \details{
 \strong{Options}
 
-The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis
-codes and search), \emph{Population} (population and geographic level), \emph{Time
+The sidebar's sections hold the options: \emph{Events} (dataset, diagnosis and
+procedure codes, and how they are searched), \emph{Population} (population and
+geographic level), \emph{Time
 periods} (calendar years and pooling) and \emph{Rate details} (ages, standard
 population, rate per, suppression, and male and female).
 \itemize{
@@ -145,11 +146,26 @@ entered is spelt out below the box with its titles. The titles come from
 \code{Analysis.dbo.ICD10AM}, each from the latest edition that holds the code;
 a code that some editions lack is labelled with the editions that hold
 it.
-\item \emph{Search}: for APC, the principal diagnosis (\code{Diagnosis1}) or any
-diagnosis (\code{Diagnosis1} to \code{Diagnosis100}). ED always searches all four
-of its diagnosis fields (\code{EDShortListCode} and \code{Diagnosis1} to
+\item \emph{Diagnosis search}: for APC, the principal diagnosis (\code{Diagnosis1}) or
+any diagnosis (\code{Diagnosis1} to \code{Diagnosis100}). ED always searches all
+four of its diagnosis fields (\code{EDShortListCode} and \code{Diagnosis1} to
 \code{Diagnosis3}), as \code{Diagnosis1} is recorded to 2020 and \code{EDShortListCode}
 from 2013, so neither holds the principal diagnosis in every year.
+\item \emph{Procedure codes}: for APC only, counts only events with a procedure
+matching any of the ACHI codes, blocks or ranges entered, for example
+\code{11012-00}, \code{11012}, \code{1826} or \verb{11000-00 to 11027-00}. Codes match as
+diagnosis codes do, without hyphens. A number of up to four digits is an
+ACHI block, shown as \verb{[1826]}, matched against the block recorded with
+each procedure (\code{BlockProcedure1} to \code{BlockProcedure50}), and a range of
+blocks such as \code{1820-1830} includes both ends. Words from a procedure
+list the codes and blocks whose titles match, as for diagnoses. ED
+records hold no procedures, so the procedure options are disabled for
+ED and its rates ignore any procedure codes entered.
+\item \emph{Procedure search}: the principal procedure (\code{Procedure1}) or any
+procedure (\code{Procedure1} to \code{Procedure50}).
+\item \emph{With diagnoses and procedures, count events with}: when both diagnosis
+and procedure codes are entered, events with a diagnosis and a procedure
+(the default), or with either.
 }
 
 \strong{Tables, maps and funnel plot}

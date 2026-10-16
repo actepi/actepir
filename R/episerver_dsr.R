@@ -32,8 +32,9 @@
 #' @details
 #' **Options**
 #'
-#' The sidebar's sections hold the options: *Events* (dataset, diagnosis
-#' codes and search), *Population* (population and geographic level), *Time
+#' The sidebar's sections hold the options: *Events* (dataset, diagnosis and
+#' procedure codes, and how they are searched), *Population* (population and
+#' geographic level), *Time
 #' periods* (calendar years and pooling) and *Rate details* (ages, standard
 #' population, rate per, suppression, and male and female).
 #' * *Dataset*: ED presentations, counted by the calendar year of
@@ -98,11 +99,26 @@
 #'   `Analysis.dbo.ICD10AM`, each from the latest edition that holds the code;
 #'   a code that some editions lack is labelled with the editions that hold
 #'   it.
-#' * *Search*: for APC, the principal diagnosis (`Diagnosis1`) or any
-#'   diagnosis (`Diagnosis1` to `Diagnosis100`). ED always searches all four
-#'   of its diagnosis fields (`EDShortListCode` and `Diagnosis1` to
+#' * *Diagnosis search*: for APC, the principal diagnosis (`Diagnosis1`) or
+#'   any diagnosis (`Diagnosis1` to `Diagnosis100`). ED always searches all
+#'   four of its diagnosis fields (`EDShortListCode` and `Diagnosis1` to
 #'   `Diagnosis3`), as `Diagnosis1` is recorded to 2020 and `EDShortListCode`
 #'   from 2013, so neither holds the principal diagnosis in every year.
+#' * *Procedure codes*: for APC only, counts only events with a procedure
+#'   matching any of the ACHI codes, blocks or ranges entered, for example
+#'   `11012-00`, `11012`, `1826` or `11000-00 to 11027-00`. Codes match as
+#'   diagnosis codes do, without hyphens. A number of up to four digits is an
+#'   ACHI block, shown as `[1826]`, matched against the block recorded with
+#'   each procedure (`BlockProcedure1` to `BlockProcedure50`), and a range of
+#'   blocks such as `1820-1830` includes both ends. Words from a procedure
+#'   list the codes and blocks whose titles match, as for diagnoses. ED
+#'   records hold no procedures, so the procedure options are disabled for
+#'   ED and its rates ignore any procedure codes entered.
+#' * *Procedure search*: the principal procedure (`Procedure1`) or any
+#'   procedure (`Procedure1` to `Procedure50`).
+#' * *With diagnoses and procedures, count events with*: when both diagnosis
+#'   and procedure codes are entered, events with a diagnosis and a procedure
+#'   (the default), or with either.
 #'
 #' **Tables, maps and funnel plot**
 #'
@@ -317,17 +333,22 @@ episerver_dsr_stop <- function() {
 # from 2021, and the two can differ, so ED always searches all four fields.
 # Older APC records are coded in ICD-9, and ED records with ICD10AMEdition 99
 # are not ICD-10, so codes such as V56.0 would otherwise match the wrong
-# conditions.
+# conditions. APC records also hold ACHI procedures, the first of them the
+# principal procedure, each with its ACHI block in the matching BlockProcedure
+# field; ED records hold none.
 .dsr_datasets <- list(
   ED  = list(table = "ED",  date = "PresentationDateTime", age = "AgeYrs",
              label = "ED presentations",
              diagnoses = c("EDShortListCode", paste0("Diagnosis", 1:3)),
              principal = FALSE,
+             procedures = NULL, blocks = NULL,
              icd10 = "COALESCE(ICD10AMEdition, 0) <> 99"),
   APC = list(table = "APC", date = "SeparationDate",       age = "AgeYears",
              label = "APC separations",
              diagnoses = paste0("Diagnosis", 1:100),
              principal = TRUE,
+             procedures = paste0("Procedure", 1:50),
+             blocks = paste0("BlockProcedure", 1:50),
              icd10 = "ICDVersion = 10")
 )
 
@@ -373,22 +394,32 @@ episerver_dsr_stop <- function() {
 
 # Validated calculator settings. Every value interpolated into SQL passes
 # through here: names are matched against the definitions above, numbers are
-# coerced to integer and diagnosis codes are parsed by .dsr_parse_codes().
-# `pool` pools the years into periods of that many years, which must divide
-# the range evenly. `ages` is the first and last age group (codes 1 to 18)
-# included in the rates.
+# coerced to integer, diagnosis codes are parsed by .dsr_parse_codes() and
+# procedures by .dsr_parse_procedures(). `pool` pools the years into periods
+# of that many years, which must divide the range evenly. `ages` is the first
+# and last age group (codes 1 to 18) included in the rates. `procedure` is
+# the principal procedure or all, and `combine` whether events need a
+# diagnosis and a procedure, or either, when both are given. A dataset
+# without procedures (ED) takes none.
 #' @noRd
 .dsr_spec <- function(dataset = "ED", scope = "ACT", level = "state",
                       years, standard = 101L, codes = NULL,
-                      diagnosis = "principal", pool = 1L, ages = c(1L, 18L)) {
+                      diagnosis = "principal", pool = 1L, ages = c(1L, 18L),
+                      procedures = NULL, procedure = "principal",
+                      combine = "and") {
 
   dataset   <- match.arg(dataset, names(.dsr_datasets))
   scope     <- match.arg(scope, names(.dsr_scopes))
   level     <- match.arg(level, names(.dsr_levels))
   diagnosis <- match.arg(diagnosis, c("principal", "all"))
+  procedure <- match.arg(procedure, c("principal", "all"))
+  combine   <- match.arg(combine, c("and", "or"))
   if (!.dsr_datasets[[dataset]]$principal) diagnosis <- "all"
   if (is.data.frame(codes)) codes <- codes$Label
   codes <- .dsr_parse_codes(codes)
+  if (is.data.frame(procedures)) procedures <- procedures$Label
+  if (is.null(.dsr_datasets[[dataset]]$procedures)) procedures <- NULL
+  procedures <- .dsr_parse_procedures(procedures)
 
   years <- suppressWarnings(as.integer(years))
   if (length(years) == 1) years <- c(years, years)
@@ -423,7 +454,8 @@ episerver_dsr_stop <- function() {
 
   list(dataset = dataset, scope = scope, level = level, years = years,
        standard = standard, codes = codes, diagnosis = diagnosis, pool = pool,
-       ages = ages)
+       ages = ages, procedures = procedures, procedure = procedure,
+       combine = combine)
 
 }
 
@@ -481,6 +513,82 @@ episerver_dsr_stop <- function() {
 }
 
 
+# Procedure criteria as typed, several to an entry when separated by commas
+# or semicolons: ACHI codes such as 11012-00, partial codes of five digits or
+# more such as 11012, ACHI blocks (numbers of up to four digits) such as 1826,
+# [1826] or block 1826, and ranges of codes or of blocks, such as 11000-00 to
+# 11027-00 or 1820-1830. A partial code stands for every code that starts
+# with it, as for diagnoses. Returns one row per entry: Label (tidied), Type
+# ("code" or "block"), and From and To (digits only) for the SQL. Anything
+# else is an error naming the entry, so only digits reach the SQL.
+#' @noRd
+.dsr_parse_procedures <- function(x) {
+
+  items <- trimws(unlist(strsplit(as.character(x), "[,;\n]+")))
+  items <- items[nzchar(items)]
+  code  <- "[0-9]{5}(?:-?[0-9]{1,2})?"
+  block <- "[0-9]{1,4}"
+  one   <- function(p) grepl(paste0("^(?:", code, "|", block, ")$"), p,
+                             perl = TRUE)
+
+  rows <- lapply(items, function(item) {
+    # En and em dashes join the ends of a range; they are made from their code
+    # points and matched as UTF-8 bytes, so the session's locale does not
+    # matter
+    s <- item
+    for (dash in intToUtf8(c(0x2013, 0x2014), multiple = TRUE)) {
+      s <- gsub(dash, " TO ", s, fixed = TRUE, useBytes = TRUE)
+    }
+    s <- gsub("BLOCK *|\\[|\\]", "", toupper(gsub("\\s+", " ", trimws(s))))
+    parts <- trimws(sub("[*%]+$", "", trimws(strsplit(s, " TO ",
+                                                      fixed = TRUE)[[1]])))
+    # A hyphen joins the parts of a code (11012-00), or else the ends of a
+    # range (1820-1830, 11000-11027)
+    if (length(parts) == 1 && !one(parts)) {
+      m <- regmatches(parts, regexec(paste0("^(", code, "|", block, ") ?- ?(",
+                                            code, "|", block, ")$"),
+                                     parts, perl = TRUE))[[1]]
+      if (length(m)) parts <- m[2:3]
+    }
+    blocks <- grepl(paste0("^", block, "$"), parts)
+    if (length(parts) < 1 || length(parts) > 2 || !all(one(parts)) ||
+        length(unique(blocks)) != 1) {
+      stop("'", item, "' is not an ACHI procedure code, block or range, ",
+           "such as 11012-00, 1826 or 11000-00 to 11027-00.", call. = FALSE)
+    }
+    type <- if (blocks[1]) "block" else "code"
+    keys <- if (blocks[1]) {
+      as.character(as.integer(parts))
+    } else {
+      gsub("-", "", parts, fixed = TRUE)
+    }
+    if (length(keys) == 2 &&
+        (if (blocks[1]) as.integer(keys[1]) > as.integer(keys[2]) else
+          .dsr_code_cmp(keys[1], keys[2]) > 0)) {
+      stop("In '", item, "' the first ", type, " comes after the second.",
+           call. = FALSE)
+    }
+    label <- if (blocks[1]) {
+      paste0("[", keys, "]")
+    } else {
+      sub("^([0-9]{5})([0-9])", "\\1-\\2", keys)
+    }
+    data.frame(Label = paste(label, collapse = " to "), Type = type,
+               From = keys[1], To = keys[length(keys)],
+               stringsAsFactors = FALSE)
+  })
+
+  out <- do.call(rbind, c(list(data.frame(Label = character(0),
+                                          Type = character(0),
+                                          From = character(0),
+                                          To = character(0))), rows))
+  out <- out[!duplicated(out[c("Type", "From", "To")]), , drop = FALSE]
+  rownames(out) <- NULL
+  out
+
+}
+
+
 # Compares two codes character by character as SQL Server orders letters and
 # digits: -1, 0 or 1. Independent of the R session's collation.
 #' @noRd
@@ -496,59 +604,96 @@ episerver_dsr_stop <- function() {
 
 # ── Diagnosis titles ────────────────────────────────────────────────────────
 
-# Codes and titles for the diagnosis search, from .dsr_sql_icd(): Code as
-# ICD-10-AM writes it, Key without the dot as the SQL compares codes, Title
-# with the editions that hold the code unless every edition in the table does,
-# and Words, the key and title as .dsr_icd_words() matches them. In code
-# order, each code before the codes under it. Morphology codes (M8140/3) are
-# left out, as the diagnosis condition skips them. The first and last
-# editions are in attribute "editions". NULL without titles.
+# Codes and titles for the diagnosis or procedure search, from the rows of
+# .dsr_sql_icd() of that type: Code as ICD-10-AM or ACHI writes it, Key
+# without the dot or hyphen as the SQL compares codes, Type ("code"), Block
+# (the ACHI block of a procedure), Title with the editions that hold the code
+# unless every edition in the table does, and Words, the key and title as
+# .dsr_icd_words() matches them. Procedures add a row for each ACHI block
+# (Type "block", Code [1826], Key 1826), with its description from the
+# latest edition. Diagnoses are in code order; procedures by block, each
+# block before its codes. Morphology codes (M8140/3) are left out, as the
+# diagnosis condition skips them. Attributes give the first and last editions
+# and the classification. NULL without titles.
 #' @noRd
-.dsr_icd_titles <- function(df) {
+.dsr_icd_titles <- function(df, type = c("Diagnosis", "Procedure")) {
 
+  type <- match.arg(type)
   if (is.null(df) || !nrow(df)) return(NULL)
+  df   <- df[tolower(df$VarType) %in% tolower(type), , drop = FALSE]
   code <- toupper(trimws(df$Code))
-  keep <- grepl("^[A-Z][0-9]{2}(\\.[0-9A-Z]{1,3})?$", code) &
-    !is.na(df$LastEdition) & !duplicated(code)
+  form <- if (type == "Diagnosis") {
+    "^[A-Z][0-9]{2}(\\.[0-9A-Z]{1,3})?$"
+  } else {
+    "^[0-9]{5}-[0-9]{2}$"
+  }
+  keep <- grepl(form, code) & !is.na(df$LastEdition) & !duplicated(code)
   if (!any(keep)) return(NULL)
   df   <- df[keep, , drop = FALSE]
   code <- code[keep]
 
   # varchar text in a Latin1_General collation is Windows-1252; text the
   # driver has not converted to UTF-8 is converted here, so it can be matched
-  title <- df$Description
-  title[is.na(title)] <- ""
-  bad <- !validUTF8(title)
-  title[bad] <- iconv(title[bad], "CP1252", "UTF-8", sub = "?")
-  Encoding(title) <- "UTF-8"
-  title <- trimws(title)
+  text <- function(x) {
+    x[is.na(x)] <- ""
+    bad <- !validUTF8(x)
+    x[bad] <- iconv(x[bad], "CP1252", "UTF-8", sub = "?")
+    Encoding(x) <- "UTF-8"
+    trimws(x)
+  }
+  title <- text(df$Description)
 
   first <- as.integer(df$FirstEdition)
   last  <- as.integer(df$LastEdition)
   editions <- c(min(first), max(last))
   span <- ifelse(first == last, paste("edition", first),
                  paste("editions", first, "to", last))
-  key <- gsub(".", "", code, fixed = TRUE)
+  key   <- gsub("[.-]", "", code)
+  block <- if (type == "Procedure") {
+    suppressWarnings(as.integer(df$ProcedureBlock))
+  } else {
+    rep(NA_integer_, length(code))
+  }
 
   out <- data.frame(
     Code  = code,
     Key   = key,
+    Type  = "code",
+    Block = block,
     Title = ifelse(first > editions[1] | last < editions[2],
                    paste0(title, " (", span, ")"), title),
     Words = .dsr_icd_words(paste(key, title)),
     stringsAsFactors = FALSE
   )
-  out <- out[order(key, method = "radix"), , drop = FALSE]
+
+  if (type == "Procedure") {
+    latest <- order(-last)
+    b <- !is.na(block[latest]) & !duplicated(block[latest])
+    n <- block[latest][b]
+    describe <- text(df$BlockDescription)[latest][b]
+    out <- rbind(out, data.frame(
+      Code = paste0("[", n, "]"), Key = as.character(n), Type = "block",
+      Block = n, Title = describe,
+      Words = .dsr_icd_words(paste("block", n, describe)),
+      stringsAsFactors = FALSE
+    ))
+    out <- out[order(is.na(out$Block), out$Block, out$Type != "block",
+                     out$Key, method = "radix"), , drop = FALSE]
+  } else {
+    out <- out[order(out$Key, method = "radix"), , drop = FALSE]
+  }
   rownames(out) <- NULL
   attr(out, "editions") <- editions
+  attr(out, "classification") <- if (type == "Diagnosis") "ICD-10-AM" else "ACHI"
   out
 
 }
 
 
-# Text as the diagnosis search matches it: lower case, accents dropped, dots
-# removed so that codes match with or without them, and anything other than
-# letters and digits a space, with a space before every word
+# Text as the code search matches it: lower case, accents dropped, dots and
+# the hyphen after the five-digit stem of an ACHI code removed so that codes
+# match with or without them, and anything other than letters and digits a
+# space, with a space before every word
 #' @noRd
 .dsr_icd_words <- function(x) {
   # Accented letters, by code point, are matched as UTF-8 bytes, so that the
@@ -561,13 +706,16 @@ episerver_dsr_stop <- function() {
                      collapse = "|")
     x <- gsub(pattern, letter, x, useBytes = TRUE)
   }
-  x <- gsub("[^a-z0-9]+", " ", gsub(".", "", x, fixed = TRUE), useBytes = TRUE)
+  x <- gsub("([0-9]{5})-(?=[0-9])", "\\1", gsub(".", "", x, fixed = TRUE),
+            perl = TRUE)
+  x <- gsub("[^a-z0-9]+", " ", x, useBytes = TRUE)
   paste0(" ", trimws(x))
 }
 
 
-# Suggestions for text typed in the diagnosis codes box: the first n codes,
-# in code order, whose code or title has a word starting with each word typed
+# Suggestions for text typed in a codes box: the first n codes and blocks, in
+# the order of the titles, whose code or title has a word starting with each
+# word typed
 #' @noRd
 .dsr_icd_search <- function(icd, text, n = 100L) {
   words <- strsplit(trimws(.dsr_icd_words(text)), " ", fixed = TRUE)[[1]]
@@ -579,16 +727,16 @@ episerver_dsr_stop <- function() {
 }
 
 
-# Answers the diagnosis codes box's requests for suggestions (?q=text) with
-# JSON rows: the code (value), its title, its words for matching in the
-# browser and its place in code order (rank)
+# Answers a codes box's requests for suggestions (?q=text) with JSON rows:
+# the code or block (value), its title, its words for matching in the
+# browser and its place in the titles (rank)
 #' @noRd
 .dsr_icd_response <- function(icd, req) {
   text <- shiny::parseQueryString(req$QUERY_STRING)$q
   rows <- .dsr_icd_search(icd, if (is.null(text)) "" else text)
   json <- jsonlite::toJSON(
     data.frame(value = rows$Code, title = rows$Title, words = rows$Words,
-               rank = match(rows$Key, icd$Key)),
+               rank = match(rows$Code, icd$Code)),
     dataframe = "rows"
   )
   shiny::httpResponse(200L, "application/json; charset=utf-8",
@@ -596,45 +744,55 @@ episerver_dsr_stop <- function() {
 }
 
 
-# The codes and ranges of the settings in words, from the titles: Label, and
-# Text, which gives a code's title, the first and last of the codes a partial
-# code heads, or the codes at the ends of a range. Codes with no title are
-# named as missing from the editions in the table.
+# The codes, blocks and ranges of the settings in words, from the titles:
+# Label, and Text, which gives a code's or block's title, the first and last
+# of the codes a partial code heads, or the codes or blocks at the ends of a
+# range. Codes and blocks with no title are named as missing from the
+# editions in the table.
 #' @noRd
 .dsr_icd_describe <- function(codes, icd) {
 
   editions <- attr(icd, "editions")
-  absent <- paste0("not in ICD-10-AM editions ", editions[1], " to ",
-                   editions[2])
+  achi <- identical(attr(icd, "classification"), "ACHI")
+  absent <- paste0("not in ", attr(icd, "classification"), " editions ",
+                   editions[1], " to ", editions[2])
+  types <- if (is.null(codes$Type)) rep("code", nrow(codes)) else codes$Type
 
-  # The row of a code, or else of the first or last of the highest codes that
-  # start with it
-  find <- function(key, last) {
-    i <- match(key, icd$Key)
-    if (!is.na(i)) return(i)
-    under <- which(startsWith(icd$Key, key))
+  # The row of a code or block, or else of the first or last of the highest
+  # codes that start with it
+  find <- function(key, type, last) {
+    rows <- which(icd$Type == type)
+    i <- rows[match(key, icd$Key[rows])]
+    if (!is.na(i) || type == "block") return(i)
+    under <- rows[startsWith(icd$Key[rows], key)]
     if (!length(under)) return(NA_integer_)
     under <- under[nchar(icd$Key[under]) == min(nchar(icd$Key[under]))]
     if (last) max(under) else min(under)
   }
-  end <- function(i, key) {
-    if (is.na(i)) {
-      return(paste0(sub("^(.{3})(.)", "\\1.\\2", key), " (", absent, ")"))
+  end <- function(i, key, type) {
+    if (!is.na(i)) return(paste(icd$Code[i], icd$Title[i]))
+    written <- if (type == "block") {
+      paste0("[", key, "]")
+    } else if (achi) {
+      sub("^([0-9]{5})([0-9])", "\\1-\\2", key)
+    } else {
+      sub("^(.{3})(.)", "\\1.\\2", key)
     }
-    paste(icd$Code[i], icd$Title[i])
+    paste0(written, " (", absent, ")")
   }
 
   text <- vapply(seq_len(nrow(codes)), function(k) {
     from <- codes$From[k]
     to   <- codes$To[k]
-    f <- find(from, FALSE)
-    t <- find(to, TRUE)
+    type <- types[k]
+    f <- find(from, type, FALSE)
+    t <- find(to, type, TRUE)
     if (from == to) {
       if (is.na(f)) return(absent)
       if (icd$Key[f] == from) return(icd$Title[f])
     }
-    if (!is.na(f) && identical(f, t)) return(end(f, from))
-    paste(end(f, from), "to", end(t, to))
+    if (!is.na(f) && identical(f, t)) return(end(f, from, type))
+    paste(end(f, from, type), "to", end(t, to, type))
   }, character(1))
 
   data.frame(Label = codes$Label, Text = text, stringsAsFactors = FALSE)
@@ -786,41 +944,87 @@ ORDER BY Year, Sex, AgeGroup, Area",
 
 
 # Condition keeping events with a diagnosis in the codes and ranges of the
-# settings, in the principal diagnosis or in any diagnosis field (always any
-# for ED, which has no principal diagnosis field). Codes are
-# compared without dots or spaces. A range keeps codes from its first code up
-# to its last, plus every code that starts with the last; a single code keeps
-# every code that starts with it. Morphology codes (M8140/3) are skipped.
-# Empty when there are no codes.
+# settings, with a procedure in its procedure codes, blocks and ranges, or,
+# when both are given, with both or either (`combine`). Diagnoses are searched
+# in the principal diagnosis or in any diagnosis field (always any for ED,
+# which has no principal diagnosis field), and procedures in the principal
+# procedure (Procedure1, with its block in BlockProcedure1) or in any of them.
+# Codes are compared without dots, hyphens or outer spaces. A range keeps
+# codes from its first code up to its last, plus every code that starts with
+# the last; a single code keeps every code that starts with it. Blocks are
+# compared as numbers. Morphology codes (M8140/3) are skipped. Empty when
+# there are no codes.
 #' @noRd
 .dsr_sql_codes <- function(spec) {
 
-  codes <- spec$codes
-  if (is.null(codes) || nrow(codes) == 0) return("")
-
   ds <- .dsr_datasets[[spec$dataset]]
-  fields <- if (spec$diagnosis == "all") ds$diagnoses else ds$diagnoses[1]
-  values <- vapply(split(paste0("(", fields, ")"),
-                         ceiling(seq_along(fields) / 5)),
-                   paste, character(1), collapse = ", ")
 
-  tests <- ifelse(
-    codes$From == codes$To,
-    sprintf("c.Code LIKE '%s%%'", codes$From),
-    sprintf("(c.Code >= '%s' AND (c.Code <= '%s' OR c.Code LIKE '%s%%'))",
-            codes$From, codes$To, codes$To)
-  )
+  # Tests of c.Code against codes and ranges, and rows of a VALUES list, k
+  # to a line
+  tests <- function(from, to) {
+    ifelse(from == to,
+           sprintf("c.Code LIKE '%s%%'", from),
+           sprintf("(c.Code >= '%s' AND (c.Code <= '%s' OR c.Code LIKE '%s%%'))",
+                   from, to, to))
+  }
+  rows <- function(values, k) {
+    vapply(split(values, ceiling(seq_along(values) / k)), paste, character(1),
+           collapse = ", ")
+  }
 
+  exists <- character(0)
+
+  codes <- spec$codes
+  if (!is.null(codes) && nrow(codes)) {
+    fields <- if (spec$diagnosis == "all") ds$diagnoses else ds$diagnoses[1]
+    exists <- c(exists, paste0(
+      "EXISTS (",
+      "\n          SELECT 1",
+      "\n          FROM (VALUES ",
+      paste(rows(paste0("(", fields, ")"), 5),
+            collapse = ",\n                       "), ") AS d (Code)",
+      "\n          CROSS APPLY (VALUES (REPLACE(LTRIM(RTRIM(d.Code)), '.', ''))) AS c (Code)",
+      "\n          WHERE c.Code NOT LIKE '%/%'",
+      "\n            AND (", paste(tests(codes$From, codes$To),
+                                 collapse = "\n                 OR "), ")",
+      "\n      )"
+    ))
+  }
+
+  procs <- spec$procedures
+  if (!is.null(procs) && nrow(procs) && length(ds$procedures)) {
+    n <- if (spec$procedure == "all") length(ds$procedures) else 1L
+    pairs <- paste0("(", ds$procedures[seq_len(n)], ", ", ds$blocks[seq_len(n)],
+                    ")")
+    code <- procs$Type == "code"
+    blocks <- ifelse(procs$From == procs$To,
+                     sprintf("p.Block = %s", procs$From),
+                     sprintf("p.Block BETWEEN %s AND %s", procs$From, procs$To))
+    exists <- c(exists, paste0(
+      "EXISTS (",
+      "\n          SELECT 1",
+      "\n          FROM (VALUES ",
+      paste(rows(pairs, 3), collapse = ",\n                       "),
+      ") AS p (Code, Block)",
+      "\n          CROSS APPLY (VALUES (REPLACE(REPLACE(LTRIM(RTRIM(p.Code)), '-', ''), '.', ''))) AS c (Code)",
+      "\n          WHERE ", paste(c(tests(procs$From[code], procs$To[code]),
+                                   blocks[!code]),
+                                 collapse = "\n             OR "),
+      "\n      )"
+    ))
+  }
+
+  if (!length(exists)) return("")
   paste0(
     "\n      AND ", ds$icd10,
-    "\n      AND EXISTS (",
-    "\n          SELECT 1",
-    "\n          FROM (VALUES ",
-    paste(values, collapse = ",\n                       "), ") AS d (Code)",
-    "\n          CROSS APPLY (VALUES (REPLACE(LTRIM(RTRIM(d.Code)), '.', ''))) AS c (Code)",
-    "\n          WHERE c.Code NOT LIKE '%/%'",
-    "\n            AND (", paste(tests, collapse = "\n                 OR "), ")",
-    "\n      )"
+    "\n      AND ",
+    if (length(exists) == 1) {
+      exists
+    } else if (spec$combine == "and") {
+      paste(exists, collapse = "\n      AND ")
+    } else {
+      paste0("(", paste(exists, collapse = "\n        OR "), ")")
+    }
   )
 
 }
@@ -927,21 +1131,23 @@ FROM Analysis.dbo.{table}", table = .dsr_pop_table(spec))
 }
 
 
-# ICD-10-AM diagnosis codes for the diagnosis search, each with its title in
-# the latest edition that holds it and the first and last editions that hold
-# it. The table stacks every edition it holds; editions are read from
+# ICD-10-AM diagnosis codes and ACHI procedure codes for the code searches,
+# each with its title, and for procedures its ACHI block, in the latest
+# edition that holds it, and the first and last editions that hold it. The
+# table stacks every edition it holds; editions are read from
 # ICD10AMVersion, as its StartDate and EndDate are not reliable.
 #' @noRd
 .dsr_sql_icd <- function() {
-  "SELECT Code, Description, FirstEdition, LastEdition
+  "SELECT VarType, Code, Description, ProcedureBlock, BlockDescription,
+       FirstEdition, LastEdition
 FROM (
-    SELECT Code, Description,
-           MIN(ICD10AMVersion) OVER (PARTITION BY Code) AS FirstEdition,
+    SELECT VarType, Code, Description, ProcedureBlock, BlockDescription,
+           MIN(ICD10AMVersion) OVER (PARTITION BY VarType, Code) AS FirstEdition,
            ICD10AMVersion AS LastEdition,
-           ROW_NUMBER() OVER (PARTITION BY Code
+           ROW_NUMBER() OVER (PARTITION BY VarType, Code
                               ORDER BY ICD10AMVersion DESC) AS Latest
     FROM Analysis.dbo.ICD10AM
-    WHERE VarType = 'Diagnosis'
+    WHERE VarType IN ('Diagnosis', 'Procedure')
 ) AS d
 WHERE Latest = 1"
 }
@@ -1033,16 +1239,24 @@ WHERE Latest = 1"
   level <- .dsr_area_label(spec$level)
   if (spec$level == "state") level <- tolower(level)
   ages  <- if (ages) .dsr_ages_text(spec$ages)
-  codes <- spec$codes$Label
+  # The diagnoses and procedures searched, e.g. "principal diagnosis J45 or
+  # J46 and any procedure [1826]"
+  either <- function(x) {
+    if (length(x) > 1) {
+      paste(paste(x[-length(x)], collapse = ", "), "or", x[length(x)])
+    } else {
+      x
+    }
+  }
+  searched <- function(labels, scope, what) {
+    if (length(labels)) {
+      paste(if (scope == "all") "any" else "principal", what, either(labels))
+    }
+  }
+  codes <- c(searched(spec$codes$Label, spec$diagnosis, "diagnosis"),
+             searched(spec$procedures$Label, spec$procedure, "procedure"))
   diagnosis <- if (length(codes)) {
-    paste0(", ", if (spec$diagnosis == "all") "any" else "principal",
-           " diagnosis ",
-           if (length(codes) > 1) {
-             paste(paste(codes[-length(codes)], collapse = ", "), "or",
-                   codes[length(codes)])
-           } else {
-             codes
-           })
+    paste0(", ", paste(codes, collapse = paste0(" ", spec$combine, " ")))
   }
   paste0(
     .dsr_datasets[[spec$dataset]]$label, diagnosis, ", ",
@@ -1431,6 +1645,77 @@ WHERE Latest = 1"
 }
 
 
+# A box for diagnosis or procedure codes. A code, block or range is added as
+# typed, when it matches create_filter (a JavaScript regular expression).
+# Other text lists the codes whose titles match it (.dsr_icd_search()),
+# fetched from the URL the server sends for the box, and Enter or Tab adds
+# the one highlighted. Suggestions are matched again in the browser on their
+# words, and none are listed while the box is empty, as it would otherwise
+# list every suggestion fetched so far. Tags show the code, with the title on
+# hover.
+#' @noRd
+.dsr_codes_box <- function(id, label, placeholder, create_filter) {
+  close_if_empty <- I(
+    "function() { if (!this.$control_input.val().trim()) this.close(); }"
+  )
+  shiny::selectizeInput(
+    id, label,
+    choices = NULL, multiple = TRUE, width = "100%",
+    options = list(
+      create           = TRUE,
+      createOnBlur     = TRUE,
+      createFilter     = I(create_filter),
+      addPrecedence    = TRUE,
+      selectOnTab      = TRUE,
+      persist          = FALSE,
+      delimiter        = ",",
+      splitOn          = I("/\\s*[,;]+\\s*/"),
+      plugins          = list("remove_button"),
+      placeholder      = placeholder,
+      valueField       = "value",
+      labelField       = "value",
+      searchField      = "words",
+      sortField        = "rank",
+      maxOptions       = 100,
+      openOnFocus      = FALSE,
+      closeAfterSelect = TRUE,
+      load = I("function(query, callback) {
+        var url = (window.dsrSearchUrls || {})[this.$input.attr('id')];
+        if (!url || !query.trim()) return callback();
+        $.getJSON(url, {q: query})
+          .done(callback).fail(function() { callback(); });
+      }"),
+      score = I("function(search) {
+        var words = search.toLowerCase().normalize('NFD')
+          .replace(/[\\u0300-\\u036f]/g, '').replace(/\\./g, '')
+          .replace(/(\\d{5})-(?=\\d)/g, '$1')
+          .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+        return function(item) {
+          if (!words.length || !item.words) return 0;
+          for (var i = 0; i < words.length; i++) {
+            if (item.words.indexOf(' ' + words[i]) < 0) return 0;
+          }
+          return 1;
+        };
+      }"),
+      onType         = close_if_empty,
+      onDropdownOpen = close_if_empty,
+      render = I("{
+        option: function(item, escape) {
+          return '<div class=\"option\"><span class=\"dsr-code\">' +
+            escape(item.value) + '</span> ' + escape(item.title || '') +
+            '</div>';
+        },
+        item: function(item, escape) {
+          return '<div title=\"' + escape(item.title || '') + '\">' +
+            escape(item.value) + '</div>';
+        }
+      }")
+    )
+  )
+}
+
+
 # Settings of a map: what to show, the year or period, sex, the extent of
 # Australian SA3 and SA2 maps and the ages of age-specific rates. The Map and
 # Explore tabs each have a set, with input IDs that start with id.
@@ -1574,9 +1859,12 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
     names(std_choices)[match(as.character(code), std_choices)]
   }
 
-  # ICD-10-AM codes and titles for the diagnosis search. NULL when they cannot
-  # be read, and codes are then typed without suggestions.
-  icd <- .dsr_icd_titles(try_cached("icd", .dsr_sql_icd()))
+  # ICD-10-AM diagnosis and ACHI procedure titles for the code searches, by
+  # the input ID of their box. NULL when they cannot be read, and codes are
+  # then typed without suggestions.
+  icd <- try_cached("icd", .dsr_sql_icd())
+  titles <- list(codes      = .dsr_icd_titles(icd, "Diagnosis"),
+                 procedures = .dsr_icd_titles(icd, "Procedure"))
 
   # Initial year range for the default settings; the slider follows the
   # settings once the app is running
@@ -1587,12 +1875,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
   }
 
   code_button_label <- if (in_rstudio) "Insert Code" else "Copy Code"
-
-  # Closes the diagnosis codes list while the box is empty, as it would
-  # otherwise list every suggestion fetched so far
-  close_if_empty <- I(
-    "function() { if (!this.$control_input.val().trim()) this.close(); }"
-  )
 
   # ── UI ────────────────────────────────────────────────────────────────────
   # The settings are in a sidebar, in sections that open and close, and the
@@ -1694,10 +1976,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       # Clipboard handler for the code and table copy buttons
       .epi_copy_script(),
 
-      # Where the diagnosis codes box fetches its suggestions
+      # Where the codes boxes fetch their suggestions, by input ID
       shiny::tags$script(shiny::HTML("
-        Shiny.addCustomMessageHandler('dsr_codes_url', function(url) {
-          window.dsrCodesUrl = url;
+        Shiny.addCustomMessageHandler('dsr_search_urls', function(urls) {
+          window.dsrSearchUrls = urls;
         });
       ")),
 
@@ -1772,6 +2054,29 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ", jsonlite::toJSON(names(Filter(function(d) !d$principal, .dsr_datasets)))))),
 
+      # A dataset without procedures (ED) disables the procedure codes and
+      # their options; their entries stay for the other dataset
+      shiny::tags$script(shiny::HTML(sprintf("
+        (function() {
+          var none = %s;
+          function sync() {
+            var box = $('#procedures')[0];
+            if (!box || !box.selectize) return;
+            var off = none.indexOf($('#dataset').val()) >= 0;
+            if (off) box.selectize.disable(); else box.selectize.enable();
+            $('input[name=procedure], input[name=combine]')
+              .prop('disabled', off).closest('.radio')
+              .toggleClass('disabled', off);
+          }
+          $(document).on('change', '#dataset', sync);
+          $(document).on('shiny:bound', function(e) {
+            if (e.target.id === 'procedures') sync();
+          });
+          $(sync);
+        })();
+      ", jsonlite::toJSON(names(Filter(function(d) !length(d$procedures),
+                                       .dsr_datasets)))))),
+
       # Copy map: the plot is a PNG data URI, decoded and written to the
       # clipboard as an image within the click, where the browser allows it
       shiny::tags$script(shiny::HTML("
@@ -1836,72 +2141,33 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
           ),
-          # A code or range is added as typed. Other text lists the codes
-          # whose titles match it (.dsr_icd_search()), fetched from the URL
-          # the server sends, and Enter or Tab adds the code highlighted.
-          # Suggestions are matched again in the browser on their words, and
-          # none are shown while the box is empty.
-          shiny::selectizeInput(
-            "codes", "Diagnosis codes",
-            choices = NULL, multiple = TRUE, width = "100%",
-            options = list(
-              create           = TRUE,
-              createOnBlur     = TRUE,
-              createFilter     = I(paste0(
-                "/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
-                "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")),
-              addPrecedence    = TRUE,
-              selectOnTab      = TRUE,
-              persist          = FALSE,
-              delimiter        = ",",
-              splitOn          = I("/\\s*[,;]+\\s*/"),
-              plugins          = list("remove_button"),
-              placeholder      = "All events. Type a code or condition",
-              valueField       = "value",
-              labelField       = "value",
-              searchField      = "words",
-              sortField        = "rank",
-              maxOptions       = 100,
-              openOnFocus      = FALSE,
-              closeAfterSelect = TRUE,
-              load = I("function(query, callback) {
-                if (!window.dsrCodesUrl || !query.trim()) return callback();
-                $.getJSON(window.dsrCodesUrl, {q: query})
-                  .done(callback).fail(function() { callback(); });
-              }"),
-              score = I("function(search) {
-                var words = search.toLowerCase().normalize('NFD')
-                  .replace(/[\\u0300-\\u036f]/g, '').replace(/\\./g, '')
-                  .replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
-                  .filter(Boolean);
-                return function(item) {
-                  if (!words.length || !item.words) return 0;
-                  for (var i = 0; i < words.length; i++) {
-                    if (item.words.indexOf(' ' + words[i]) < 0) return 0;
-                  }
-                  return 1;
-                };
-              }"),
-              onType         = close_if_empty,
-              onDropdownOpen = close_if_empty,
-              render = I("{
-                option: function(item, escape) {
-                  return '<div class=\"option\"><span class=\"dsr-code\">' +
-                    escape(item.value) +
-                    '</span> ' + escape(item.title || '') + '</div>';
-                },
-                item: function(item, escape) {
-                  return '<div title=\"' + escape(item.title || '') + '\">' +
-                    escape(item.value) + '</div>';
-                }
-              }")
-            )
+          .dsr_codes_box(
+            "codes", "Diagnosis codes", "All events. Type a code or condition",
+            paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
+                   "\\s+to\\s+)\\s*([a-z][\\da-z.]*[*%]?)?)?\\s*$/i")
           ),
           shiny::uiOutput("codes_note"),
           shiny::radioButtons(
-            "diagnosis", "Search",
+            "diagnosis", "Diagnosis search",
             choices = c("Principal diagnosis" = "principal",
                         "Any diagnosis" = "all")
+          ),
+          .dsr_codes_box(
+            "procedures", "Procedure codes",
+            "All events. Type a code or procedure",
+            paste0("/^\\s*(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%\\u2013\\u2014-]*",
+                   "(\\s+to\\s+(block\\s*)?\\[?\\d[\\d\\s\\[\\]*%-]*)?$/i")
+          ),
+          shiny::uiOutput("procedures_note"),
+          shiny::radioButtons(
+            "procedure", "Procedure search",
+            choices = c("Principal procedure" = "principal",
+                        "Any procedure" = "all")
+          ),
+          shiny::radioButtons(
+            "combine", "With diagnoses and procedures, count events with",
+            choices = c("a diagnosis and a procedure" = "and",
+                        "a diagnosis or a procedure" = "or")
           )
         ),
         bslib::accordion_panel(
@@ -2087,18 +2353,24 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     rv <- shiny::reactiveValues(fetched = NULL, error = NULL)
 
-    # The diagnosis codes box fetches its suggestions from this URL
-    if (!is.null(icd)) {
-      session$sendCustomMessage(
-        "dsr_codes_url",
-        session$registerDataObj("codes_search", icd, .dsr_icd_response)
-      )
-    }
+    # The codes boxes fetch their suggestions from these URLs
+    ids <- names(Filter(Negate(is.null), titles))
+    urls <- lapply(stats::setNames(ids, ids), function(id) {
+      session$registerDataObj(paste0(id, "_search"), titles[[id]],
+                              .dsr_icd_response)
+    })
+    session$sendCustomMessage("dsr_search_urls", urls)
 
-    # Why the diagnosis codes cannot be read, or NULL
+    # Why the diagnosis or procedure codes cannot be read, or NULL
     codes_error <- shiny::reactive({
       tryCatch({
         .dsr_parse_codes(input$codes)
+        NULL
+      }, error = function(e) conditionMessage(e))
+    })
+    procedures_error <- shiny::reactive({
+      tryCatch({
+        .dsr_parse_procedures(input$procedures)
         NULL
       }, error = function(e) conditionMessage(e))
     })
@@ -2127,6 +2399,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                                 c(1L, length(.dsr_age_labels))
                               } else {
                                 input$ages
+                              },
+                              procedures = input$procedures,
+                              procedure = if (is.null(input$procedure)) {
+                                "principal"
+                              } else {
+                                input$procedure
+                              },
+                              combine = if (is.null(input$combine)) {
+                                "and"
+                              } else {
+                                input$combine
                               }),
              error = NULL),
         error = function(e) list(spec = NULL, error = conditionMessage(e))
@@ -2163,6 +2446,17 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                                min = r$min, max = r$max, value = sel)
     }, ignoreNULL = FALSE)
 
+    # Each code, block and range entered in a box, with its titles
+    entered <- function(values, parse, icd) {
+      if (is.null(icd) || !length(values)) return(NULL)
+      d <- .dsr_icd_describe(parse(values), icd)
+      shiny::div(class = "epi-note dsr-codes",
+                 lapply(seq_len(nrow(d)), function(i) {
+                   shiny::div(shiny::span(class = "dsr-code", d$Label[i]),
+                              d$Text[i])
+                 }))
+    }
+
     output$codes_note <- shiny::renderUI({
       err <- codes_error()
       if (!is.null(err)) {
@@ -2170,33 +2464,63 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       dataset <- if (is.null(input$dataset)) "ED" else input$dataset
       ds <- .dsr_datasets[[dataset]]
-      # Each code and range entered, with its titles
-      entered <- if (!is.null(icd) && length(input$codes)) {
-        d <- .dsr_icd_describe(.dsr_parse_codes(input$codes), icd)
-        shiny::div(class = "epi-note dsr-codes",
-                   lapply(seq_len(nrow(d)), function(i) {
-                     shiny::div(shiny::span(class = "dsr-code", d$Label[i]),
-                                d$Text[i])
-                   }))
+      shiny::tagList(
+        entered(input$codes, .dsr_parse_codes, titles$codes),
+        shiny::div(
+          class = "epi-note",
+          "Leave empty for all events. A partial code such as J45 matches ",
+          "every code that starts with it, and a range such as C13-C15.45 ",
+          "includes both ends. Only ICD-10 coded records are searched.",
+          if (is.null(titles$codes)) {
+            paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
+                   "titles could not be read from Analysis.dbo.ICD10AM.")
+          } else {
+            paste0(" Type words from a condition, such as myocardial, to ",
+                   "choose from the codes whose titles contain them.")
+          },
+          if (!ds$principal) {
+            paste0(" ", dataset, " searches all its diagnosis fields (",
+                   paste(ds$diagnoses, collapse = ", "), "), as none of them ",
+                   "holds the principal diagnosis in every year.")
+          }
+        )
+      )
+    })
+
+    output$procedures_note <- shiny::renderUI({
+      err <- procedures_error()
+      if (!is.null(err)) {
+        return(shiny::div(class = "epi-note epi-error", err))
       }
-      shiny::tagList(entered, shiny::div(
-        class = "epi-note",
-        "Leave empty for all events. A partial code such as J45 matches ",
-        "every code that starts with it, and a range such as C13-C15.45 ",
-        "includes both ends. Only ICD-10 coded records are searched.",
-        if (is.null(icd)) {
-          paste0(" Searching by condition is unavailable, as the ICD-10-AM ",
-                 "titles could not be read from Analysis.dbo.ICD10AM.")
-        } else {
-          paste0(" Type words from a condition, such as myocardial, to ",
-                 "choose from the codes whose titles contain them.")
-        },
-        if (!ds$principal) {
-          paste0(" ", dataset, " searches all its diagnosis fields (",
-                 paste(ds$diagnoses, collapse = ", "), "), as none of them ",
-                 "holds the principal diagnosis in every year.")
-        }
-      ))
+      dataset <- if (is.null(input$dataset)) "ED" else input$dataset
+      ds <- .dsr_datasets[[dataset]]
+      if (!length(ds$procedures)) {
+        with <- Filter(function(d) length(d$procedures), .dsr_datasets)
+        return(shiny::div(class = "epi-note", paste0(
+          ds$label, " have no procedures, so procedure codes apply to ",
+          paste(vapply(with, `[[`, character(1), "label"), collapse = " and "),
+          " only."
+        )))
+      }
+      shiny::tagList(
+        entered(input$procedures, .dsr_parse_procedures, titles$procedures),
+        shiny::div(
+          class = "epi-note",
+          "Leave empty for all events. A code such as 11012-00, or a partial ",
+          "code such as 11012, matches every code that starts with it; a ",
+          "block such as 1826, shown as [1826], matches the procedures in ",
+          "that ACHI block; and a range such as 11000-00 to 11027-00 or ",
+          "1820-1830 includes both ends.",
+          if (is.null(titles$procedures)) {
+            paste0(" Searching by procedure is unavailable, as the ACHI ",
+                   "titles could not be read from Analysis.dbo.ICD10AM.")
+          } else {
+            paste0(" Type words from a procedure, such as electromyography, ",
+                   "to choose from the codes and blocks whose titles contain ",
+                   "them.")
+          }
+        )
+      )
     })
 
     # The periods the years will be pooled into, or why they cannot be
@@ -2343,11 +2667,20 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         }
       )))
 
-      if (nrow(s$codes)) {
+      if (nrow(s$codes) || nrow(s$procedures)) {
+        missing <- c(
+          if (nrow(s$codes)) {
+            paste(if (s$diagnosis == "all") "diagnosis" else
+                    "principal diagnosis", "recorded cannot match the diagnoses")
+          },
+          if (nrow(s$procedures)) {
+            paste(if (s$procedure == "all") "procedure" else
+                    "principal procedure", "recorded cannot match the procedures")
+          }
+        )
         notes <- c(notes, list(shiny::p(
-          "Diagnosis search: ICD-10 coded records only; events with no ",
-          if (s$diagnosis == "all") "diagnosis" else "principal diagnosis",
-          " recorded cannot match."
+          "Code search: ICD-10 coded records only; events with no ",
+          paste(missing, collapse = ", and events with no "), "."
         )))
       }
 
@@ -2388,7 +2721,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       now <- spec()
       keys <- c("dataset", "scope", "level", "years", "codes", "diagnosis",
-                "pool", "ages")
+                "pool", "ages", "procedures", "procedure", "combine")
       if (!is.null(now) && !identical(now[keys], s[keys])) {
         notes <- c(notes, list(shiny::p(class = "epi-warn",
           "The settings have changed: press Calculate to update the results."

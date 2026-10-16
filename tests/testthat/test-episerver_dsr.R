@@ -38,30 +38,52 @@ fake_events <- local({
   data.frame(Year = 2023L, e[c("Sex", "AgeGroup", "Area", "Events")])
 })
 
-# ICD-10-AM codes as .dsr_sql_icd() returns them, with invented titles. The
-# table holds editions 3 to 11; X99.9 left after edition 9 and U07.1 came in
-# edition 10. M8140/3 is a morphology code, " h81.0 " has outer spaces and a
-# title in Windows-1252, as the ODBC driver can return it.
-fake_icd <- data.frame(
-  Code = c("I27", "I21.4", "I21", "I21.0", "I20", "I22", "I25", "I25.2",
-           "J45", "J45.0", "J45.9", "J46", "A41.50", "A41.51", " h81.0 ",
-           "M8140/3", "X99.9", "U07.1"),
-  Description = c(
-    "Other pulmonary heart test condition",
-    "Acute subendocardial myocardial test condition",
-    "Acute myocardial test condition",
-    "Acute myocardial test condition of anterior wall",
-    "Test chest pain condition", "Subsequent myocardial test condition",
-    "Chronic heart test condition", "Old myocardial test condition",
-    "Test wheeze condition", "Allergic test wheeze condition",
-    "Test wheeze condition, unspecified", "Severe test wheeze condition",
-    "Test sepsis, first organism", "Test sepsis due to E. coli",
-    iconv("Ménière test condition", "UTF-8", "CP1252"),
-    "Test morphology", "Retired test condition", "New test condition"),
-  FirstEdition = c(rep(3L, 17), 10L),
-  LastEdition  = c(rep(11L, 16), 9L, 11L),
-  stringsAsFactors = FALSE
-)
+# ICD-10-AM diagnoses and ACHI procedures as .dsr_sql_icd() returns them,
+# with invented titles and blocks. The table holds editions 3 to 11; X99.9
+# and 90004-00 left after edition 9 and U07.1 came in edition 10. M8140/3 is
+# a morphology code, " h81.0 " has outer spaces and a title in Windows-1252,
+# as the ODBC driver can return it, and 90010-00 has no block.
+fake_icd <- local({
+  diagnoses <- data.frame(
+    VarType = "Diagnosis",
+    Code = c("I27", "I21.4", "I21", "I21.0", "I20", "I22", "I25", "I25.2",
+             "J45", "J45.0", "J45.9", "J46", "A41.50", "A41.51", " h81.0 ",
+             "M8140/3", "X99.9", "U07.1"),
+    Description = c(
+      "Other pulmonary heart test condition",
+      "Acute subendocardial myocardial test condition",
+      "Acute myocardial test condition",
+      "Acute myocardial test condition of anterior wall",
+      "Test chest pain condition", "Subsequent myocardial test condition",
+      "Chronic heart test condition", "Old myocardial test condition",
+      "Test wheeze condition", "Allergic test wheeze condition",
+      "Test wheeze condition, unspecified", "Severe test wheeze condition",
+      "Test sepsis, first organism", "Test sepsis due to E. coli",
+      iconv("M\u00e9ni\u00e8re test condition", "UTF-8", "CP1252"),
+      "Test morphology", "Retired test condition", "New test condition"),
+    ProcedureBlock = NA_integer_, BlockDescription = NA_character_,
+    FirstEdition = c(rep(3L, 17), 10L),
+    LastEdition  = c(rep(11L, 16), 9L, 11L),
+    stringsAsFactors = FALSE
+  )
+  procedures <- data.frame(
+    VarType = "Procedure",
+    Code = c("90003-00", "90001-01", "90001-00", "90002-00", "90004-00",
+             "90010-00"),
+    Description = c("Test hearing check",
+                    "Test nerve conduction study with muscle recording",
+                    "Test nerve conduction study, one nerve",
+                    "Test brain recording", "Retired test procedure",
+                    "Test procedure, unassigned"),
+    ProcedureBlock = c(1905L, 1901L, 1901L, 1900L, 1905L, NA),
+    BlockDescription = c("Test hearing checks", "Test nerve studies",
+                         "Test nerve studies", "Test brain recordings",
+                         "Old test hearing checks", NA),
+    FirstEdition = 3L, LastEdition = c(11L, 11L, 11L, 11L, 9L, 11L),
+    stringsAsFactors = FALSE
+  )
+  rbind(diagnoses, procedures)
+})
 
 fake_episerver <- function() {
   calls <- character(0)
@@ -139,7 +161,9 @@ test_that(".dsr_spec validates and normalises the settings", {
   expect_equal(s, list(dataset = "APC", scope = "AUS", level = "sa2",
                        years = c(2023L, 2023L), standard = 300L,
                        codes = .dsr_parse_codes(NULL), diagnosis = "principal",
-                       pool = 1L, ages = c(1L, 18L)))
+                       pool = 1L, ages = c(1L, 18L),
+                       procedures = .dsr_parse_procedures(NULL),
+                       procedure = "principal", combine = "and"))
   expect_equal(nrow(s$codes), 0)
   expect_equal(.dsr_spec(scope = "SURROUNDS", years = 2023)$scope, "SURROUNDS")
 
@@ -323,6 +347,63 @@ test_that("a range takes in the codes between its ends and under its last", {
 
 })
 
+test_that(".dsr_parse_procedures reads codes, blocks and ranges", {
+
+  p <- .dsr_parse_procedures(c(
+    "11012-00", "1101200", "11012", "11012-0*", "1826", "[1826]", "block 18",
+    "1820-1830", "[1820] to [1830]", "11000-00 to 11027-00", "11000-11027",
+    "11000-00-11027-00", paste0("13100-00 ", intToUtf8(0x2013), " 13100-09")
+  ))
+  expect_equal(p$Label, c("11012-00", "11012", "11012-0", "[1826]", "[18]",
+                          "[1820] to [1830]", "11000-00 to 11027-00",
+                          "11000 to 11027", "13100-00 to 13100-09"))
+  expect_equal(p$Type, rep(c("code", "block", "code"), c(3, 3, 3)))
+  expect_equal(p$From, c("1101200", "11012", "110120", "1826", "18", "1820",
+                         "1100000", "11000", "1310000"))
+  expect_equal(p$To, c("1101200", "11012", "110120", "1826", "18", "1830",
+                       "1102700", "11027", "1310009"))
+
+  # Several to an entry, separated by commas or semicolons
+  expect_equal(.dsr_parse_procedures("11012-00, 1826; 0042")$Label,
+               c("11012-00", "[1826]", "[42]"))
+  expect_equal(nrow(.dsr_parse_procedures(NULL)), 0)
+  expect_named(.dsr_parse_procedures(NULL), c("Label", "Type", "From", "To"))
+
+})
+
+test_that(".dsr_parse_procedures rejects anything but codes, blocks and ranges", {
+
+  bad <- c("11012-001", "1826-11012", "12345678", "abc", "J45", "11012-",
+           "-11012", "11012-00 OR 1=1", "11012'", "1820 to 1830 to 1840")
+  for (b in bad) {
+    expect_error(.dsr_parse_procedures(b), "is not an ACHI procedure code",
+                 label = b)
+  }
+  expect_error(.dsr_parse_procedures("1830-1820"),
+               "the first block comes after the second")
+  expect_error(.dsr_parse_procedures("11027 to 11000"),
+               "the first code comes after the second")
+
+})
+
+test_that("a procedure range takes in the codes or blocks between its ends", {
+
+  procs <- .dsr_parse_procedures(c("11000-00 to 11027-01", "1820-1830",
+                                   "13100"))
+  inside <- data.frame(
+    code  = c("11000-00", "11012-00", "1102700", " 11027-01 ", "11027-011",
+              "13100-00", "13100-09", "99999-00", NA),
+    block = c(NA, NA, NA, NA, NA, NA, NA, 1820, 1830)
+  )
+  outside <- data.frame(
+    code  = c("10999-99", "11027-02", "11030-00", "13101-00", "", NA),
+    block = c(NA, NA, NA, NA, 1819, 1831)
+  )
+  expect_true(all(dsr_procedure_matches(inside$code, inside$block, procs)))
+  expect_false(any(dsr_procedure_matches(outside$code, outside$block, procs)))
+
+})
+
 test_that(".dsr_code_cmp orders codes as SQL Server orders letters and digits", {
 
   expect_equal(.dsr_code_cmp("C13", "C13"), 0)
@@ -334,13 +415,15 @@ test_that(".dsr_code_cmp orders codes as SQL Server orders letters and digits", 
 
 # ── Diagnosis titles ────────────────────────────────────────────────────────
 
-test_that("the titles query takes each diagnosis code from its latest edition", {
+test_that("the titles query takes each code from its latest edition", {
 
   sql <- .dsr_sql_icd()
   expect_match(sql, "FROM Analysis.dbo.ICD10AM", fixed = TRUE)
-  expect_match(sql, "WHERE VarType = 'Diagnosis'", fixed = TRUE)
-  expect_match(sql, "MIN(ICD10AMVersion) OVER (PARTITION BY Code)",
+  expect_match(sql, "WHERE VarType IN ('Diagnosis', 'Procedure')",
                fixed = TRUE)
+  expect_match(sql, "MIN(ICD10AMVersion) OVER (PARTITION BY VarType, Code)",
+               fixed = TRUE)
+  expect_match(sql, "ProcedureBlock, BlockDescription", fixed = TRUE)
   expect_match(sql, "ORDER BY ICD10AMVersion DESC) AS Latest", fixed = TRUE)
   expect_match(sql, "WHERE Latest = 1", fixed = TRUE)
   # The table's dates are not reliable
@@ -402,6 +485,49 @@ test_that(".dsr_icd_search matches words typed to the start of words in codes an
 
 })
 
+test_that(".dsr_icd_titles lists procedures by block, each block before its codes", {
+
+  icd <- .dsr_icd_titles(fake_icd, "Procedure")
+  expect_equal(icd$Code, c("[1900]", "90002-00", "[1901]", "90001-00",
+                           "90001-01", "[1905]", "90003-00", "90004-00",
+                           "90010-00"))
+  expect_equal(icd$Type, c("block", "code", "block", "code", "code", "block",
+                           "code", "code", "code"))
+  expect_equal(icd$Key[icd$Code %in% c("[1901]", "90001-01")],
+               c("1901", "9000101"))
+  expect_equal(attr(icd, "classification"), "ACHI")
+  expect_equal(attr(.dsr_icd_titles(fake_icd), "classification"), "ICD-10-AM")
+
+  # A block takes its description from the latest edition that holds it
+  expect_equal(icd$Title[icd$Code == "[1905]"], "Test hearing checks")
+  expect_equal(icd$Title[icd$Code == "90004-00"],
+               "Retired test procedure (editions 3 to 9)")
+  expect_equal(icd$Words[icd$Code == "[1901]"], " block 1901 test nerve studies")
+
+  # Each type is read only from its own rows
+  expect_false(any(grepl("^[A-Z]", icd$Code)))
+  expect_false(any(grepl("^[0-9]", .dsr_icd_titles(fake_icd)$Code)))
+  expect_null(.dsr_icd_titles(fake_icd[fake_icd$VarType == "Diagnosis", ],
+                              "Procedure"))
+
+})
+
+test_that(".dsr_icd_search finds procedures and blocks by words, codes and numbers", {
+
+  icd <- .dsr_icd_titles(fake_icd, "Procedure")
+  codes <- function(text) .dsr_icd_search(icd, text)$Code
+
+  expect_equal(codes("nerve"), c("[1901]", "90001-00", "90001-01"))
+  expect_equal(codes("nerve muscle"), "90001-01")
+  # Codes match with or without their hyphen, and blocks by number
+  expect_equal(codes("90001-01"), "90001-01")
+  expect_equal(codes("9000101"), "90001-01")
+  expect_equal(codes("90001"), c("90001-00", "90001-01"))
+  expect_equal(codes("1905"), "[1905]")
+  expect_equal(codes("block"), c("[1900]", "[1901]", "[1905]"))
+
+})
+
 test_that("suggestions are answered as JSON with their place in code order", {
 
   icd <- .dsr_icd_titles(fake_icd)
@@ -443,6 +569,27 @@ test_that(".dsr_icd_describe spells out codes, partial codes and ranges", {
     paste0("C13 (", absent, ") to C15.45 (", absent, ")")
   ))
   expect_equal(nrow(.dsr_icd_describe(.dsr_parse_codes(NULL), icd)), 0)
+
+  # Procedures: codes, partial codes, blocks and ranges of either
+  icd <- .dsr_icd_titles(fake_icd, "Procedure")
+  absent <- "not in ACHI editions 3 to 11"
+  d <- .dsr_icd_describe(
+    .dsr_parse_procedures(c("90001-00", "90001", "1901", "1900-1905",
+                            "1900-1902", "90002-00 to 90003-00", "9999")),
+    icd
+  )
+  expect_equal(d$Label, c("90001-00", "90001", "[1901]", "[1900] to [1905]",
+                          "[1900] to [1902]", "90002-00 to 90003-00", "[9999]"))
+  expect_equal(d$Text, c(
+    "Test nerve conduction study, one nerve",
+    paste("90001-00 Test nerve conduction study, one nerve to 90001-01 Test",
+          "nerve conduction study with muscle recording"),
+    "Test nerve studies",
+    "[1900] Test brain recordings to [1905] Test hearing checks",
+    paste0("[1900] Test brain recordings to [1902] (", absent, ")"),
+    "90002-00 Test brain recording to 90003-00 Test hearing check",
+    absent
+  ))
 
 })
 
@@ -564,6 +711,66 @@ test_that("diagnosis SQL searches the principal or every diagnosis field", {
 
 })
 
+test_that("procedure SQL searches the principal or every procedure and block", {
+
+  principal <- .dsr_sql_codes(.dsr_spec("APC", years = 2023,
+                                        procedures = c("11012-00", "1826")))
+  expect_match(principal, "AND ICDVersion = 10", fixed = TRUE)
+  expect_match(principal,
+               "FROM (VALUES (Procedure1, BlockProcedure1)) AS p (Code, Block)",
+               fixed = TRUE)
+  expect_match(principal,
+               "REPLACE(REPLACE(LTRIM(RTRIM(p.Code)), '-', ''), '.', '')",
+               fixed = TRUE)
+  expect_match(principal,
+               "WHERE c.Code LIKE '1101200%'\n             OR p.Block = 1826",
+               fixed = TRUE)
+  expect_no_match(principal, "Diagnosis", fixed = TRUE)
+
+  all <- .dsr_sql_codes(.dsr_spec("APC", years = 2023, procedure = "all",
+                                  procedures = c("11000 to 11027-00",
+                                                 "1820-1830")))
+  pairs <- regmatches(all, gregexpr("\\(Procedure[0-9]+, BlockProcedure[0-9]+\\)",
+                                    all))[[1]]
+  expect_equal(pairs, paste0("(Procedure", 1:50, ", BlockProcedure", 1:50, ")"))
+  expect_match(all, paste0("(c.Code >= '11000' AND (c.Code <= '1102700' OR ",
+                           "c.Code LIKE '1102700%'))"), fixed = TRUE)
+  expect_match(all, "p.Block BETWEEN 1820 AND 1830", fixed = TRUE)
+
+  # ED has no procedures, so they are left out
+  ed <- .dsr_spec("ED", years = 2023, codes = "J45", procedures = "11012-00")
+  expect_equal(nrow(ed$procedures), 0)
+  expect_no_match(.dsr_sql_codes(ed), "Procedure", fixed = TRUE)
+
+})
+
+test_that("diagnoses and procedures combine with and or or", {
+
+  spec <- function(combine) {
+    .dsr_spec("APC", years = 2023, codes = "J45", procedures = "1826",
+              combine = combine)
+  }
+  both <- .dsr_sql_codes(spec("and"))
+  expect_match(both, "\n      AND EXISTS (\n          SELECT 1\n          FROM (VALUES (Diagnosis1))",
+               fixed = TRUE)
+  expect_match(both, "\n      )\n      AND EXISTS (\n          SELECT 1\n          FROM (VALUES (Procedure1, ",
+               fixed = TRUE)
+  either <- .dsr_sql_codes(spec("or"))
+  expect_match(either, "\n      AND (EXISTS (", fixed = TRUE)
+  expect_match(either, "\n      )\n        OR EXISTS (", fixed = TRUE)
+  expect_match(either, "p.Block = 1826\n      ))$")
+
+  # Diagnoses alone give the same condition as before procedures were added
+  expect_identical(
+    .dsr_sql_codes(.dsr_spec("APC", years = 2023, codes = "J45",
+                             combine = "or")),
+    .dsr_sql_codes(.dsr_spec("APC", years = 2023, codes = "J45"))
+  )
+  expect_error(.dsr_spec(years = 2023, combine = "xor"))
+  expect_error(.dsr_spec(years = 2023, procedure = "secondary"))
+
+})
+
 test_that("population SQL reads the ERP5 table for the same years", {
 
   st <- .dsr_sql_population(.dsr_spec("ED", "AUS", "state", c(2019, 2023)))
@@ -621,7 +828,10 @@ test_that("every SQL statement is complete and safe to embed in R code", {
     })),
     vapply(coded, .dsr_sql_events, character(1)),
     .dsr_sql_standards(), .dsr_sql_dates("ED"), .dsr_sql_dates("APC"),
-    .dsr_sql_icd()
+    .dsr_sql_icd(),
+    .dsr_sql_events(.dsr_spec("APC", years = 2023, codes = "J45",
+                              procedures = c("11012-00", "1820-1830"),
+                              procedure = "all", combine = "or"))
   )
 
   # No placeholder left unfilled, and nothing that would end or escape the
@@ -1424,6 +1634,53 @@ test_that("the app spells out the diagnosis codes entered with their titles", {
 
 })
 
+test_that("the app searches procedures in APC and combines them with diagnoses", {
+
+  fake <- fake_episerver()
+  app <- episerver_dsr_app(query = fake$query)
+  note <- function(output) {
+    gsub("\\s+", " ", strip_html(output$procedures_note$html))
+  }
+
+  shiny::testServer(app, {
+    session$setInputs(dataset = "APC", scope = "ACT", level = "state",
+                      standard = "101", years = c(2023, 2023),
+                      multiplier = "100000", codes = "I21",
+                      diagnosis = "principal", procedures = c("90001-00", "1901"),
+                      procedure = "all", combine = "or")
+    expect_match(note(output),
+                 "90001-00 Test nerve conduction study, one nerve", fixed = TRUE)
+    expect_match(note(output), "[1901] Test nerve studies", fixed = TRUE)
+    expect_match(note(output), "Type words from a procedure", fixed = TRUE)
+
+    session$setInputs(calculate = 1)
+    sql <- grep("AS Events", fake$calls(), value = TRUE, fixed = TRUE)
+    expect_length(sql, 1)
+    expect_match(sql, "(Procedure50, BlockProcedure50)", fixed = TRUE)
+    expect_match(sql, "\n        OR EXISTS (", fixed = TRUE)
+    info <- strip_html(output$info_bar$html)
+    expect_match(info, paste("APC separations, principal diagnosis I21 or any",
+                             "procedure 90001-00 or [1901],"), fixed = TRUE)
+    expect_match(info, "cannot match the procedures", fixed = TRUE)
+
+    session$setInputs(combine = "and")
+    expect_match(strip_html(output$info_bar$html), "settings have changed")
+
+    # A procedure that cannot be read stops the calculation and says why
+    session$setInputs(procedures = "90001-001")
+    expect_null(spec())
+    expect_match(note(output), "is not an ACHI procedure code")
+
+    # ED has no procedures: they are left out and the note says so
+    session$setInputs(procedures = "90001-00", dataset = "ED")
+    expect_equal(nrow(spec()$procedures), 0)
+    expect_match(note(output), paste("ED presentations have no procedures, so",
+                                     "procedure codes apply to APC separations",
+                                     "only."), fixed = TRUE)
+  })
+
+})
+
 test_that("the app takes typed codes when the titles cannot be read", {
 
   fake <- fake_episerver()
@@ -1442,6 +1699,10 @@ test_that("the app takes typed codes when the titles cannot be read", {
     note <- strip_html(output$codes_note$html)
     expect_match(note, "Searching by condition is unavailable")
     expect_no_match(note, "Acute myocardial")
+    session$setInputs(procedures = "90001-00")
+    note <- strip_html(output$procedures_note$html)
+    expect_match(note, "Searching by procedure is unavailable")
+    expect_no_match(note, "Test nerve")
     session$setInputs(calculate = 1)
     expect_null(rv$error)
     expect_match(grep("AS Events", fake$calls(), value = TRUE),
@@ -1474,8 +1735,9 @@ test_that("the diagnosis codes box adds typed codes and suggests codes for words
                         perl = TRUE), fixed = TRUE))
   expect_true(all(c("createFilter", "load", "score", "render", "splitOn",
                     "onType", "onDropdownOpen") %in% evaluated))
-  expect_match(page, "Shiny.addCustomMessageHandler('dsr_codes_url'",
+  expect_match(page, "Shiny.addCustomMessageHandler('dsr_search_urls'",
                fixed = TRUE)
+  expect_match(page, "data-for=\"procedures\"", fixed = TRUE)
 
 })
 
@@ -1568,7 +1830,8 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
   expect_length(sidebar, 1)
   expect_no_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
-  for (id in c("dataset", "codes", "diagnosis", "scope", "level", "years",
+  for (id in c("dataset", "codes", "diagnosis", "procedures", "procedure",
+               "combine", "scope", "level", "years",
                "pool", "ages", "standard", "multiplier", "suppress",
                "by_sex", "calculate", "insert_code")) {
     expect_true(has_id(sidebar, id), label = id)

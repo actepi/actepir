@@ -201,40 +201,94 @@ GROUP BY {fields}",
 
 })
 
-test_that("the ICD-10-AM titles cover the diagnosis codes recorded", {
+test_that("the ICD-10-AM and ACHI titles cover the codes recorded", {
 
   skip_if_no_episerver()
   db <- live_db()
 
   raw <- db$query(.dsr_sql_icd())
-  expect_named(raw, c("Code", "Description", "FirstEdition", "LastEdition"))
-  expect_equal(anyDuplicated(trimws(raw$Code)), 0)
-  icd <- .dsr_icd_titles(raw)
+  expect_named(raw, c("VarType", "Code", "Description", "ProcedureBlock",
+                      "BlockDescription", "FirstEdition", "LastEdition"))
+  expect_equal(anyDuplicated(paste(tolower(raw$VarType), trimws(raw$Code))), 0)
+  icd <- .dsr_icd_titles(raw, "Diagnosis")
+  procs <- .dsr_icd_titles(raw, "Procedure")
   expect_gt(nrow(icd), 10000)
+  expect_gt(sum(procs$Type == "code"), 1000)
+  expect_gt(sum(procs$Type == "block"), 100)
   expect_equal(attr(icd, "editions")[2], max(raw$LastEdition))
   expect_true(all(c("I21", "J45", "C15.4") %in% icd$Code))
-  expect_true(all(validUTF8(icd$Title)))
+  expect_true(all(validUTF8(c(icd$Title, procs$Title))))
 
   # Every code but the morphology codes has the form the search reads
-  codes <- toupper(trimws(raw$Code))
-  dropped <- setdiff(codes[!grepl("/", codes, fixed = TRUE)], icd$Code)
-  expect_equal(utils::head(dropped, 20), character(0))
+  for (type in c("Diagnosis", "Procedure")) {
+    codes <- toupper(trimws(raw$Code[tolower(raw$VarType) == tolower(type)]))
+    titles <- if (type == "Diagnosis") icd else procs
+    dropped <- setdiff(codes[!grepl("/", codes, fixed = TRUE)], titles$Code)
+    expect_equal(utils::head(dropped, 20), character(0), label = type)
+  }
 
-  # The principal diagnoses of APC separations in 2018, all in one edition,
-  # have titles
+  # The principal diagnoses and procedures of APC separations in 2018, all
+  # in one edition, have titles, and their blocks are in the table
   ds <- .dsr_datasets$APC
-  d <- db$query(.dsr_fill("SELECT {field}, COUNT(*) AS n
+  d <- db$query(.dsr_fill("SELECT {fields}, COUNT(*) AS n
 FROM Analysis.dbo.{table}
 WHERE {date} >= '20180101'
   AND {date} < '20190101'
   AND {icd10}
-GROUP BY {field}",
-    field = ds$diagnoses[1], table = ds$table, date = ds$date,
-    icd10 = ds$icd10))
-  key <- toupper(gsub(".", "", trimws(d[[1]]), fixed = TRUE))
-  coded <- !is.na(key) & nzchar(key) & !grepl("/", key, fixed = TRUE)
-  titled <- key %in% icd$Key
-  expect_gt(sum(d$n[coded & titled]) / sum(d$n[coded]), 0.99)
+GROUP BY {fields}",
+    fields = paste(ds$diagnoses[1], ds$procedures[1], ds$blocks[1], sep = ", "),
+    table = ds$table, date = ds$date, icd10 = ds$icd10))
+  share <- function(values, keys) {
+    coded <- !is.na(values) & nzchar(values) & !grepl("/", values, fixed = TRUE)
+    sum(d$n[coded & values %in% keys]) / sum(d$n[coded])
+  }
+  key <- function(x) toupper(gsub("[.-]", "", trimws(x)))
+  expect_gt(share(key(d[[1]]), icd$Key), 0.99)
+  expect_gt(share(key(d[[2]]), procs$Key[procs$Type == "code"]), 0.99)
+  expect_gt(share(as.character(d[[3]]), procs$Key[procs$Type == "block"]),
+            0.99)
+
+})
+
+test_that("procedure codes and blocks select the events the R reading does", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+
+  ds <- .dsr_datasets$APC
+  counted <- function(...) {
+    s <- .dsr_spec("APC", "AUS", "state", 2023L, ...)
+    sum(db$query(.dsr_sql_events(s))$Events)
+  }
+
+  # The principal procedure, against dsr_procedure_matches() (helper-dsr.R)
+  procs <- c("13100", "1825-1827", "11012-00")
+  d <- db$query(.dsr_fill("SELECT {fields}, COUNT(*) AS n
+FROM Analysis.dbo.{table}
+WHERE {date} >= '20230101'
+  AND {date} < '20240101'
+  AND {icd10}
+GROUP BY {fields}",
+    fields = paste(ds$procedures[1], ds$blocks[1], sep = ", "),
+    table = ds$table, date = ds$date, icd10 = ds$icd10))
+  hit <- dsr_procedure_matches(d[[1]], d[[2]], .dsr_parse_procedures(procs))
+  principal <- counted(procedures = procs)
+  expect_equal(principal, sum(d$n[hit]))
+  expect_gt(principal, 0)
+  any_proc <- counted(procedures = procs, procedure = "all")
+  expect_gte(any_proc, principal)
+  expect_lt(any_proc, counted())
+
+  # With diagnoses: both are counted once, and either is the two together
+  # less both
+  diagnoses <- counted(codes = "I21", diagnosis = "all")
+  procedures <- counted(procedures = procs, procedure = "all")
+  both <- counted(codes = "I21", diagnosis = "all", procedures = procs,
+                  procedure = "all", combine = "and")
+  either <- counted(codes = "I21", diagnosis = "all", procedures = procs,
+                    procedure = "all", combine = "or")
+  expect_lte(both, min(diagnoses, procedures))
+  expect_equal(either, diagnoses + procedures - both)
 
 })
 
@@ -287,7 +341,9 @@ test_that("the app calculates against EpiServer", {
 
   skip_if_no_episerver()
 
-  titles <- .dsr_icd_titles(live_db()$query(.dsr_sql_icd()))
+  rows <- live_db()$query(.dsr_sql_icd())
+  titles <- .dsr_icd_titles(rows, "Diagnosis")
+  procs <- .dsr_icd_titles(rows, "Procedure")
   app <- episerver_dsr_app()
 
   shiny::testServer(app, {
@@ -322,6 +378,13 @@ test_that("the app calculates against EpiServer", {
     note <- gsub("\\s+", " ", gsub("<[^>]+>", "", output$codes_note$html))
     expect_match(note, paste("J45", titles$Title[titles$Code == "J45"]),
                  fixed = TRUE)
+    # As are procedures, with their titles from the same table
+    session$setInputs(dataset = "APC", procedures = "13100-00")
+    note <- gsub("\\s+", " ", gsub("<[^>]+>", "", output$procedures_note$html))
+    expect_match(note, paste("13100-00",
+                             procs$Title[procs$Code == "13100-00"]),
+                 fixed = TRUE)
+    session$setInputs(dataset = "ED", procedures = NULL)
     session$setInputs(calculate = 2)
     expect_null(rv$error)
     r <- results()

@@ -19,6 +19,9 @@ test_that("the help gives the data, formulas and sources the calculator uses", {
   }
   expect_match(text, "Diagnosis1 to Diagnosis100", fixed = TRUE)
   expect_match(text, "Analysis.dbo.ICD10AM", fixed = TRUE)
+  expect_match(text, paste("Procedure1 to Procedure50, with their blocks in",
+                           "BlockProcedure1 to BlockProcedure50"), fixed = TRUE)
+  expect_match(text, "so procedure codes apply to APC only", fixed = TRUE)
   expect_match(text, "Analysis.dbo.StandardPops", fixed = TRUE)
   for (col in vapply(.dsr_levels, `[[`, character(1), "column")) {
     expect_match(text, col, fixed = TRUE)

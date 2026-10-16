@@ -7,12 +7,12 @@
 #
 # Every number is invented. There are 14 SA3s (the ten ACT SA3s and four NSW
 # SA3s around the ACT) with SA2s in proportion to their size, 2001 to 2024.
-# Event rates give realistic ED and APC volumes, and a diagnosis condition
-# keeps about 1% of events, for small counts. The events also hold the cases
-# the info bar reports: no age, no residence, an area missing from the
-# population table and sex not stated, plus one SA2 with an empty age group
-# that has events. Two small SA3s (80103 and 80111) have age groups under 30
-# people.
+# Event rates give realistic ED and APC volumes, and a diagnosis or procedure
+# condition keeps about 1% of events, for small counts. The events also hold
+# the cases the info bar reports: no age, no residence, an area missing from
+# the population table and sex not stated, plus one SA2 with an empty age
+# group that has events. Two small SA3s (80103 and 80111) have age groups
+# under 30 people.
 
 local({
 
@@ -73,7 +73,7 @@ local({
   }
   events <- list(ED = events_for("ED"), APC = events_for("APC"))
 
-  # ICD-10-AM titles as .dsr_sql_icd() returns them, all invented: every
+  # ICD-10-AM diagnoses as .dsr_sql_icd() returns them, all invented: every
   # category A00 to Z99 and its subdivisions .0 to .9 (28,600 codes) with
   # titles of two words from a list, and five myocardial titles for the
   # search checks. X99.9 left after edition 9 and U07.1 came in edition 10.
@@ -101,6 +101,35 @@ local({
   icd$Description[match(names(myocardial), icd$Code)] <- myocardial
   icd$LastEdition[icd$Code == "X99.9"] <- 9L
   icd$FirstEdition[icd$Code == "U07.1"] <- 10L
+
+  # ACHI procedures, also invented: 2,000 codes, two to each of 1,000 stems
+  # from 30000, five stems to a block (blocks 1 to 200), and a block of two
+  # nerve studies for the search checks
+  stems <- 30000L + 7L * (0:999)
+  proc_k <- seq_len(2000L) - 1L
+  procedures <- data.frame(
+    Code = sprintf("%05d-%02d", rep(stems, each = 2), rep(0:1, 1000)),
+    Description = paste(icd_words[proc_k %% icd_n + 1L],
+                        icd_words[proc_k %/% icd_n %% icd_n + 1L],
+                        "procedure"),
+    ProcedureBlock = rep(seq_len(200L), each = 10),
+    BlockDescription = paste(icd_words[rep(seq_len(200L), each = 10) %% icd_n + 1L],
+                             "procedures"),
+    FirstEdition = 3L, LastEdition = 11L, stringsAsFactors = FALSE
+  )
+  procedures <- rbind(procedures, data.frame(
+    Code = c("39001-00", "39001-01"),
+    Description = c("Test nerve conduction study, one nerve",
+                    "Test nerve conduction study with muscle recording"),
+    ProcedureBlock = 900L, BlockDescription = "Test nerve studies",
+    FirstEdition = 3L, LastEdition = 11L
+  ))
+  icd <- rbind(
+    data.frame(VarType = "Diagnosis", icd[c("Code", "Description")],
+               ProcedureBlock = NA_integer_, BlockDescription = NA_character_,
+               icd[c("FirstEdition", "LastEdition")]),
+    data.frame(VarType = "Procedure", procedures)
+  )
 
   extract_years <- function(sql) {
     y <- as.integer(regmatches(sql, gregexpr("[0-9]{4}(?=0101')", sql, perl = TRUE))[[1]])
@@ -159,8 +188,8 @@ local({
       noage <- out[1:3, ]; noage$AgeGroup <- NA
       nosex <- out[1:6, ]; nosex$Sex <- 9L; nosex$Events <- 2L
       out <- rbind(out, extra, nopop, noage, nosex)
-      # A diagnosis condition keeps about 1% of events
-      if (grepl("AND EXISTS", sql, fixed = TRUE)) {
+      # A diagnosis or procedure condition keeps about 1% of events
+      if (grepl("EXISTS (", sql, fixed = TRUE)) {
         out$Events <- stats::rbinom(nrow(out), out$Events, 0.01)
         out <- out[out$Events > 0, ]
       }

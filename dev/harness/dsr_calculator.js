@@ -105,10 +105,12 @@ const fs = require('fs');
   // with them, and Enter adds the code highlighted; a code or range is added
   // as typed, by Enter or Tab; other text is not added; the note spells out
   // each entry
-  const box = '#codes-selectized';
-  const control = '#codes ~ .selectize-control';
+  let box = '#codes-selectized';
+  let control = '#codes ~ .selectize-control';
   const suggestions = () => page.$$eval(`${control} .selectize-dropdown-content [data-selectable]`,
     os => os.map(o => o.textContent.trim()));
+  const tags = () => page.$$eval(`${control} .selectize-input > [data-value]`,
+    ts => ts.map(t => [t.getAttribute('data-value'), t.getAttribute('title')]));
   const typeCodes = async (s, key) => {
     await page.click(box);
     await page.type(box, s, { delay: 60 });
@@ -127,8 +129,7 @@ const fs = require('fs');
   console.log('SEARCH J4, Tab:', JSON.stringify((await typeCodes('J4', 'Tab')).slice(0, 3)));
   console.log('SEARCH zzzz, Tab:', JSON.stringify(await typeCodes('zzzz', 'Tab')));
   await page.fill(box, '');
-  console.log('CODES tags:', JSON.stringify(await page.$$eval(`${control} .selectize-input > [data-value]`,
-    ts => ts.map(t => [t.getAttribute('data-value'), t.getAttribute('title')]))));
+  console.log('CODES tags:', JSON.stringify(await tags()));
   await settle(800);
   console.log('CODES note:', await text('#codes_note'));
   // Clicking the empty box lists nothing
@@ -142,6 +143,35 @@ const fs = require('fs');
   await page.waitForTimeout(800);
   await shot('07_codes_search');
   await page.keyboard.press('Escape');
+
+  // Procedure codes: disabled for ED. For APC, words list the codes and
+  // blocks, Enter adds the one highlighted, a code or block range is added as
+  // typed, and the note spells out each entry. Diagnoses or procedures then
+  // select the events.
+  box = '#procedures-selectized';
+  control = '#procedures ~ .selectize-control';
+  const disabled = () => page.evaluate(() => [
+    $('#procedures')[0].selectize.isDisabled,
+    $('input[name=procedure]').prop('disabled'),
+    $('input[name=combine]').prop('disabled')]);
+  console.log('PROCEDURES disabled with ED:', JSON.stringify(await disabled()));
+  console.log('PROCEDURES note with ED:', await text('#procedures_note'));
+  await select('dataset', 'APC');
+  await settle();
+  console.log('PROCEDURES disabled with APC:', JSON.stringify(await disabled()));
+  console.log('SEARCH nerve, Enter:', JSON.stringify(await typeCodes('nerve', 'Enter')));
+  console.log('SEARCH 39001-01, Enter:', JSON.stringify(await typeCodes('39001-01', 'Enter')));
+  console.log('SEARCH 1-5, Tab:', JSON.stringify((await typeCodes('1-5', 'Tab')).slice(0, 3)));
+  await page.fill(box, '');
+  console.log('PROCEDURES tags:', JSON.stringify(await tags()));
+  await settle(800);
+  console.log('PROCEDURES note:', await text('#procedures_note'));
+  await page.check('input[name=combine][value=or]');
+  await page.click('a[data-value=tables]');
+  await page.click('#calculate');
+  await settle(2000);
+  console.log('INFO BAR with codes:', (await text('#info_bar')).split('. ')[0]);
+  await shot('08_procedures');
 
   // Done stops the app and the page says so
   await page.click('#done');

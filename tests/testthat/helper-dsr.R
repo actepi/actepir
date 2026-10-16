@@ -18,3 +18,25 @@ dsr_code_matches <- function(x, codes) {
     }, codes$From, codes$To))
   }, logical(1), USE.NAMES = FALSE)
 }
+
+# The procedure condition that .dsr_sql_codes() builds, written in R, for
+# procedure codes and the blocks recorded beside them. As in the SQL, codes
+# are compared without outer spaces, hyphens and dots, and blocks as numbers.
+
+dsr_procedure_matches <- function(code, block, procedures) {
+  code  <- toupper(gsub("[.-]", "", trimws(code)))
+  block <- suppressWarnings(as.integer(block))
+  vapply(seq_along(code), function(k) {
+    any(mapply(function(type, from, to) {
+      if (type == "block") {
+        return(!is.na(block[k]) && block[k] >= as.integer(from) &&
+                 block[k] <= as.integer(to))
+      }
+      x <- code[k]
+      if (is.na(x)) return(FALSE)
+      if (from == to) return(startsWith(x, from))
+      .dsr_code_cmp(x, from) >= 0 &&
+        (.dsr_code_cmp(x, to) <= 0 || startsWith(x, to))
+    }, procedures$Type, procedures$From, procedures$To))
+  }, logical(1), USE.NAMES = FALSE)
+}

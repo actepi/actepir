@@ -3,10 +3,11 @@
 # Synthetic EpiServer and ABS boundary service for dry runs of the live tests
 # (dryrun_live.R). It answers every query in
 # tests/testthat/test-episerver_dsr_live.R. Most answers are fixed counts.
-# Queries with a diagnosis condition are answered by applying the generated
-# SQL condition to synthetic coded records, with SQL Server's semantics
-# written here independently (outer spaces and dots removed, case ignored,
-# bytewise order), so the test of the code matching is not circular.
+# Queries with a diagnosis or procedure condition are answered by applying
+# the generated SQL condition to synthetic coded records, with SQL Server's
+# semantics written here independently (outer spaces, dots and, for
+# procedures, hyphens removed, case ignored, bytewise order, blocks as
+# numbers), so the test of the code matching is not circular.
 #
 # A dry run checks the test code. It cannot show that the SQL suits the real
 # tables: only the maintainer's run against EpiServer does that.
@@ -83,7 +84,7 @@ fake_fixed <- function(sql) {
 }
 
 
-# ── Coded records for diagnosis conditions ──────────────────────────────────
+# ── Coded records for diagnosis and procedure conditions ────────────────────
 
 set.seed(1)
 code_pool <- c("C12.9", "C13", "C13.0", "C14.9", "C15", "C15.4", "C15.45",
@@ -104,19 +105,6 @@ records <- function(n, fields, icd) {
   }
   d
 }
-# ICD-10-AM titles as .dsr_sql_icd() returns them: every code of the pool
-# above, J45, and invented categories and subdivisions A00.0 to Z99.9, with
-# invented titles, in editions 3 to 11
-icd_rows <- local({
-  pool <- toupper(trimws(code_pool))
-  pool <- pool[nzchar(pool) & !grepl("/", pool, fixed = TRUE)]
-  cats <- as.vector(outer(LETTERS, sprintf("%02d", 0:99), paste0))
-  code <- unique(c(pool, "J45", cats, as.vector(outer(cats, 0:9, paste,
-                                                       sep = "."))))
-  data.frame(Code = code, Description = paste("Synthetic title", code),
-             FirstEdition = 3L, LastEdition = 11L, stringsAsFactors = FALSE)
-})
-
 # ICD holds ICD10AMEdition (ED) or ICDVersion (APC)
 recs <- list(
   ED  = records(20000, c("EDShortListCode", paste0("Diagnosis", 1:3)),
@@ -124,10 +112,65 @@ recs <- list(
   APC = records(8000, paste0("Diagnosis", 1:100), c(9, 10, 10, 10))
 )
 
-# Whether each code meets the condition in sql, read from the SQL text
-sql_match <- function(code, sql) {
-  code <- toupper(gsub(".", "", trimws(code), fixed = TRUE))
-  ok <- !is.na(code) & !grepl("/", code, fixed = TRUE)
+# APC procedures, each with the block recorded beside it, fewer in each later
+# field, written in the ways the data might hold them
+proc_pool <- data.frame(
+  code  = c("11012-00", "1101200", " 11012-01 ", "11000-00", "11027-00",
+            "11027-01", "11030-00", "13100-00", "13100-09", "13101-00",
+            "90001-00", ""),
+  block = c(1826L, 1826L, 1826L, 1825L, 1827L, 1827L, 1828L, 1060L, 1060L,
+            1061L, 1900L, NA),
+  stringsAsFactors = FALSE
+)
+for (k in 1:50) {
+  i <- sample(nrow(proc_pool), nrow(recs$APC), TRUE)
+  i[stats::runif(nrow(recs$APC)) < min(0.95, 0.2 + 0.05 * k)] <- NA
+  recs$APC[[paste0("Procedure", k)]] <- proc_pool$code[i]
+  recs$APC[[paste0("BlockProcedure", k)]] <- proc_pool$block[i]
+}
+
+# ICD-10-AM titles as .dsr_sql_icd() returns them, with invented titles, in
+# editions 3 to 11. Diagnoses: every code of the pool above, J45, and the
+# categories and subdivisions A00.0 to Z99.9. Procedures: every code of the
+# pool above, and 2,000 codes from 30000-00 in 200 blocks.
+icd_rows <- local({
+  pool <- toupper(trimws(code_pool))
+  pool <- pool[nzchar(pool) & !grepl("/", pool, fixed = TRUE)]
+  cats <- as.vector(outer(LETTERS, sprintf("%02d", 0:99), paste0))
+  code <- unique(c(pool, "J45", cats, as.vector(outer(cats, 0:9, paste,
+                                                       sep = "."))))
+  diagnoses <- data.frame(VarType = "Diagnosis", Code = code,
+                          Description = paste("Synthetic title", code),
+                          ProcedureBlock = NA_integer_,
+                          BlockDescription = NA_character_,
+                          stringsAsFactors = FALSE)
+  pool <- proc_pool[nzchar(proc_pool$code), ]
+  pool$code <- sub("^([0-9]{5})-?([0-9]{2})$", "\\1-\\2", trimws(pool$code))
+  pool <- pool[!duplicated(pool$code), ]
+  filler <- sprintf("%05d-%02d", 30000L + 0:1999 %/% 2, 0:1999 %% 2)
+  procedures <- data.frame(
+    VarType = "Procedure", Code = c(pool$code, filler),
+    Description = paste("Synthetic title", c(pool$code, filler)),
+    ProcedureBlock = c(pool$block, 1L + 0:1999 %/% 10),
+    stringsAsFactors = FALSE
+  )
+  procedures$BlockDescription <- paste("Synthetic block",
+                                       procedures$ProcedureBlock)
+  out <- rbind(diagnoses, procedures)
+  out$FirstEdition <- 3L
+  out$LastEdition <- 11L
+  out
+})
+
+# Whether each code meets the code tests in sql, read from the SQL text, with
+# the characters in strip removed as that SQL removes them; morphology codes
+# meet them only where the SQL does not skip them
+sql_match <- function(code, sql, strip = "[.]") {
+  code <- toupper(gsub(strip, "", trimws(code)))
+  ok <- !is.na(code)
+  if (grepl("NOT LIKE '%/%'", sql, fixed = TRUE)) {
+    ok <- ok & !grepl("/", code, fixed = TRUE)
+  }
   range_re <- paste0("\\(c\\.Code >= '[A-Z0-9]+' AND \\(c\\.Code <= ",
                      "'[A-Z0-9]+' OR c\\.Code LIKE '[A-Z0-9]+%'\\)\\)")
   ranges  <- regmatches(sql, gregexpr(range_re, sql))[[1]]
@@ -145,6 +188,18 @@ sql_match <- function(code, sql) {
     }
   }
   ok & hit
+}
+
+# Whether each block meets the block tests in sql, read from the SQL text
+block_match <- function(block, sql) {
+  block <- suppressWarnings(as.integer(block))
+  hit <- rep(FALSE, length(block))
+  for (t in regmatches(sql, gregexpr("p\\.Block (= [0-9]+|BETWEEN [0-9]+ AND [0-9]+)",
+                                     sql))[[1]]) {
+    n <- as.integer(regmatches(t, gregexpr("[0-9]+", t))[[1]])
+    hit <- hit | (!is.na(block) & block >= n[1] & block <= n[length(n)])
+  }
+  hit
 }
 
 count_by <- function(d) {
@@ -195,14 +250,31 @@ fake <- function(sql) {
     return(data.frame(Year = 2023L, Sex = e$Sex, AgeGroup = e$AgeGroup,
                       Area = e$Area, Events = 7000L))
   }
-  if (grepl("AND EXISTS", sql, fixed = TRUE)) {
+  if (grepl("EXISTS (", sql, fixed = TRUE)) {
     stopifnot(grepl(if (ds == "ED") "COALESCE(ICD10AMEdition, 0) <> 99" else
                       "ICDVersion = 10", sql, fixed = TRUE))
     d <- keep_icd(d)
-    fields <- gsub("[()]", "", unique(regmatches(
-      sql, gregexpr("\\((EDShortListCode|Diagnosis[0-9]+)\\)", sql)
-    )[[1]]))
-    hit <- Reduce(`|`, lapply(d[fields], sql_match, sql = sql))
+    # Each EXISTS: diagnoses in their fields, or procedures and the blocks
+    # beside them; then both, or either when the SQL joins them with OR
+    parts <- regmatches(sql, gregexpr("(?s)EXISTS \\(.*?\n      \\)", sql,
+                                      perl = TRUE))[[1]]
+    hits <- lapply(parts, function(part) {
+      if (grepl("AS d (Code)", part, fixed = TRUE)) {
+        fields <- gsub("[()]", "", unique(regmatches(
+          part, gregexpr("\\((EDShortListCode|Diagnosis[0-9]+)\\)", part)
+        )[[1]]))
+        return(Reduce(`|`, lapply(d[fields], sql_match, sql = part)))
+      }
+      pairs <- regmatches(part, gregexpr(
+        "\\(Procedure[0-9]+, BlockProcedure[0-9]+\\)", part))[[1]]
+      Reduce(`|`, lapply(pairs, function(pair) {
+        f <- regmatches(pair, gregexpr("[A-Za-z]+[0-9]+", pair))[[1]]
+        sql_match(d[[f[1]]], part, strip = "[.-]") |
+          block_match(d[[f[2]]], part)
+      }))
+    })
+    either <- grepl("\n        OR EXISTS (", sql, fixed = TRUE)
+    hit <- Reduce(if (either) `|` else `&`, hits)
     out <- count_by(d[hit, ])
     # SA3 and SA2 queries give the codes of the fixed populations' areas
     if (grepl("geo_SA3_2021 AS Area", sql, fixed = TRUE)) {
