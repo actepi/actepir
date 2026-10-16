@@ -51,16 +51,18 @@ const fs = require('fs');
   })));
 
   // Each information button shows its notes and hides them again
-  for (const id of await page.$$eval('.dsr-help-toggle', bs => bs.map(b => b.getAttribute('aria-controls')))) {
-    const visible = () => page.$eval('#' + id, e => e.offsetHeight > 0);
+  for (const id of await page.$$eval('aside#settings .epi-help', ds => ds.map(d => d.id))) {
+    // A closed <details> hides its content with content-visibility, which
+    // leaves offsetHeight as it was
+    const visible = () => page.$eval(`#${id} .epi-note`, e => e.checkVisibility());
     const before = await visible();
-    await page.click(`[aria-controls=${id}]`);
-    await page.waitForTimeout(600);
+    await page.click(`#${id} > summary`);
+    await page.waitForTimeout(300);
     const open = await visible();
-    const note = (await text('#' + id)).slice(0, 50);
+    const note = (await text(`#${id} .epi-note`)).slice(0, 50);
     if (id === 'codes_help') await shot('00_help_open');
-    await page.click(`[aria-controls=${id}]`);
-    await page.waitForTimeout(600);
+    await page.click(`#${id} > summary`);
+    await page.waitForTimeout(300);
     console.log(`HELP ${id}: hidden ${!before}, shown ${open}, hidden again ${!(await visible())}:`, JSON.stringify(note));
   }
 
@@ -151,11 +153,26 @@ const fs = require('fs');
   console.log('CODE:', JSON.stringify((await clipboard()).split('\n').filter(l => /dsr_calculate|min_|suppress/.test(l))));
 
   // The bug button opens the problem report; Copy report copies what was
-  // described and the details shown
+  // described and the details shown. In a short window the dialog fits,
+  // and the wheel outside the details does not move it.
+  await page.setViewportSize({ width: 1440, height: 650 });
   await page.click('#bug_report');
   await page.waitForSelector('#bug_details:not(:empty)');
   await page.waitForTimeout(800);
-  console.log('REPORT dialog:', await text('.modal-title'), '|', (await text('.modal-body p')).slice(0, 80));
+  console.log('REPORT dialog:', await text('.modal-title'), '|', await text('.modal-body p'));
+  const dialogTop = () => page.$eval('.modal-content', e => Math.round(e.getBoundingClientRect().top));
+  const fits = await page.$eval('.modal-content', e => e.getBoundingClientRect().bottom <= window.innerHeight);
+  const top0 = await dialogTop();
+  const what = await page.$eval('#bug_what', e => { const r = e.getBoundingClientRect(); return [r.left + 20, r.top + 20]; });
+  await page.mouse.move(what[0], what[1]);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(300);
+  const details = await page.$eval('#bug_details', e => { const r = e.getBoundingClientRect(); return [r.left + 40, r.top + 20]; });
+  await page.mouse.move(details[0], details[1]);
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(300);
+  console.log('REPORT in a 650px window: fits', fits, '| moved by the wheel', (await dialogTop()) !== top0,
+    '| details scrolled', await page.$eval('#bug_details', e => e.scrollTop > 0));
   await page.fill('#bug_what', 'The map was blank.');
   await page.waitForTimeout(600);
   await shot('02b_report');
@@ -167,6 +184,8 @@ const fs = require('fs');
   console.log('REPORT lines:', JSON.stringify(lines.filter(l => /^(The map|Calculated|Settings error|Code button|codes =|level =|actepir |Browser|Window|Errors shown)/.test(l))));
   await page.click('.modal-footer [data-bs-dismiss=modal]');
   await page.waitForTimeout(600);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(400);
 
   // Explore: the linked map and funnel plot
   await page.click('a[data-value=explore]');
@@ -176,6 +195,14 @@ const fs = require('fs');
   console.log('EXPLORE heading:', await text('#ex_heading'));
   console.log('EXPLORE note:', await text('#ex_method'));
   console.log('EXPLORE areas: map', await areas('#ex_map svg [data-id]'), 'funnel', await areas('#ex_funnel svg [data-id]'));
+  // The settings run down the left of the plots, which fit the window
+  console.log('EXPLORE settings:', JSON.stringify(await page.$$eval('#ex_settings label.control-label, #ex_settings .checkbox label, #ex_settings .btn',
+    ls => ls.filter(l => l.offsetParent).map(l => l.textContent.trim()))));
+  console.log('EXPLORE layout:', JSON.stringify(await page.evaluate(() => {
+    const r = s => document.querySelector(s).getBoundingClientRect();
+    return { settingsRight: Math.round(r('#ex_settings').right), mapLeft: Math.round(r('#ex_map svg').left),
+             plotsBottom: Math.round(Math.max(r('#ex_map svg').bottom, r('#ex_funnel svg').bottom)), window: window.innerHeight };
+  })));
   await shot('03_explore');
 
   // The toolbars, shown on pointing at a plot, in Iris rgb(86, 44, 140),

@@ -1860,7 +1860,7 @@ test_that("the app takes typed codes when the titles cannot be read", {
   page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
                                QUERY_STRING = ""))$content
   help <- function(id) {
-    regmatches(page, regexpr(paste0("(?s)<div id=\"", id, "\".*?</div>"),
+    regmatches(page, regexpr(paste0("(?s)<details id=\"", id, "\".*?</details>"),
                              page, perl = TRUE))
   }
   expect_match(help("codes_help"), "Searching by condition is unavailable")
@@ -1994,15 +1994,9 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
   expect_length(sidebar, 1)
   expect_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
-  expect_match(page, "aside#settings ~ .bslib-sidebar-resize-handle { left: 0; }",
-               fixed = TRUE)
-  # Section headings are in the info bar's tint, in bold Nightshade
-  for (rule in c("--bs-accordion-btn-bg: var(--epi-info-bg);",
-                 "--bs-accordion-active-bg: var(--epi-info-bg);",
-                 "--bs-accordion-btn-color: var(--epi-primary);",
-                 ".sidebar .accordion-button { font-weight: 600; }")) {
-    expect_match(page, rule, fixed = TRUE)
-  }
+  # Spacing, section headings and the resize handle come from the shared
+  # style (test-epi_app.R)
+  expect_match(page, "--epi-gap:", fixed = TRUE)
   for (id in c("dataset", "codes", "diagnosis", "procedures", "procedure",
                "combine", "scope", "level", "years",
                "pool", "ages", "standard", "multiplier", "suppress",
@@ -2031,12 +2025,11 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   # Notes on a setting are behind an information button beside its label,
   # and start hidden
   help <- function(id) {
-    part(paste0("(?s)<div id=\"", id, "_help\" class=\"collapse dsr-help\">.*?</div>"))
+    part(paste0("(?s)<details id=\"", id, "_help\" class=\"epi-help\">.*?</details>"))
   }
   for (id in c("codes", "diagnosis", "procedures", "min_events")) {
-    expect_match(sidebar, paste0("data-bs-target=\"#", id, "_help\""),
-                 fixed = TRUE)
     expect_length(help(id), 1)
+    expect_true(grepl(help(id), sidebar, fixed = TRUE), label = id)
   }
   expect_match(help("codes"), "Type words from a condition", fixed = TRUE)
   expect_match(help("diagnosis"), paste0(
@@ -2048,9 +2041,22 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_match(help("procedures"), "Type words from a procedure", fixed = TRUE)
   expect_match(help("min_events"), "AIHW (2011)", fixed = TRUE)
   for (id in c("info_bar", "summary_table", "ex_map", "ex_funnel", "done",
-               "copy_table")) {
+               "copy_table", "ex_value")) {
     expect_false(has_id(sidebar, id), label = id)
   }
+
+  # The Explore tab's settings run down its own sidebar, beside the plots,
+  # with the notes on selecting areas behind an information button
+  explore <- part("(?s)<aside id=\"ex_settings\" class=\"sidebar.*?</aside>")
+  expect_length(explore, 1)
+  for (id in c("ex_value", "ex_year", "ex_sex", "ex_ages", "ex_colour",
+               "ex_overdispersion", "ex_zoom", "ex_reset", "ex_clear",
+               "ex_download", "ex_map_pdf", "ex_funnel_png")) {
+    expect_true(has_id(explore, id), label = id)
+  }
+  expect_false(has_id(explore, "ex_map"))
+  expect_match(help("ex_zoom"), "lasso", fixed = TRUE)
+  expect_true(grepl(help("ex_zoom"), explore, fixed = TRUE))
 
   # The Tables tab switches between the rates and the age-specific rates,
   # with one button that copies the table shown

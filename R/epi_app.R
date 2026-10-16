@@ -301,27 +301,31 @@
 }
 
 
-# The maintainer named in DESCRIPTION, as list(name, email), for problem
-# reports. Either is NA when DESCRIPTION does not give it. The Maintainer
-# field is written from Authors@R when the package is installed, so it is
-# read from Authors@R when the package is loaded from source.
+# Where analysts send problem reports from the apps
+.epi_contact <- "healthinfo@act.gov.au"
+
+
+# A setting with notes (...) behind an information button at the right of
+# its label. The button is the summary of a <details> element, so a click
+# shows the notes below the label and another hides them, in Bootstrap 3 or
+# 5 alike. The notes start hidden.
 #' @noRd
-.epi_maintainer <- function() {
-  desc <- utils::packageDescription("actepir")
-  m <- desc$Maintainer
-  if (is.null(m) && !is.null(desc[["Authors@R"]])) {
-    authors <- tryCatch(eval(parse(text = desc[["Authors@R"]])),
-                        error = function(e) NULL)
-    cre <- authors[vapply(unclass(authors), function(p) "cre" %in% p$role,
-                          logical(1))]
-    if (length(cre)) m <- format(cre[1], include = c("given", "family", "email"))
-  }
-  if (is.null(m) || is.na(m) || !nzchar(m)) {
-    return(list(name = NA_character_, email = NA_character_))
-  }
-  email <- regmatches(m, regexpr("(?<=<)[^>]+(?=>)", m, perl = TRUE))
-  list(name  = trimws(sub("<.*", "", m)),
-       email = if (length(email)) email else NA_character_)
+.epi_with_help <- function(input, ...) {
+  label <- htmltools::tagQuery(input)$find("label.control-label")
+  tag <- label$selectedTags()[[1]]
+  id <- paste0(tag$attribs$`for`, "_help")
+  about <- paste("About", tolower(paste(unlist(tag$children), collapse = "")))
+  shiny::div(
+    class = "epi-field",
+    label$after(
+      shiny::tags$details(
+        id = id, class = "epi-help",
+        shiny::tags$summary(title = about, `aria-label` = about,
+                            shiny::icon("circle-info")),
+        shiny::div(class = "epi-note", ...)
+      )
+    )$allTags()
+  )
 }
 
 
@@ -426,7 +430,10 @@
     "link-hover-color"         = "#320557",
     "component-active-bg"      = "#562C8C",
     "input-focus-border-color" = "#562C8C",
-    "focus-ring-color"         = "rgba(86, 44, 140, 0.35)"
+    "focus-ring-color"         = "rgba(86, 44, 140, 0.35)",
+    # bslib's shiny preset sets 10%, a share of the window's width, which
+    # pushes a dialog below the bottom of a wide, short window
+    "modal-dialog-margin-y-sm-up" = "1.75rem"
   )
   # The app's name in the top bar is a heading
   bslib::bs_add_rules(theme,
@@ -434,8 +441,12 @@
 }
 
 
-# Theme shared by the apps: Nightshade title bar, buttons, inputs,
-# DataTables and sliders
+# Theme shared by the apps: colours, the spacing and type of controls and
+# sections, the title bar, buttons, notes, information buttons,
+# notifications, DataTables and sliders. The rules use the classes of Shiny,
+# Bootstrap 3 and 5, bslib and shinydashboard, so that controls in any app
+# take them without CSS of their own. dev/reference/app-style.md sets them
+# out.
 #' @noRd
 .epi_app_style <- function() {
   shiny::tags$style(shiny::HTML("
@@ -445,6 +456,153 @@
       --epi-accent:       #562C8C;  /* Iris: accents, controls, selection focus */
       --epi-info-bg:      #eae6f1;  /* info bar */
       --epi-select-bg:    #eae6f1;  /* selected row */
+      /* Spacing and type */
+      --epi-font:      15px;   /* labels, choices and section headings */
+      --epi-font-box:  14px;   /* text in boxes and their lists */
+      --epi-font-note: 11px;   /* notes on settings */
+      --epi-line:      1.4;    /* line height of labels and choices */
+      --epi-gap:       10px;   /* between settings */
+      --epi-gap-small: 6px;    /* between stacked buttons */
+      --epi-pad:       16px;   /* side padding of pages, sidebars, sections */
+      --epi-head-pad:  10px;   /* above and below section headings */
+      --epi-body-pad:  8px var(--epi-pad) 12px;  /* inside sections */
+      --epi-box-pad-y: 4px;    /* inside boxes */
+      --epi-box-pad-x: 10px;
+      --bslib-sidebar-padding: var(--epi-pad);
+    }
+    /* Controls: labels, choices and boxes */
+    .shiny-input-container { margin-bottom: var(--epi-gap); }
+    .shiny-input-container > .control-label {
+      font-size: var(--epi-font); font-weight: 400;
+      line-height: var(--epi-line); margin-bottom: 2px;
+    }
+    .shiny-input-container .radio, .shiny-input-container .checkbox {
+      margin-top: 0; margin-bottom: 2px;
+    }
+    /* Shiny pulls choices up by Bootstrap 3's 10px margin above them */
+    .shiny-input-radiogroup label ~ .shiny-options-group,
+    .shiny-input-checkboxgroup label ~ .shiny-options-group { margin-top: 0; }
+    /* shinydashboard's sidebar pads each control: the same spacing */
+    section.sidebar .shiny-input-container {
+      padding: var(--epi-gap) var(--epi-pad) 0; margin-bottom: 0;
+    }
+    .shiny-input-container .radio label,
+    .shiny-input-container .checkbox label {
+      font-size: var(--epi-font); line-height: var(--epi-line);
+    }
+    .shiny-input-container input.form-control,
+    .shiny-input-container textarea.form-control,
+    .shiny-input-container select.form-control,
+    .shiny-input-container select.form-select,
+    .shiny-input-container .selectize-input {
+      padding-top: var(--epi-box-pad-y); padding-bottom: var(--epi-box-pad-y);
+      padding-left: var(--epi-box-pad-x);
+      font-size: var(--epi-font-box); line-height: var(--epi-line);
+      min-height: 0;
+    }
+    .shiny-input-container input.form-control,
+    .shiny-input-container select.form-control {
+      height: auto; padding-right: var(--epi-box-pad-x);
+    }
+    .selectize-input input, .selectize-dropdown {
+      font-size: var(--epi-font-box);
+    }
+    /* Sections: bslib accordions and shinydashboard boxes. Headings are in
+       the info bar's tint, in bold Nightshade. */
+    .accordion {
+      --bs-accordion-bg: transparent;
+      --bs-accordion-btn-bg: var(--epi-info-bg);
+      --bs-accordion-active-bg: var(--epi-info-bg);
+      --bs-accordion-btn-color: var(--epi-primary);
+      --bs-accordion-active-color: var(--epi-primary);
+      --bs-accordion-btn-padding-x: var(--epi-pad);
+      --bs-accordion-btn-padding-y: var(--epi-head-pad);
+      --bs-accordion-btn-icon: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23320557' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e\");
+      --bs-accordion-btn-active-icon: var(--bs-accordion-btn-icon);
+    }
+    .accordion-button { font-size: var(--epi-font); font-weight: 600; }
+    .accordion-body { padding: var(--epi-body-pad); }
+    .box > .box-header {
+      background-color: var(--epi-info-bg); color: var(--epi-primary);
+      padding: var(--epi-head-pad) var(--epi-pad);
+    }
+    .box > .box-header > .box-title { font-size: var(--epi-font);
+                                      font-weight: 600; }
+    .box > .box-body { padding: var(--epi-body-pad); }
+    .accordion-body > :last-child,
+    .accordion-body > :last-child .shiny-input-container,
+    .box-body > :last-child,
+    .box-body > :last-child .shiny-input-container { margin-bottom: 0; }
+    /* Sidebars: settings are spaced by their own margins (--epi-gap), so
+       bslib's gaps between them are removed */
+    .bslib-sidebar-layout > .sidebar > .sidebar-content { gap: 0; }
+    .bslib-sidebar-layout > .sidebar > .sidebar-content > .accordion:not(:last-child) {
+      margin-bottom: var(--epi-gap);
+    }
+    /* Actions held at the foot of a sidebar, across its full width and
+       flush with the sections above and the sidebar's bottom edge. The foot
+       stays above what scrolls under it, such as a focused section heading
+       (z-index 3) and slider handles, and below open dropdowns (1000). */
+    .epi-actions {
+      position: sticky; bottom: 0; z-index: 20;
+      display: flex; align-items: center; gap: 8px;
+      margin: 0 calc(-1 * var(--epi-pad));
+      padding: 8px var(--epi-pad);
+      background-color: var(--bslib-sidebar-bg, inherit);
+      border-top: 1px solid #e6e5e5;
+    }
+    .accordion + .epi-actions { margin-top: calc(-1 * var(--epi-gap)); }
+    .sidebar-content:has(> .epi-actions:last-child) { padding-bottom: 0; }
+    /* Buttons stacked down a sidebar, each its full width */
+    .epi-stack { display: flex; flex-direction: column;
+                 gap: var(--epi-gap-small); margin-bottom: var(--epi-gap); }
+    .epi-stack .btn, .epi-stack .dropdown { width: 100%; text-align: left; }
+    /* Notes on a setting, and a setting's notes behind an information
+       button at the right of its label (.epi_with_help()) */
+    .epi-note { font-size: var(--epi-font-note); color: #777;
+                margin: -4px 0 var(--epi-gap) 0; }
+    .epi-note.epi-error { color: #b00020; }
+    .epi-field > .shiny-input-container { position: relative; }
+    .epi-field .control-label { padding-right: 22px; }
+    .epi-help > summary {
+      position: absolute; top: 0; right: 0; z-index: 1;
+      height: calc(var(--epi-font) * var(--epi-line));
+      display: flex; align-items: center; padding: 0 2px;
+      list-style: none; cursor: pointer; color: var(--epi-accent);
+    }
+    .epi-help > summary::-webkit-details-marker { display: none; }
+    .epi-help > summary:hover, .epi-help[open] > summary {
+      color: var(--epi-primary);
+    }
+    .epi-help .epi-note { margin: 0 0 4px 0; }
+    /* In shinydashboard's sidebar, inside its padding and in its colours */
+    section.sidebar .epi-help > summary {
+      top: var(--epi-gap); right: var(--epi-pad); color: inherit;
+    }
+    section.sidebar .epi-note { color: inherit; opacity: 0.75; }
+    /* Buttons that are an icon alone, in Iris, Nightshade on hover */
+    .epi-icon-btn { border: 0; background: none; padding: 0 2px;
+                    color: var(--epi-accent); line-height: 1; }
+    .epi-icon-btn:hover { color: var(--epi-primary); }
+    .epi-icon-btn:focus:not(:focus-visible),
+    .epi-help > summary:focus:not(:focus-visible) { outline: none; }
+    .epi-icon-btn:focus-visible, .epi-help > summary:focus-visible {
+      outline: 2px solid var(--epi-accent); outline-offset: 1px;
+      border-radius: 2px;
+    }
+    /* A bslib sidebar's resize handle sits just outside the sidebar's
+       edge. bslib puts the handle, and the strip that activates it, over
+       the sidebar's last 12px, where they cover the scrollbar and stop the
+       wheel and the scrollbar's thumb working. */
+    .bslib-sidebar-layout:not(.sidebar-right) > .bslib-sidebar-resize-handle {
+      left: 0;
+    }
+    .bslib-sidebar-layout:not(.sidebar-right) > .bslib-sidebar-resize-handle::before,
+    .bslib-sidebar-layout:not(.sidebar-right) > .bslib-sidebar-resize-handle.handle-active::before {
+      left: 0; right: auto; width: 100%;
+    }
+    .bslib-sidebar-layout:not(.sidebar-right) > .bslib-sidebar-resize-handle .resize-indicator {
+      right: auto; left: 3px; transform: translateY(-50%);
     }
     .gadget-content { padding: 10px; }
     /* Title bar: Nightshade background, white title */
@@ -462,19 +620,23 @@
       border-color: #fff !important;
       color: #fff !important;
     }
-    .selector-row { display: flex; gap: 10px; margin-bottom: 10px;
-                    align-items: flex-end; }
+    .selector-row { display: flex; gap: var(--epi-gap);
+                    margin-bottom: var(--epi-gap); align-items: flex-end; }
     .selector-row > * { flex: 1; }
     .selector-row .form-group { margin-bottom: 0; }
     .info-bar {
       background: var(--epi-info-bg);
       border-left: 3px solid var(--epi-primary);
-      padding: 8px 12px; margin-bottom: 10px; font-size: 12px;
+      padding: 8px 12px; margin-bottom: var(--epi-gap); font-size: 12px;
       color: #555;
     }
+    .info-bar p { margin: 0 0 4px 0; }
+    .info-bar p:last-child { margin-bottom: 0; }
+    .info-bar .epi-warn { color: #8a5300; }
+    .info-bar.epi-error { border-left-color: #b00020; color: #b00020; }
     .options-row {
-      display: flex; align-items: center; gap: 15px;
-      margin-bottom: 10px; flex-wrap: wrap;
+      display: flex; align-items: center; gap: var(--epi-gap);
+      margin-bottom: var(--epi-gap); flex-wrap: wrap;
     }
     .options-row .form-group { margin-bottom: 0; }
     .radio-inline { margin-top: 0; padding-top: 0; }

@@ -65,6 +65,7 @@ Run all three before pushing whenever R code, roxygen comments or tests change.
 - Do not add R option or environment variable fallbacks for connection arguments. That approach was tried and rejected as unintuitive. The fallback still present in `episerver_connect()` is due for removal. Do not extend it or rely on it.
 - `proxy_actgov_toggle()` is legacy. Leave it as it is.
 - RStudio integration is limited to what `inst/rstudio/` supports: addins and project templates. RStudio has no API for adding menu bar items.
+- Shiny apps follow `dev/reference/app-style.md`. Spacing, type and shared components come from `.epi_theme()` and `.epi_app_style()`, not from CSS in each app.
 
 ## Quarto and R Markdown templates
 

@@ -70,7 +70,7 @@ the left, in sections that open and close, and the results in tabs on the
 top bar. The arrow at the top of the sidebar hides it, and its right edge
 can be dragged to widen it. The information button beside a setting shows
 notes on it, and the bug button at the foot of the sidebar prepares a
-report of a problem to send to the maintainer.
+report of a problem to send to \email{healthinfo@act.gov.au}.
 }
 \details{
 \strong{Options}

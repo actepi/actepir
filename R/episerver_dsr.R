@@ -20,7 +20,7 @@
 #' top bar. The arrow at the top of the sidebar hides it, and its right edge
 #' can be dragged to widen it. The information button beside a setting shows
 #' notes on it, and the bug button at the foot of the sidebar prepares a
-#' report of a problem to send to the maintainer.
+#' report of a problem to send to \email{healthinfo@act.gov.au}.
 #'
 #' @inheritParams episerver_browse
 #' @inheritDotParams episerver_connect encrypt trust_certificate
@@ -1706,38 +1706,11 @@ WHERE Latest = 1"
 }
 
 
-# A setting with notes (...) that an information button at the right of its
-# label shows and hides. The notes start hidden and open below the label.
-# They are a Bootstrap collapse, so they open and close in the browser.
-#' @noRd
-.dsr_with_help <- function(input, ...) {
-  label <- htmltools::tagQuery(input)$find("label.control-label")
-  id <- paste0(label$selectedTags()[[1]]$attribs$`for`, "_help")
-  about <- paste("About",
-                 tolower(paste(unlist(label$selectedTags()[[1]]$children),
-                               collapse = "")))
-  shiny::div(
-    class = "dsr-field",
-    shiny::tags$button(
-      type = "button", class = "dsr-icon-btn dsr-help-toggle collapsed",
-      `data-bs-toggle` = "collapse", `data-bs-target` = paste0("#", id),
-      `aria-controls` = id, `aria-expanded` = "false",
-      title = about, `aria-label` = about,
-      shiny::icon("circle-info")
-    ),
-    label$after(
-      shiny::div(id = id, class = "collapse dsr-help",
-                 shiny::div(class = "epi-note", ...))
-    )$allTags()
-  )
-}
-
-
-# A problem report for the maintainer, as text: what the analyst says
-# happened (left out when `what` is NULL), the calculator's state (named
-# lines), the settings by input ID, written as R arguments, R code for the
-# settings when they can be used, and the session (.epi_session_report()).
-# It holds settings but no counts or rates.
+# A problem report, as text: what the analyst says happened (left out when
+# `what` is NULL), the calculator's state (named lines), the settings by
+# input ID, written as R arguments, R code for the settings when they can be
+# used, and the session (.epi_session_report()). It holds settings but no
+# counts or rates.
 #' @noRd
 .dsr_problem_report <- function(what, state, inputs, code, session) {
   section <- function(title, lines) {
@@ -1769,21 +1742,17 @@ WHERE Latest = 1"
 .dsr_map_controls <- function(id) {
   name <- function(x) paste0(id, "_", x)
   shiny::tagList(
-    shiny::div(
-      class = "selector-row dsr-row",
-      shiny::selectInput(
-        name("value"), "Show",
-        choices = c("Age-standardised rate" = "DSR",
-                    "Crude rate" = "Crude",
-                    "Age-specific rate" = "AgeRate",
-                    "Events" = "Events"),
-        width = "100%"
-      ),
-      shiny::selectInput(name("year"), "Year", choices = NULL,
-                         width = "100%"),
-      shiny::selectInput(name("sex"), "Sex", choices = "Persons",
-                         width = "100%")
+    shiny::selectInput(
+      name("value"), "Show",
+      choices = c("Age-standardised rate" = "DSR",
+                  "Crude rate" = "Crude",
+                  "Age-specific rate" = "AgeRate",
+                  "Events" = "Events"),
+      width = "100%"
     ),
+    shiny::selectInput(name("year"), "Year", choices = NULL, width = "100%"),
+    shiny::selectInput(name("sex"), "Sex", choices = "Persons",
+                       width = "100%"),
     shiny::conditionalPanel(
       sprintf("input.%s == 'AgeRate'", name("value")),
       shiny::sliderInput(
@@ -1938,8 +1907,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       .epi_app_style(),
 
-      # Calculator-only rules: the top bar, the sidebar, wrapping selector
-      # rows, notes, the error bar, table headings and the diagnosis code tags
+      # Calculator-only rules: the top bar, the sidebar, the problem report,
+      # table headings, the diagnosis code tags and the Explore tab
       shiny::tags$style(shiny::HTML("
         /* Top bar: the logo at the brand's minimum size, a crest 60px
            across, with clear space equal to the height of its ACT
@@ -1949,104 +1918,18 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .navbar-brand { display: flex; padding: 22px 0; margin-right: 22px; }
         .epi-brand { display: flex; align-items: center; gap: 22px; }
         .epi-logo { height: 60px; }
-        /* Sidebar: Lavender tint, with Calculate and Copy Code in view at
-           its foot across its full width. The bar stays above what
-           scrolls under it, such as a focused section heading (z-index 3)
-           and slider handles, and below open dropdowns (1000). */
+        /* Sidebars: Lavender tint, with Calculate, Copy Code and the bug
+           button in view at the foot of the settings (.epi-actions) */
         :root { --bslib-sidebar-bg: #f7f4fd; }
-        /* Section headings in the info bar's tint, in bold Nightshade, so
-           that they stand apart from the settings under them */
-        .sidebar .accordion {
-          --bs-accordion-bg: transparent;
-          --bs-accordion-btn-bg: var(--epi-info-bg);
-          --bs-accordion-active-bg: var(--epi-info-bg);
-          --bs-accordion-btn-color: var(--epi-primary);
-          --bs-accordion-active-color: var(--epi-primary);
-          --bs-accordion-btn-icon: url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23320557' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e\");
-          --bs-accordion-btn-active-icon: var(--bs-accordion-btn-icon);
-        }
-        .sidebar .accordion-button { font-weight: 600; }
-        /* Spacing in the sidebar, set by these variables: the text size,
-           the space between settings, the padding of section headings and
-           of sections, and the padding and text size of boxes */
-        aside#settings {
-          --dsr-font: 15px;
-          --dsr-gap: 10px;
-          --dsr-head-pad: 10px 16px;
-          --dsr-body-pad: 8px 16px 12px;
-          --dsr-box-pad: 4px 10px;
-          --dsr-box-font: 14px;
-          font-size: var(--dsr-font);
-        }
-        aside#settings > .sidebar-content { gap: 0; padding-bottom: 0; }
-        aside#settings > .sidebar-content > .accordion { margin-bottom: 0; }
-        aside#settings .accordion-button { padding: var(--dsr-head-pad);
-                                           font-size: var(--dsr-font); }
-        aside#settings .accordion-body { padding: var(--dsr-body-pad); }
-        aside#settings .shiny-input-container { margin-bottom: var(--dsr-gap); }
-        aside#settings .accordion-body > :last-child,
-        aside#settings .accordion-body > :last-child .shiny-input-container {
-          margin-bottom: 0;
-        }
-        aside#settings .control-label { line-height: 1.4; }
-        aside#settings .radio, aside#settings .checkbox { margin-bottom: 2px; }
-        aside#settings .radio label, aside#settings .checkbox label {
-          line-height: 1.4;
-        }
-        aside#settings input.form-control, aside#settings .selectize-input {
-          padding: var(--dsr-box-pad); font-size: var(--dsr-box-font);
-          min-height: 0;
-        }
-        aside#settings .selectize-input input { font-size: var(--dsr-box-font); }
-        aside#settings .selectize-dropdown { font-size: var(--dsr-box-font); }
-        .dsr-actions {
-          --dsr-pad: var(--bslib-sidebar-padding, var(--bslib-spacer, 1.5rem));
-          position: sticky; bottom: 0; z-index: 20;
-          display: flex; align-items: center; gap: 8px;
-          margin: 0 calc(-1 * var(--dsr-pad));
-          padding: 8px var(--dsr-pad);
-          background-color: var(--bslib-sidebar-bg);
-          border-top: 1px solid #e6e5e5;
-        }
-        /* The resize handle sits just outside the sidebar's right edge.
-           bslib puts the handle, and the strip that activates it, over the
-           sidebar's last 12px, where they cover the scrollbar and stop the
-           wheel and the scrollbar's thumb working. */
-        aside#settings ~ .bslib-sidebar-resize-handle { left: 0; }
-        aside#settings ~ .bslib-sidebar-resize-handle::before,
-        aside#settings ~ .bslib-sidebar-resize-handle.handle-active::before {
-          left: 0; right: auto; width: 100%;
-        }
-        aside#settings ~ .bslib-sidebar-resize-handle .resize-indicator {
-          right: auto; left: 3px; transform: translateY(-50%);
-        }
-        /* Icon buttons in Iris, Nightshade on hover: the information button
-           beside a setting's label, Nightshade while its notes show, and
-           the problem report at the right of the foot */
-        .dsr-icon-btn { border: 0; background: none; padding: 0 2px;
-                        color: var(--epi-accent); line-height: 1; }
-        .dsr-icon-btn:hover, .dsr-help-toggle:not(.collapsed) {
-          color: var(--epi-primary);
-        }
-        .dsr-icon-btn:focus:not(:focus-visible) { outline: none; }
-        .dsr-icon-btn:focus-visible { outline: 2px solid var(--epi-accent);
-                                      outline-offset: 1px; border-radius: 2px; }
-        .dsr-field { position: relative; }
-        .dsr-field .control-label { padding-right: 22px; }
-        .dsr-help-toggle { position: absolute; top: 0; right: 0; z-index: 1;
-                           height: 1.4em; }
-        .dsr-help .epi-note { margin: 0 0 4px 0; }
-        .dsr-actions .dsr-icon-btn { margin-left: auto; font-size: 1.1rem; }
-        #bug_details { max-height: 260px; overflow: auto; font-size: 11px;
-                       white-space: pre-wrap; }
-        .dsr-row { flex-wrap: wrap; }
-        .dsr-row > * { min-width: 200px; }
-        .info-bar p { margin: 0 0 4px 0; }
-        .info-bar p:last-child { margin-bottom: 0; }
-        .info-bar .epi-warn { color: #8a5300; }
-        .info-bar.epi-error { border-left-color: #b00020; color: #b00020; }
-        .epi-note { font-size: 11px; color: #777; margin: -4px 0 10px 0; }
-        .epi-note.epi-error { color: #b00020; }
+        .epi-actions #bug_report { margin-left: auto; font-size: 1.1rem; }
+        /* The problem report fits the window, and only its details scroll,
+           so the dialog does not move under the wheel */
+        .epi-report .modal-body { display: flex; flex-direction: column;
+                                  min-height: 0; }
+        #bug_details { flex: 0 1 auto; min-height: 6em; max-height: 50vh;
+                       overflow: auto;
+                       overscroll-behavior: contain; margin-bottom: 0;
+                       font-size: 11px; white-space: pre-wrap; }
         .epi-table-head { display: flex; align-items: center;
                           justify-content: space-between; margin: 4px 0 6px 0; }
         .epi-table-head h5 { color: var(--epi-primary); font-weight: 600;
@@ -2059,8 +1942,14 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .dsr-code { font-weight: 600; color: var(--epi-primary); }
         .dsr-codes div { margin-bottom: 2px; }
         .radio.disabled label { color: #999; }
-        .explore-row { display: flex; flex-wrap: wrap; gap: 12px; }
-        .explore-panel { flex: 1 1 400px; min-width: 0; }
+        .explore-row { display: flex; flex-wrap: wrap; gap: var(--epi-gap); }
+        .explore-panel { flex: 1 1 300px; min-width: 0; }
+        /* The plots keep their shape and fit the window below their top
+           (--ex-plot-height, from the script below). ggiraph sets the
+           SVG's max-height in its style attribute. */
+        .explore-panel svg.ggiraph-svg {
+          max-height: var(--ex-plot-height, 100vh) !important;
+        }
         .explore-panel .ex-linked { stroke: #320557 !important;
                                     stroke-width: 2px !important; }
         /* The Download menu's choices in the brand purples */
@@ -2144,6 +2033,27 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           });
         })();
       ", jsonlite::toJSON(.dsr_age_labels)))),
+
+      # The Explore tab's plots fit the window, so that neither needs
+      # scrolling to be seen whole: their height is the window's less their
+      # distance from the top of the page when it is scrolled to the top
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          function fit() {
+            var row = document.querySelector('.explore-row');
+            if (!row || !row.offsetParent) return;
+            var top = row.getBoundingClientRect().top;
+            for (var el = row.parentElement; el; el = el.parentElement) {
+              top += el.scrollTop;
+            }
+            var room = Math.max(window.innerHeight - top - 16, 300);
+            row.style.setProperty('--ex-plot-height', room + 'px');
+          }
+          function soon() { setTimeout(fit, 0); }
+          $(window).on('resize', soon);
+          $(document).on('shown.bs.tab shiny:value', soon);
+        })();
+      ")),
 
       # Pointing at an area in the Explore tab's map or funnel plot outlines
       # it in both, matched on the data-id that ggiraph gives each area
@@ -2272,7 +2182,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             choices = c("ED presentations" = "ED", "APC separations" = "APC"),
             width = "100%"
           ),
-          .dsr_with_help(
+          .epi_with_help(
             .dsr_codes_box(
               "codes", "Diagnosis codes", "All events. Type a code or condition",
               paste0("/^\\s*[a-z](\\d[\\da-z.]*)?[*%]?(\\s*(-|\\u2013|\\u2014|",
@@ -2290,7 +2200,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             }
           ),
           shiny::uiOutput("codes_note"),
-          .dsr_with_help(
+          .epi_with_help(
             shiny::radioButtons(
               "diagnosis", "Diagnosis search",
               choices = c("Principal diagnosis" = "principal",
@@ -2309,7 +2219,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
               }
             }, names(.dsr_datasets), .dsr_datasets))
           ),
-          .dsr_with_help(
+          .epi_with_help(
             .dsr_codes_box(
               "procedures", "Procedure codes",
               "All events. Type a code or procedure",
@@ -2404,7 +2314,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
             "suppress", "Suppress counts below",
             value = 5, min = 0, step = 1, width = "100%"
           ),
-          .dsr_with_help(
+          .epi_with_help(
             shiny::numericInput(
               "min_events", "Minimum events for a DSR",
               value = 20, min = 0, step = 1, width = "100%"
@@ -2420,7 +2330,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         )
       ),
       shiny::div(
-        class = "dsr-actions",
+        class = "epi-actions",
         shiny::actionButton(
           "calculate", "Calculate",
           icon  = shiny::icon("calculator"),
@@ -2434,7 +2344,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         # Opens the problem report; the script above sends what the browser
         # knows with the click
         shiny::tags$button(
-          id = "bug_report", type = "button", class = "dsr-icon-btn",
+          id = "bug_report", type = "button", class = "epi-icon-btn",
           title = "Report a problem", `aria-label` = "Report a problem",
           shiny::icon("bug")
         )
@@ -2466,63 +2376,82 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     bslib::nav_panel(
       "Explore", value = "explore",
-      .dsr_map_controls("ex"),
-      shiny::div(
-        class = "options-row",
-        shiny::selectInput(
-          "ex_colour", "Colour the map by",
-          choices = c("Value" = "value",
-                      "Position in the funnel plot" = "position"),
-          width = "220px"
-        ),
-        shiny::checkboxInput("ex_overdispersion",
-                             "Allow for overdispersion", value = TRUE,
-                             width = "auto"),
-        shiny::actionButton("ex_zoom", "Zoom to selected",
-                            icon = shiny::icon("magnifying-glass-plus"),
-                            class = "btn-sm btn-primary"),
-        shiny::actionButton("ex_reset", "Show all",
-                            icon = shiny::icon("expand"),
-                            class = "btn-sm btn-primary"),
-        shiny::actionButton("ex_clear", "Clear selection",
-                            icon = shiny::icon("xmark"),
-                            class = "btn-sm btn-primary"),
-        # Download: a Bootstrap dropdown of the four files
-        shiny::div(
-          class = "dropdown",
-          shiny::tags$button(
-            id = "ex_download", type = "button",
-            class = "btn btn-sm btn-primary dropdown-toggle",
-            `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
-            shiny::icon("download"), "Download"
+      # The settings run down the left, so that the map and funnel plot
+      # take the height of the window
+      bslib::layout_sidebar(
+        border = FALSE, border_radius = FALSE, fillable = FALSE,
+        sidebar = bslib::sidebar(
+          id = "ex_settings", width = 240, open = "always",
+          resizable = FALSE,
+          .dsr_map_controls("ex"),
+          shiny::selectInput(
+            "ex_colour", "Colour the map by",
+            choices = c("Value" = "value",
+                        "Position in the funnel plot" = "position"),
+            width = "100%"
           ),
-          shiny::tags$ul(
-            class = "dropdown-menu",
-            shiny::tags$li(shiny::downloadLink("ex_map_pdf", "Map as PDF",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::downloadLink("ex_map_png", "Map as PNG",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
-            shiny::tags$li(shiny::downloadLink("ex_funnel_pdf",
-                                               "Funnel plot as PDF",
-                                               class = "dropdown-item")),
-            shiny::tags$li(shiny::downloadLink("ex_funnel_png",
-                                               "Funnel plot as PNG",
-                                               class = "dropdown-item"))
+          shiny::checkboxInput("ex_overdispersion",
+                               "Allow for overdispersion", value = TRUE),
+          .epi_with_help(
+            shiny::div(
+              class = "form-group shiny-input-container",
+              shiny::tags$label(class = "control-label", `for` = "ex_zoom",
+                                "Selection and zoom"),
+              shiny::div(
+                class = "epi-stack",
+                shiny::actionButton("ex_zoom", "Zoom to selected",
+                                    icon = shiny::icon("magnifying-glass-plus"),
+                                    class = "btn-sm btn-primary"),
+                shiny::actionButton("ex_reset", "Show all",
+                                    icon = shiny::icon("expand"),
+                                    class = "btn-sm btn-primary"),
+                shiny::actionButton("ex_clear", "Clear selection",
+                                    icon = shiny::icon("xmark"),
+                                    class = "btn-sm btn-primary"),
+                # Download: a Bootstrap dropdown of the four files
+                shiny::div(
+                  class = "dropdown",
+                  shiny::tags$button(
+                    id = "ex_download", type = "button",
+                    class = "btn btn-sm btn-primary dropdown-toggle",
+                    `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+                    shiny::icon("download"), "Download"
+                  ),
+                  shiny::tags$ul(
+                    class = "dropdown-menu",
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_map_pdf", "Map as PDF", class = "dropdown-item")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_map_png", "Map as PNG", class = "dropdown-item")),
+                    shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_funnel_pdf", "Funnel plot as PDF",
+                      class = "dropdown-item")),
+                    shiny::tags$li(shiny::downloadLink(
+                      "ex_funnel_png", "Funnel plot as PNG",
+                      class = "dropdown-item"))
+                  )
+                )
+              )
+            ),
+            "Point at an area or a point for its figures. Click areas or ",
+            "points, or draw round them with the lasso in a plot's toolbar, ",
+            "to select them in both plots. The toolbar also zooms and pans. ",
+            "Download saves either plot as PDF or PNG."
           )
-        )
-      ),
-      shiny::uiOutput("ex_note"),
-      shiny::uiOutput("ex_heading"),
-      shiny::div(
-        class = "explore-row",
-        shiny::div(class = "explore-panel",
-                   ggiraph::girafeOutput("ex_map")),
-        shiny::div(class = "explore-panel",
-                   ggiraph::girafeOutput("ex_funnel"))
-      ),
-      shiny::uiOutput("ex_method"),
-      shiny::uiOutput("ex_selected")
+        ),
+        shiny::uiOutput("ex_note"),
+        shiny::uiOutput("ex_heading"),
+        shiny::div(
+          class = "explore-row",
+          shiny::div(class = "explore-panel",
+                     ggiraph::girafeOutput("ex_map")),
+          shiny::div(class = "explore-panel",
+                     ggiraph::girafeOutput("ex_funnel"))
+        ),
+        shiny::uiOutput("ex_method"),
+        shiny::uiOutput("ex_selected")
+      )
     ),
 
     bslib::nav_panel("Help", value = "help", .dsr_help()),
@@ -3445,10 +3374,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           "(geo.abs.gov.au), so only the funnel plot is shown: ", b$error
         ))
       }
-      note("Point at an area or a point for its figures. Click areas or ",
-           "points, or draw round them with the lasso in a plot's toolbar, ",
-           "to select them in both plots. The toolbar also zooms and pans. ",
-           "Download saves either plot as PDF or PNG.")
+      NULL
     })
 
     # How the funnel plot is made, and how much the areas vary
@@ -3651,23 +3577,21 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
+    # The dialog fits the window and only the details scroll (.epi-report)
     shiny::observeEvent(input$bug_client, {
-      maint <- .epi_maintainer()
-      to <- if (!is.na(maint$email)) {
-        shiny::tags$a(
-          href = paste0("mailto:", maint$email, "?subject=",
-                        utils::URLencode("DSR Calculator problem report",
-                                         reserved = TRUE)),
-          if (is.na(maint$name)) maint$email else maint$name,
-          .noWS = "after"
-        )
-      } else {
-        "the maintainer"
-      }
-      shiny::showModal(shiny::modalDialog(
+      dialog <- shiny::modalDialog(
         title = "Report a problem", size = "l", easyClose = TRUE,
-        shiny::p("Say what happened, then copy the report and paste it into ",
-                 "an email to ", to, "."),
+        shiny::p(
+          "Say what happened, then copy the report and paste it into an ",
+          "email to ",
+          shiny::tags$a(
+            href = paste0("mailto:", .epi_contact, "?subject=",
+                          utils::URLencode("DSR Calculator problem report",
+                                           reserved = TRUE)),
+            .epi_contact, .noWS = "after"
+          ),
+          "."
+        ),
         shiny::textAreaInput("bug_what",
                              "What happened, and what did you expect?",
                              width = "100%", rows = 4, resize = "vertical"),
@@ -3683,7 +3607,11 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
                              `data-bs-dismiss` = "modal", "Close")
         )
-      ))
+      )
+      shiny::showModal(
+        htmltools::tagQuery(dialog)$find(".modal-dialog")$
+          addClass("modal-dialog-scrollable epi-report")$allTags()
+      )
     })
     output$bug_details <- shiny::renderText({
       shiny::req(input$bug_client)

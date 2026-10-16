@@ -74,7 +74,9 @@ The sidebar change (pending) added checks of the sidebar, the notification and t
 |---|---|
 | `dsr_calculator.js`, sidebar | Sections Events, Population (Geographic scope, Geographic level, Ages, Male and female), Time periods and Rate details. Headings `rgb(234, 230, 241)`, text `rgb(50, 5, 87)`, weight 600. Each of the four information buttons (`codes_help`, `diagnosis_help`, `procedures_help`, `min_events_help`) shows its note and hides it again. With a 15px scrollbar, the wheel from the results scrolls the sidebar at 5 of 5 points across the scrollbar, dragging the thumb scrolls it, and dragging the edge 120px makes it 460px wide. |
 | `dsr_calculator.js`, notification | "Table copied to the clipboard" on `rgb(234, 230, 241)`, text and left border `rgb(50, 5, 87)`. |
-| `dsr_calculator.js`, problem report | The dialog "Report a problem" names the maintainer. Copy report copies the sections What happened, Calculator, Settings, R code for these settings and R session, with the text typed, `Calculated: yes`, the settings, actepir's version and the browser. |
+| `dsr_calculator.js`, problem report | The dialog "Report a problem" asks for an email to healthinfo@act.gov.au. In a 1440 by 650 window it fits, the wheel does not move it, and the details scroll. Copy report copies the sections What happened, Calculator, Settings, R code for these settings and R session, with the text typed, `Calculated: yes`, the settings, actepir's version and the browser. |
+| `dsr_calculator.js`, Explore | Settings down the left: Show, Year, Sex, Colour the map by, Allow for overdispersion, Selection and zoom, Zoom to selected, Show all, Clear selection and Download. The settings end at x = 596 and the map starts at 612; the plots end at y = 680 in a 900-pixel window. |
+| `episerver_browser.js` | Unchanged results. The labels, boxes and gaps take the shared spacing (`.epi_app_style()`): 15px regular labels, 14px boxes, 10px gaps. |
 | `dryrun_live.R` | Unchanged: no query changed. |
 
 ## How it works
@@ -92,6 +94,7 @@ The sidebar change (pending) added checks of the sidebar, the notification and t
   - They click buttons, wait until Shiny is idle (no `shiny-busy` class on the page) and read the page.
   - Reading the clipboard needs `grantPermissions(['clipboard-read', 'clipboard-write'])`.
   - Playwright hides scrollbars unless Chromium is launched with `ignoreDefaultArgs: ['--hide-scrollbars']`, as `dsr_calculator.js` is. The sidebar checks need the scrollbar.
+  - A closed `<details>` hides its content with `content-visibility`, so test whether a note shows with `checkVisibility()`, not `offsetHeight`.
 - **The dry run.**
   - `dryrun_live.R` copies the package's test helpers and the `_live` test files to a temporary directory, and adds a last helper that sources `fake_live.R`. It then runs them with `testthat::test_dir()` after `pkgload::load_all()`.
   - `fake_live.R` defines `.epi_connection()` in the test environment, where the tests find it before the package's. It also replaces it in the namespace for the apps the tests run, and turns `skip_if_no_episerver()` and `skip_if_no_abs()` into no-ops.
