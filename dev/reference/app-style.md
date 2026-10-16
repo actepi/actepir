@@ -75,7 +75,7 @@ The brand purples are in `act-brand.md`. In the apps:
 
 ### miniUI gadgets (Bootstrap 3)
 
-The EpiServer Browser uses miniUI and `.epi_app_style()`, and takes the same control spacing and type.
+The EpiServer Browser uses miniUI and `.epi_app_style()`, and takes the same control spacing and type. It is to be rebuilt as a bslib app to this guide; `dev/notes/shared-apps.md` lists what it needs.
 
 ## Controls and spacing
 

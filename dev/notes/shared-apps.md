@@ -52,8 +52,11 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 
 ## Open items
 
-- The EpiServer Browser still uses miniUI. Moving it to the bslib layout would make the apps consistent.
-- The EpiServer Browser has no problem report. `.epi_session_report()` is shared so that it can have one.
+- **EpiServer Browser overhaul (the maintainer, in another branch).** The Browser is to be rebuilt to `dev/reference/app-style.md`. What it needs, and what exists for it:
+  - **Layout.** It uses miniUI (Bootstrap 3); the guide's layout is `bslib::page_navbar()` with `.epi_theme()`, the shared top bar (name at the left, logo at the right) and settings in a sidebar or `.epi_tab_settings()`. Its own CSS in `episerver_browse_app()` (the labels slot, `#labels_source`, the value-label cells) should take the tokens.
+  - **No Done.** It opens in the browser only, so its Done button is redundant for the same reason as the DSR Calculator's. The calculator's replacements are in `episerver_dsr_app()`: the `shiny:disconnected` script that says the app has stopped and how to open it again, and `session$onSessionEnded(shiny::stopApp)` in the foreground.
+  - **Problem report.** `.epi_session_report()` and `.epi_contact` are shared. The bug button and its script, the dialog and `.dsr_problem_report()` are in `episerver_dsr.R`.
+  - **One mechanism.** When the Browser takes the stopped message or the problem report, move that code from `episerver_dsr.R` to `epi_app.R` and have both apps call it, rather than copying it.
+  - **Offline tests.** `episerver_browse_app()` has no `query` argument, so the harness runs it by replacing `.epi_connection()` and there are no `shiny::testServer()` tests. Adding the argument, as `episerver_dsr_app()` has, would allow them.
+  - **Afterwards.** Once no app uses miniUI, the `.gadget-*` and `#done` rules in `.epi_app_style()`, and `miniUI` in Imports, can go.
 - shinydashboard's colours are not themed (see `dev/reference/app-style.md`).
-- The EpiServer Browser has no offline tests. `episerver_browse_app()` has no `query` argument, so the harness runs it by replacing `.epi_connection()`.
-- **The EpiServer Browser's Done button (waiting on the maintainer).** The Browser now also opens in the browser only, so its Done button is redundant for the same reason as the DSR Calculator's. Done leaves its tab greyed out; the DSR Calculator says that it has stopped and how to open it again (the `shiny:disconnected` script in `episerver_dsr_app()`).
