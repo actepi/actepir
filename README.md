@@ -1,4 +1,4 @@
-# actepir
+# actepir <img src="man/figures/logo.png" align="right" height="139" alt="" />
 
 An R package developed for ACT Health's Epidemiology Section.
 
