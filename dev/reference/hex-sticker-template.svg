@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="43.994mm" height="50.8mm" viewBox="0 0 43.994 50.8">
+  <title>Hex sticker template</title>
+  <desc>Template for badges in the style of the actepir hex sticker. Units are millimetres. The name is live text in Montserrat SemiBold: edit it, then convert it to outlines. Specification: dev/reference/hex-sticker.md in the actepi/actepir repository.</desc>
+  <g id="frame">
+    <path id="border" fill="#6E46E0" d="M21.997,0 L43.994,12.7 L43.994,38.1 L21.997,50.8 L0,38.1 L0,12.7 Z"/>
+    <path id="background" fill="#320557" d="M21.997,1.732 L42.494,13.566 L42.494,37.234 L21.997,49.068 L1.5,37.234 L1.5,13.566 Z"/>
+  </g>
+  <g id="pyramid">
+    <!-- One bar per age group, 0-4 (bottom) to 85+ (top) -->
+    <g id="males" fill="#A591FF">
+      <rect x="21.26" y="33.55" width="0.59" height="1.29"/>
+      <rect x="19.52" y="31.94" width="2.33" height="1.29"/>
+      <rect x="19.04" y="30.33" width="2.81" height="1.29"/>
+      <rect x="18.7" y="28.72" width="3.14" height="1.29"/>
+      <rect x="16.29" y="27.11" width="5.55" height="1.29"/>
+      <rect x="15.66" y="25.49" width="6.18" height="1.29"/>
+      <rect x="15.22" y="23.88" width="6.63" height="1.29"/>
+      <rect x="15.42" y="22.27" width="6.42" height="1.29"/>
+      <rect x="15.21" y="20.66" width="6.63" height="1.29"/>
+      <rect x="15.1" y="19.05" width="6.75" height="1.29"/>
+      <rect x="15.36" y="17.44" width="6.49" height="1.29"/>
+      <rect x="15.67" y="15.83" width="6.18" height="1.29"/>
+      <rect x="16.1" y="14.22" width="5.75" height="1.29"/>
+      <rect x="16.28" y="12.61" width="5.57" height="1.29"/>
+      <rect x="17.97" y="10.99" width="3.88" height="1.29"/>
+      <rect x="20.25" y="9.38" width="1.6" height="1.29"/>
+      <rect x="21.26" y="7.77" width="0.59" height="1.29"/>
+      <rect x="21.26" y="6.16" width="0.59" height="1.29"/>
+    </g>
+    <g id="females" fill="#B464DC">
+      <rect x="22.15" y="33.55" width="1.8" height="1.29"/>
+      <rect x="22.15" y="31.94" width="2.86" height="1.29"/>
+      <rect x="22.15" y="30.33" width="3.08" height="1.29"/>
+      <rect x="22.15" y="28.72" width="2.87" height="1.29"/>
+      <rect x="22.15" y="27.11" width="3.06" height="1.29"/>
+      <rect x="22.15" y="25.49" width="2.92" height="1.29"/>
+      <rect x="22.15" y="23.88" width="2.64" height="1.29"/>
+      <rect x="22.15" y="22.27" width="3.04" height="1.29"/>
+      <rect x="22.15" y="20.66" width="4.08" height="1.29"/>
+      <rect x="22.15" y="19.05" width="4.41" height="1.29"/>
+      <rect x="22.15" y="17.44" width="4.25" height="1.29"/>
+      <rect x="22.15" y="15.83" width="4.67" height="1.29"/>
+      <rect x="22.15" y="14.22" width="6.86" height="1.29"/>
+      <rect x="22.15" y="12.61" width="11.82" height="1.29"/>
+      <rect x="22.15" y="10.99" width="9.62" height="1.29"/>
+      <rect x="22.15" y="9.38" width="7.32" height="1.29"/>
+      <rect x="22.15" y="7.77" width="5.83" height="1.29"/>
+      <rect x="22.15" y="6.16" width="4.87" height="1.29"/>
+    </g>
+  </g>
+  <text id="name" x="21.997" y="41.6" text-anchor="middle" font-family="Montserrat, 'Montserrat SemiBold', Arial, sans-serif" font-weight="600" font-size="6.6" fill="#FFFFFF">actepir</text>
+</svg>
