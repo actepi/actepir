@@ -1981,7 +1981,7 @@ test_that("the settings are in a sidebar and the results in tabs on the top bar"
   expect_length(navbar, 1)
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*DSR Calculator\\s*<",
                perl = TRUE)
-  expect_match(navbar, "src=\"data:image/png;base64,", fixed = TRUE)
+  expect_match(navbar, "src=\"data:image/svg+xml;base64,", fixed = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
   for (tab in c("tables", "explore", "help")) {
     at <- in_bar(paste0("data-value=\"", tab, "\""))

@@ -6,6 +6,7 @@ How the package's hex sticker is built, and how to make a related badge in the s
 |---|---|
 | `man/figures/logo.svg` | The master artwork, with the name converted to outlines so that it renders the same on any machine. Use it for print and wherever a scalable logo is needed. |
 | `man/figures/logo.png` | The README image, a 240 × 278 px export of `logo.svg`. This is the size `usethis::use_logo()` produces; the README shows it at 139 px high so that it stays sharp on high-density screens. |
+| `inst/www/logo-lockup.svg` | The lockup in the top bar of the package's Shiny apps: the pyramid and the name from `logo.svg`, side by side, without the hexagon. See "Lockup for the apps". |
 | `dev/reference/hex-sticker-template.svg` | The same artwork with the name as live text, as the starting point for a related badge. |
 
 ## Frame
@@ -37,6 +38,16 @@ The outline is the ACT polygon from the Natural Earth 1:10m admin-1 boundaries (
 The axis is a single meridian. The northern tip of the ACT lies east of its southern tail, so no meridian crosses every band. The axis is at the median of the 18 band midpoints, about 149.00° E, which keeps the two sides of comparable width. A meridian through both tips would keep the outline exact but leave the female bars as slivers for most of the height. In the two northernmost bands and the southernmost band, the outline does not reach 2.2 km west of the axis, so those male bars are drawn at that minimum length and every age group has a bar for both sexes.
 
 The pyramid is drawn at 0.335 mm per km, 29 mm tall from y = 6 to y = 35, with the axis on the sticker's centre line. Each bar fills 80% of its band, and a 0.3 mm gap separates the two sides at the axis.
+
+## Lockup for the apps
+
+The Shiny apps show the sticker's motif in their 104 px top bar, on Nightshade, as a lockup rather than the whole hexagon (`.epi_logo()` in `R/epi_app.R`). At the bar's height the hexagon would be about 60 px tall, with the name set at about 8 px inside it; side by side, the name is set at about 26 px.
+
+- **Parts.** The `pyramid` group and the outlined `name` path of `logo.svg`, copied unchanged: the same bars, colours and outlines. `test-epi_app.R` checks that they still match `logo.svg`.
+- **Layout.** The pyramid at the sticker's scale, moved to the origin (`translate(-15.1,-6.16)`), 18.87 mm wide and 28.68 mm tall. The name at twice the sticker's scale, 4 mm to the right of the pyramid, with the middle of its x-height (y = 39.85 on the sticker) on the pyramid's vertical centre: `translate(2.19,-65.36) scale(2)`. The viewBox is `0 0 69.69 28.68`.
+- **Use.** The name is white, so the lockup is for Nightshade and the darker purples only. The apps show it 56 px tall with 24 px above and below (`.navbar .epi-logo` in `.epi_app_style()`).
+
+When the sticker changes, rebuild the lockup from the new `logo.svg` with the same layout; the test fails until it matches.
 
 ## Making a related badge
 

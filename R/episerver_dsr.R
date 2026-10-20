@@ -2446,8 +2446,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     bslib::nav_panel("Help", value = "help", .dsr_help()),
 
-    # The logo at the right of the top bar. The app runs in a browser tab,
-    # which closes it; no Done button is needed.
+    # The actepir lockup at the right of the top bar. The app runs in a
+    # browser tab, which closes it; no Done button is needed.
     bslib::nav_spacer(),
     bslib::nav_item(.epi_logo(class = "epi-logo"))
   )
