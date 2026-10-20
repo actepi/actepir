@@ -59,7 +59,8 @@ The brand purples are in `act-brand.md`. In the apps:
 ### bslib apps (Bootstrap 5)
 
 - **Page.** `bslib::page_navbar()` with `.epi_theme()`, `.epi_app_style()` and `.epi_logo()`. See "Adding a tool" in `dev/notes/shared-apps.md`.
-- **Top bar.** The app's name (`title`) at the left; its result views as tabs, 48px after the name; then `bslib::nav_spacer()` and `bslib::nav_item(.epi_logo(class = "epi-logo"))`, which puts the logo at the right at the brand's minimum size (a crest 60px across) with 22px clear space. The bar is 104px tall.
+- **Top bar.** The app's name (`title`) at the left; its result views as tabs, 48px after the name; then `bslib::nav_spacer()` and `bslib::nav_item(.epi_logo(class = "epi-logo"))`, which puts the actepir lockup (the hex sticker's pyramid and the package's name, `dev/reference/hex-sticker.md`) at the right, 56px tall with 24px above and below. The bar is 104px tall.
+- **No ACT Government logo.** The apps are internal tools for analysts, and `act-brand.md` requires the ACT Government logo on external communications. The maintainer chose the package's own mark for them.
 - **No Done button.** The apps open in a browser tab, which the analyst closes. A background app keeps running, so it opens again at once, until its `_stop()` function or the end of the R session. When it stops, the tab says so and how to open it again. In the foreground (`background = FALSE`), closing the tab stops the app, which frees the console.
 - **Settings sidebar.** `bslib::sidebar()`, 340px wide, resizable, open on desktop. Settings are grouped in `bslib::accordion()` sections that start open.
 - **Actions at the foot.** The sidebar's actions (Calculate, Copy Code, the bug button) are in a `div(class = "epi-actions")` as its last child, held in view at the foot.

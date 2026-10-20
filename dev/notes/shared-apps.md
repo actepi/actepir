@@ -13,7 +13,7 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 | `.epi_contact`, `.epi_session_report()` | Where problem reports go (healthinfo@act.gov.au), and lines on the R session for them. The DSR Calculator's report uses them (see `dsr-calculator.md`). |
 | `.epi_with_help()` | A setting's notes behind an information button beside its label. |
 | `.epi_tab_settings()` | A tab's own settings in a panel down the left of its results, distinct from the app's sidebar. |
-| `.epi_logo()` | The white ACT Government logo as a data URI. |
+| `.epi_logo()` | The actepir lockup (`inst/www/logo-lockup.svg`: the hex sticker's pyramid and the package's name) as a data URI. |
 | `.epi_theme()` | The bslib (Bootstrap 5) theme in the brand purples and fonts of `dev/reference/act-brand.md`, with Bootstrap's dialog margin. |
 | `.epi_app_style()` | CSS for every app: the spacing and type tokens and the rules that apply them to controls and sections, buttons, focus, notes, information and icon buttons, sidebar feet and button stacks, the sidebar resize handle, notifications, DataTables and sliders. |
 
@@ -36,7 +36,8 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 - **Hover and focus.** Buttons go to Iris (`#562C8C`) on hover and on keyboard focus. Focus rings show only for keyboard focus (`:focus-visible`), so a mouse click leaves no highlight.
 - **Fonts are named, not downloaded.** Montserrat and Source Sans 3 are used where installed, otherwise the brand's alternatives, Arial and Calibri.
 - **The logo is a data URI,** so it works in background apps without `addResourcePath()`.
-- **Top bar.** In a bslib app the name is at the left, the tabs 48px after it, and the logo at the right. The rules are in `.epi_app_style()` (`.navbar`, `.navbar-brand`, `.epi-logo`).
+- **Top bar.** In a bslib app the name is at the left, the tabs 48px after it, and the actepir lockup at the right. The rules are in `.epi_app_style()` (`.navbar`, `.navbar-brand`, `.epi-logo`).
+- **The actepir lockup, not the ACT Government logo.** The maintainer replaced the ACT Government logo with the package's hex sticker. The whole hexagon at the bar's height was compared with a lockup of its pyramid and name, with and without a white outline: the hexagon came out about 60px tall with its name set at about 8px, while the lockup sets the name at about 26px and needs no outline, as it has no edge to set off against the Nightshade bar. The ACT Government logo's file was removed, as no app used it any more. `dev/reference/hex-sticker.md` sets out how the lockup is built.
 - **No Done in the DSR Calculator.** It runs in a browser tab, which the analyst closes. The background process keeps running until `episerver_dsr_stop()` or the end of the R session, and the add-in or `episerver_dsr()` reopens it at once (`.run_app()` reuses a running app). In the foreground, closing the tab stops the app (`session$onSessionEnded()`), as the app holds the console. The EpiServer Browser still has its miniUI Done button; see Open items.
 - **A tab's own settings** go in `.epi_tab_settings()`, a nested bslib `layout_sidebar()` with the class `epi-tab-layout`. The shared style gives it the sidebar's tint and spacing but no dividing border, a height that follows its settings, and a sticky position, so that it reads as a panel within the tab rather than a second app sidebar. `layout_sidebar()` puts named attributes on its main area, so the class is added to the layout afterwards.
 - **Theme tests turn off the sass cache.** Tests that compile the theme set `withr::local_options(sass.cache = FALSE)`, or sass writes to the user's cache folder.
@@ -53,7 +54,7 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Epi
 ## Open items
 
 - **EpiServer Browser overhaul (the maintainer, in another branch).** The Browser is to be rebuilt to `dev/reference/app-style.md`. What it needs, and what exists for it:
-  - **Layout.** It uses miniUI (Bootstrap 3); the guide's layout is `bslib::page_navbar()` with `.epi_theme()`, the shared top bar (name at the left, logo at the right) and settings in a sidebar or `.epi_tab_settings()`. Its own CSS in `episerver_browse_app()` (the labels slot, `#labels_source`, the value-label cells) should take the tokens.
+  - **Layout.** It uses miniUI (Bootstrap 3); the guide's layout is `bslib::page_navbar()` with `.epi_theme()`, the shared top bar (name at the left, the actepir lockup at the right) and settings in a sidebar or `.epi_tab_settings()`. Its own CSS in `episerver_browse_app()` (the labels slot, `#labels_source`, the value-label cells) should take the tokens.
   - **No Done.** It opens in the browser only, so its Done button is redundant for the same reason as the DSR Calculator's. The calculator's replacements are in `episerver_dsr_app()`: the `shiny:disconnected` script that says the app has stopped and how to open it again, and `session$onSessionEnded(shiny::stopApp)` in the foreground.
   - **Problem report.** `.epi_session_report()` and `.epi_contact` are shared. The bug button and its script, the dialog and `.dsr_problem_report()` are in `episerver_dsr.R`.
   - **One mechanism.** When the Browser takes the stopped message or the problem report, move that code from `episerver_dsr.R` to `epi_app.R` and have both apps call it, rather than copying it.

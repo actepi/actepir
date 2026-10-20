@@ -136,9 +136,9 @@ test_that("controls and sections take their spacing and type from shared tokens"
 test_that("the top bar has the name at the left and the logo at the right", {
 
   css <- as.character(.epi_app_style())
-  # The logo at the brand's minimum size, a crest 60px across, with 22px
-  # clear space; the name stands apart from the tabs
-  expect_match(css, ".navbar .epi-logo { display: block; height: 60px; margin: 22px 0 22px 22px; }",
+  # The lockup 56px tall, with 24px above and below in the 104px bar; the
+  # name stands apart from the tabs
+  expect_match(css, ".navbar .epi-logo { display: block; height: 56px; margin: 24px 0 24px 22px; }",
                fixed = TRUE)
   expect_match(css, ".navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }",
                fixed = TRUE)
@@ -256,9 +256,31 @@ test_that("the logo is embedded in the page", {
 
   expect_s3_class(logo, "shiny.tag")
   expect_equal(logo$name, "img")
-  expect_match(logo$attribs$src, "^data:image/png;base64,[A-Za-z0-9+/=]+$")
-  expect_equal(logo$attribs$alt, "ACT Government")
+  expect_match(logo$attribs$src, "^data:image/svg\\+xml;base64,[A-Za-z0-9+/=]+$")
+  expect_equal(logo$attribs$alt, "actepir")
   expect_equal(logo$attribs$class, "epi-logo")
+
+})
+
+test_that("the apps' lockup is the hex sticker's pyramid and name", {
+
+  lockup <- readLines(system.file("www", "logo-lockup.svg", package = "actepir"),
+                      warn = FALSE)
+  # The sticker's master is installed in help/figures, and is in man/figures
+  # when the package is loaded from source
+  master <- system.file("help", "figures", "logo.svg", package = "actepir")
+  if (!nzchar(master)) master <- test_path("..", "..", "man", "figures", "logo.svg")
+  skip_if_not(file.exists(master), "the hex sticker's master is not available")
+  master <- readLines(master, warn = FALSE)
+
+  # The same bars, in the same colours, and the same outlined name
+  pick <- function(x, pattern) trimws(grep(pattern, x, value = TRUE))
+  for (pattern in c("<rect ", "<g id=\"(males|females)\"")) {
+    expect_equal(pick(lockup, pattern), pick(master, pattern))
+  }
+  d <- function(x) sub(".* d=\"([^\"]+)\".*", "\\1", pick(x, "id=\"name\""))
+  expect_equal(d(lockup), d(master))
+  expect_match(pick(lockup, "id=\"name\""), "fill=\"#FFFFFF\"", fixed = TRUE)
 
 })
 

@@ -409,22 +409,23 @@
 }
 
 
-# The reversed (white) ACT Government logo as an <img>, or NULL if the file
-# is not installed. The image is embedded as a data URI, which avoids
-# addResourcePath() and so works in foreground and background apps alike.
-# `...` adds attributes such as class or style.
+# The actepir lockup, the hex sticker's pyramid with the package's name in
+# white (inst/www/logo-lockup.svg, see dev/reference/hex-sticker.md), as an
+# <img>, or NULL if the file is not installed. The image is embedded as a
+# data URI, which avoids addResourcePath() and so works in foreground and
+# background apps alike. `...` adds attributes such as class or style.
 #' @noRd
 .epi_logo <- function(...) {
-  path <- system.file("www", "ACTGov_inline_rev.png", package = "actepir")
+  path <- system.file("www", "logo-lockup.svg", package = "actepir")
   if (!nzchar(path)) {
     return(NULL)
   }
   # base64_enc() breaks its output into lines, which a data URI does not need
-  png <- readBin(path, "raw", file.info(path)$size)
+  svg <- readBin(path, "raw", file.info(path)$size)
   shiny::tags$img(
-    src = paste0("data:image/png;base64,",
-                 gsub("[\r\n]", "", jsonlite::base64_enc(png))),
-    alt = "ACT Government", ...
+    src = paste0("data:image/svg+xml;base64,",
+                 gsub("[\r\n]", "", jsonlite::base64_enc(svg))),
+    alt = "actepir", ...
   )
 }
 
@@ -550,14 +551,13 @@
     .accordion-body > :last-child .shiny-input-container,
     .box-body > :last-child,
     .box-body > :last-child .shiny-input-container { margin-bottom: 0; }
-    /* Top bar of a bslib page_navbar: the app's name at the left, its tabs
-       after a gap, and the logo at the right (.epi-logo), at the brand's
-       minimum size, a crest 60px across, with clear space equal to the
-       height of its ACT lettering, 22px */
+    /* Top bar of a bslib page_navbar, 104px tall: the app's name at the
+       left, its tabs after a gap, and the actepir lockup at the right
+       (.epi-logo), 56px tall with 24px above and below */
     .navbar { --bs-navbar-padding-y: 0; }
     .navbar > .container-fluid { padding-left: 22px; padding-right: 22px; }
     .navbar-brand { margin-right: 48px; }
-    .navbar .epi-logo { display: block; height: 60px; margin: 22px 0 22px 22px; }
+    .navbar .epi-logo { display: block; height: 56px; margin: 24px 0 24px 22px; }
     /* The tabs centred on the logo's height, where the bar is not collapsed:
        bslib collapses it below Bootstrap's lg breakpoint, 992px */
     @media (min-width: 992px) {
