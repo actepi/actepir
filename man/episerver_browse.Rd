@@ -151,8 +151,8 @@ PDF or a standalone HTML file, as \code{\link[=episerver_dictionary]{episerver_d
 from the labels of the label table read. The PDF needs the Quarto that
 comes with RStudio; without it, its item is disabled. \emph{Dictionaries of all
 tables}, in the same menu, writes the dictionaries of every table and view
-with labels in the schema, or in the whole database, to a folder chosen,
-as HTML, PDF or both.
+with labels in the schema, or in the whole database, to a folder typed or
+found in the dialog's list of folders, as HTML, PDF or both.
 
 \strong{Background process}
 

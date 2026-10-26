@@ -113,8 +113,8 @@
 #' from the labels of the label table read. The PDF needs the Quarto that
 #' comes with RStudio; without it, its item is disabled. *Dictionaries of all
 #' tables*, in the same menu, writes the dictionaries of every table and view
-#' with labels in the schema, or in the whole database, to a folder chosen,
-#' as HTML, PDF or both.
+#' with labels in the schema, or in the whole database, to a folder typed or
+#' found in the dialog's list of folders, as HTML, PDF or both.
 #'
 #' **Background process**
 #'
@@ -492,26 +492,87 @@ episerver_browse_stop <- function() {
   }
 }
 
-# Windows' folder dialog (utils::choose.dir()) and opening a folder in
-# Explorer (shell.exec()), or NULL where R has neither, as off Windows. They
-# are looked up, so that R CMD check on other systems does not miss them.
-#' @noRd
-.browse_choose_fn <- function() {
-  get0("choose.dir", envir = asNamespace("utils"), mode = "function",
-       inherits = FALSE)
-}
+# Opening a folder in Explorer (shell.exec()), or NULL where R has no
+# shell.exec(), as off Windows. It is looked up, so that R CMD check on other
+# systems does not miss it.
 #' @noRd
 .browse_open_fn <- function() {
   get0("shell.exec", envir = baseenv(), mode = "function", inherits = FALSE)
 }
 
-# A folder chosen in Windows' folder dialog, starting at `default`, or NA
+# The folder whose folders the folder list shows: `folder` when it exists,
+# or else the nearest folder above it that does, with forward slashes; NA
+# when `folder` is empty or no part of it exists
 #' @noRd
-.browse_choose_dir <- function(default = "") {
-  choose <- .browse_choose_fn()
-  if (is.null(choose)) return(NA_character_)
-  choose(default = if (dir.exists(default)) normalizePath(default) else "",
-         caption = "Choose the folder for the dictionaries")
+.browse_folder_at <- function(folder) {
+  folder <- trimws(if (is.null(folder)) "" else folder)
+  if (!nzchar(folder)) return(NA_character_)
+  repeat {
+    if (dir.exists(folder)) return(normalizePath(folder, winslash = "/"))
+    up <- dirname(folder)
+    if (identical(up, folder)) return(NA_character_)
+    folder <- up
+  }
+}
+
+# The folders in `at`, by name, leaving out hidden and system folders
+#' @noRd
+.browse_subfolders <- function(at) {
+  found <- tryCatch(list.dirs(at, full.names = FALSE, recursive = FALSE),
+                    error = function(e) character())
+  found <- found[nzchar(found) & !grepl("^[.$]", found)]
+  found[order(tolower(found))]
+}
+
+# The folder list below the Folder box of Dictionaries of all tables: Up,
+# Home and Working directory, then the folders in the folder given (or in
+# the nearest folder above it that exists). A click on any of them puts its
+# path in the box, through input$bulk_into. Windows' folder dialog is not
+# used, as it does not open from the browser's background process.
+#' @noRd
+.browse_folder_ui <- function(folder) {
+  at <- .browse_folder_at(folder)
+  slash <- function(path) normalizePath(path, winslash = "/", mustWork = FALSE)
+  go <- function(label, path, icon) {
+    shiny::tags$button(type = "button", class = "btn btn-sm btn-primary browse-folder",
+                       `data-folder` = path, disabled = if (is.null(path)) NA,
+                       shiny::icon(icon), label)
+  }
+  parent <- if (!is.na(at)) dirname(at)
+  if (!is.null(parent) && (identical(parent, at) || !dir.exists(parent))) {
+    parent <- NULL
+  }
+  subs <- if (!is.na(at)) .browse_subfolders(at) else character()
+  given <- trimws(if (is.null(folder)) "" else folder)
+  note <- if (is.na(at)) {
+    if (nzchar(given)) "No part of this folder's path exists." else {
+      "Give a folder, or start from Home or the working directory."
+    }
+  } else if (!dir.exists(given)) {
+    paste0("This folder does not exist yet; it will be made. The list shows ",
+           "the folders in ", at, ".")
+  } else if (!length(subs)) {
+    "There are no folders in this folder."
+  }
+  shiny::tagList(
+    shiny::div(
+      class = "options-row",
+      go("Up", if (!is.null(parent)) slash(parent), "arrow-up"),
+      go("Home", slash("~"), "house"),
+      go("Working directory", slash(getwd()), "folder-open")
+    ),
+    if (!is.null(note)) shiny::p(class = "epi-note", note),
+    if (length(subs)) {
+      shiny::div(class = "list-group browse-folders", lapply(subs, function(s) {
+        shiny::tags$button(
+          type = "button",
+          class = "list-group-item list-group-item-action browse-folder",
+          `data-folder` = paste0(sub("/$", "", at), "/", s),
+          shiny::icon("folder"), s
+        )
+      }))
+    }
+  )
 }
 
 # Opens `folder` in Explorer, where it can
@@ -524,17 +585,16 @@ episerver_browse_stop <- function() {
 
 # The dialog of Download > Dictionaries of all tables: the tables and views
 # (of the schema chosen, or of the whole database), the files (PDF only with
-# Quarto) and the folder, which Choose fills from Windows' folder dialog
+# Quarto) and the folder, with the folder list (.browse_folder_ui()) below it
 #' @noRd
-.browse_bulk_dialog <- function(db, schema, has_quarto, folder,
-                                can_choose = !is.null(.browse_choose_fn())) {
+.browse_bulk_dialog <- function(db, schema, has_quarto, folder) {
   files <- shiny::checkboxGroupInput(
     "bulk_formats", "Files",
     choiceNames  = list("HTML", if (has_quarto) "PDF" else {
       "PDF (needs Quarto, which comes with RStudio)"
     }),
     choiceValues = list("html", "pdf"),
-    selected     = c("html", if (has_quarto) "pdf")
+    selected     = c("html", if (has_quarto) "pdf"), width = "100%"
   )
   if (!has_quarto) {
     files <- htmltools::tagQuery(files)$find("input")$
@@ -557,12 +617,7 @@ episerver_browse_stop <- function() {
     ),
     files,
     shiny::textInput("bulk_dir", "Folder", value = folder, width = "100%"),
-    if (can_choose) {
-      shiny::div(class = "options-row", shiny::actionButton(
-        "bulk_choose", "Choose\u2026", icon = shiny::icon("folder-open"),
-        class = "btn-sm btn-primary"
-      ))
-    },
+    shiny::uiOutput("bulk_folders"),
     shiny::p(class = "epi-note",
              "A PDF takes a second or two to make, so the dictionaries of a ",
              "large database can take some minutes."),
@@ -724,6 +779,11 @@ episerver_browse_stop <- function() {
       "and views without labels are left out. A PDF takes a second or two, ",
       "so a large database can take some minutes."
     ),
+    shiny::p(
+      "Type or paste the folder, or find it in the list below the box: click ",
+      "a folder to open it, or Up, Home or Working directory. A folder that ",
+      "does not exist is made, so a new folder's name can be typed at the end."
+    ),
 
     shiny::h5("Problems"),
     shiny::p(paste0(
@@ -816,8 +876,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       # Browser-only rules: the dataset labels in the Table list, light on
       # the chosen table's Nightshade, the Collection tab, the line on the
-      # columns chosen, and the value labels in the columns' table, whose
-      # list scrolls once open
+      # columns chosen, the value labels in the columns' table, whose list
+      # scrolls once open, and the folder list of Dictionaries of all tables
       shiny::tags$style(shiny::HTML("
         .browse-label { color: #777; }
         .selectize-dropdown .option.selected .browse-label { color: inherit;
@@ -830,6 +890,21 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         td.browse-values details summary { cursor: pointer;
                                            color: var(--epi-accent); }
         td.browse-values details div { max-height: 150px; overflow-y: auto; }
+        .browse-folders { max-height: 220px; overflow-y: auto;
+                          overscroll-behavior: contain;
+                          margin-bottom: var(--epi-gap); }
+        .browse-folders .list-group-item { font-size: var(--epi-font-box);
+          padding: var(--epi-box-pad-y) var(--epi-box-pad-x); }
+      ")),
+
+      # A click on a folder in the list of Dictionaries of all tables
+      # (.browse_folder_ui()) sends its path, read from the attribute so
+      # that a name such as 2024 stays text
+      shiny::tags$script(shiny::HTML("
+        $(document).on('click', '.browse-folder', function() {
+          Shiny.setInputValue('bulk_into', this.getAttribute('data-folder'),
+                              {priority: 'event'});
+        });
       ")),
 
       # Clipboard handler for the code button
@@ -1369,11 +1444,14 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       shiny::showModal(.browse_bulk_dialog(input$db, input$schema,
                                            !is.null(.dict_quarto()), bulk_dir()))
     })
-    shiny::observeEvent(input$bulk_choose, {
-      folder <- .browse_choose_dir(input$bulk_dir)
-      if (length(folder) && !is.na(folder)) {
-        shiny::updateTextInput(session, "bulk_dir", value = folder)
-      }
+    # The folder list follows the Folder box, once typing pauses, as a
+    # network folder can be slow to list; a click in it fills the box
+    bulk_typed <- shiny::debounce(shiny::reactive(input$bulk_dir), 300)
+    output$bulk_folders <- shiny::renderUI({
+      .browse_folder_ui(or(bulk_typed(), bulk_dir()))
+    })
+    shiny::observeEvent(input$bulk_into, {
+      shiny::updateTextInput(session, "bulk_dir", value = input$bulk_into)
     })
     shiny::observeEvent(input$bulk_write, {
       formats <- intersect(c("html", if (!is.null(.dict_quarto())) "pdf"),

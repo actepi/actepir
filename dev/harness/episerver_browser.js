@@ -279,18 +279,49 @@ const fs = require('fs');
     await html.close();
   }
 
-  // Dictionaries of all tables: the dialog, then the whole database's
-  // dictionaries written to a folder in the output directory
+  // Dictionaries of all tables: the dialog, the folder list, then the whole
+  // database's dictionaries written to a folder in the output directory
   if (!(await page.isVisible('#dict_bulk'))) await page.click('#dict_download');
   await page.click('#dict_bulk');
   await page.waitForSelector('#bulk_write', { state: 'visible' });
-  await page.waitForTimeout(500);
+  await settle(500);
+  // The buttons above the list, the folders in it and the note
+  const folders = () => page.evaluate(() => ({
+    buttons: [...document.querySelectorAll('#bulk_folders .options-row .browse-folder')]
+      .map(b => [b.textContent.trim(), b.disabled]),
+    list: [...document.querySelectorAll('#bulk_folders .list-group-item')].map(b => b.textContent.trim()),
+    note: ((document.querySelector('#bulk_folders .epi-note') || {}).textContent || '').trim()
+  }));
   console.log('BULK DIALOG:', await text('.modal-title'), '|', JSON.stringify(await page.$$eval(
     '#bulk_scope input, #bulk_formats input',
     inputs => inputs.map(i => [i.value, i.checked, i.disabled]))),
     '| folder', JSON.stringify(await page.inputValue('#bulk_dir')),
-    '| choose', !!(await page.$('#bulk_choose')));
+    '| folders', JSON.stringify(await folders()));
+  // The list follows the box; a click on a folder, or Up, fills the box
+  for (const d of ['picker/Alpha/Inner', 'picker/beta', 'picker/2024', 'picker/.hidden']) {
+    fs.mkdirSync(`${out}/${d}`, { recursive: true });
+  }
+  const picker = fs.realpathSync(`${out}/picker`);
+  await page.fill('#bulk_dir', picker);
+  await settle(500);
+  console.log('BULK FOLDERS:', JSON.stringify(await folders()), '| list', JSON.stringify(
+    await page.$eval('#bulk_folders .browse-folders', e => {
+      const s = getComputedStyle(e);
+      return [s.maxHeight, s.overflowY, s.overscrollBehaviorY,
+              Math.round(e.querySelector('.list-group-item').getBoundingClientRect().height)];
+    })));
   await shot('08c_bulk_dialog');
+  await page.click('#bulk_folders .list-group-item:has-text("Alpha")');
+  await settle(500);
+  console.log('BULK INTO:', JSON.stringify(await page.inputValue('#bulk_dir')), JSON.stringify(await folders()));
+  await page.click('#bulk_folders .browse-folder:has-text("Up")');
+  await settle(500);
+  await page.click('#bulk_folders .list-group-item:has-text("2024")');
+  await settle(500);
+  console.log('BULK UP:', JSON.stringify(await page.inputValue('#bulk_dir')));
+  await page.fill('#bulk_dir', `${picker}/new/folder`);
+  await settle(500);
+  console.log('BULK NEW:', JSON.stringify(await folders()));
   await page.check('#bulk_scope input[value=db]');
   await page.fill('#bulk_dir', `${out}/bulk`);
   await page.click('#bulk_write');

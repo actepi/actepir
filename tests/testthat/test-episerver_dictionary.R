@@ -245,7 +245,8 @@ test_that("Quarto is found on the PATH or beside RStudio's pandoc", {
   withr::local_envvar(PATH = bin, RSTUDIO_PANDOC = "")
   expect_equal(normalizePath(dirname(.dict_quarto())), normalizePath(bin))
   withr::local_envvar(PATH = empty, RSTUDIO_PANDOC = file.path(rstudio, "tools"))
-  expect_equal(.dict_quarto(), file.path(rstudio, "quarto.exe"))
+  expect_equal(normalizePath(.dict_quarto()),
+               normalizePath(file.path(rstudio, "quarto.exe")))
   withr::local_envvar(PATH = empty, RSTUDIO_PANDOC = "")
   expect_null(.dict_quarto())
 
@@ -518,8 +519,7 @@ test_that("the dictionaries of many tables are written one by one, and failures 
 test_that("the dialog for the dictionaries of all tables offers the tables, files and folder", {
 
   html <- function(x) as.character(x)
-  dialog <- html(.browse_bulk_dialog("Analysis", "dbo", TRUE, "C:/work/dictionaries",
-                                     can_choose = TRUE))
+  dialog <- html(.browse_bulk_dialog("Analysis", "dbo", TRUE, "C:/work/dictionaries"))
   expect_match(dialog, "modal-dialog-scrollable", fixed = TRUE)
   expect_match(dialog, "Of the schema Analysis.dbo", fixed = TRUE)
   expect_match(dialog, "Of the whole database Analysis, each schema in a folder of its name",
@@ -527,16 +527,14 @@ test_that("the dialog for the dictionaries of all tables offers the tables, file
   expect_match(dialog, "<input type=\"checkbox\" name=\"bulk_formats\" value=\"pdf\" checked=\"checked\"/>",
                fixed = TRUE)
   expect_match(dialog, "value=\"C:/work/dictionaries\"", fixed = TRUE)
-  expect_match(dialog, "id=\"bulk_choose\"", fixed = TRUE)
-  expect_match(dialog, "Choose\u2026", fixed = TRUE)
+  expect_match(dialog, "id=\"bulk_folders\"", fixed = TRUE)
   expect_match(dialog, "id=\"bulk_write\"", fixed = TRUE)
 
-  # Without Quarto the PDF is disabled; off Windows there is no Choose
-  plain <- html(.browse_bulk_dialog("Analysis", "dbo", FALSE, "x", can_choose = FALSE))
+  # Without Quarto the PDF is disabled
+  plain <- html(.browse_bulk_dialog("Analysis", "dbo", FALSE, "x"))
   expect_match(plain, "value=\"pdf\" disabled", fixed = TRUE)
   expect_match(plain, "PDF (needs Quarto, which comes with RStudio)", fixed = TRUE)
   expect_match(plain, "value=\"html\" checked=\"checked\"", fixed = TRUE)
-  expect_no_match(plain, "bulk_choose", fixed = TRUE)
 
   listed <- .dict_tables(fake_browse_episerver()$query, "Analysis", "dbo")
   done <- list(dictionaries = list(1, 2),
@@ -552,18 +550,54 @@ test_that("the dialog for the dictionaries of all tables offers the tables, file
   expect_match(none, "No dictionary was written.", fixed = TRUE)
   expect_no_match(none, "bulk_open", fixed = TRUE)
 
-  # The folder dialog and Explorer are used where R has them
-  local_mocked_bindings(.browse_choose_fn = function() NULL)
-  expect_true(is.na(.browse_choose_dir("x")))
-  local_mocked_bindings(.browse_choose_fn = function() {
-    function(default, caption) paste0(default, "|chosen")
-  })
+  # Explorer is used where R has it
   here <- withr::local_tempdir()
-  expect_equal(.browse_choose_dir(here), paste0(normalizePath(here), "|chosen"))
   opened <- NULL
   local_mocked_bindings(.browse_open_fn = function() function(x) opened <<- x)
   .browse_open_dir(here)
   expect_equal(opened, normalizePath(here))
+
+})
+
+test_that("the folder list offers the folders in the folder given, and above it", {
+
+  slash <- function(path) normalizePath(path, winslash = "/")
+  root <- slash(withr::local_tempdir())
+  for (d in c("b", "A", "c/d", ".hidden", "$sys")) {
+    dir.create(file.path(root, d), recursive = TRUE)
+  }
+  file.create(file.path(root, "file.txt"))
+  expect_equal(.browse_subfolders(root), c("A", "b", "c"))
+  expect_equal(.browse_subfolders(file.path(root, "none")), character())
+
+  # The folder given, or the nearest folder above it that exists
+  expect_equal(.browse_folder_at(root), root)
+  expect_equal(.browse_folder_at(file.path(root, "c", "d")), paste0(root, "/c/d"))
+  expect_equal(.browse_folder_at(file.path(root, "new", "deeper")), root)
+  expect_true(is.na(.browse_folder_at("")))
+  expect_true(is.na(.browse_folder_at(NULL)))
+
+  html <- function(x) as.character(x)
+  ui <- html(.browse_folder_ui(root))
+  at <- function(path) paste0("data-folder=\"", path, "\"")
+  pos <- vapply(paste0(root, c("/A", "/b", "/c")),
+                function(p) regexpr(at(p), ui, fixed = TRUE), integer(1))
+  expect_true(all(pos > 0) && !is.unsorted(pos))
+  expect_match(ui, at(slash(dirname(root))), fixed = TRUE)
+  expect_match(ui, at(slash("~")), fixed = TRUE)
+  expect_match(ui, at(slash(getwd())), fixed = TRUE)
+  expect_no_match(ui, "hidden", fixed = TRUE)
+  expect_no_match(ui, "epi-note", fixed = TRUE)
+
+  # Notes on the folder given
+  expect_match(html(.browse_folder_ui(file.path(root, "new"))),
+               paste0("This folder does not exist yet; it will be made. The list ",
+                      "shows the folders in ", root, "."), fixed = TRUE)
+  expect_match(html(.browse_folder_ui(file.path(root, "c", "d"))),
+               "There are no folders in this folder.", fixed = TRUE)
+  expect_match(html(.browse_folder_ui("")), "Give a folder", fixed = TRUE)
+  # At the top there is no Up
+  expect_match(html(.browse_folder_ui("/")), "browse-folder\" disabled>", fixed = TRUE)
 
 })
 
@@ -576,11 +610,10 @@ test_that("the browser writes the dictionaries of all tables with labels to the 
                         .dict_run_quarto = function(quarto, typ, pdf) {
                           writeLines("%PDF-1.7", pdf)
                         })
-  chose <- NULL
-  local_mocked_bindings(.browse_choose_dir = function(default) {
-    chose <<- default
-    "C:/chosen"
-  })
+  filled <- NULL
+  local_mocked_bindings(updateTextInput = function(session, inputId, ..., value) {
+    filled <<- c(inputId, value)
+  }, .package = "shiny")
   opened <- NULL
   local_mocked_bindings(.browse_open_dir = function(folder) opened <<- folder)
   whole <- file.path(withr::local_tempdir(), "new folder")
@@ -592,8 +625,11 @@ test_that("the browser writes the dictionaries of all tables with labels to the 
                       show_values = TRUE, table = "APC")
     expect_equal(bulk_dir(), file.path(getwd(), "dictionaries"))
     session$setInputs(dict_bulk = 1, bulk_dir = whole)
-    session$setInputs(bulk_choose = 1)
-    expect_equal(chose, whole)
+    session$elapse(500)
+    expect_match(output$bulk_folders$html, "This folder does not exist yet", fixed = TRUE)
+    # A click in the folder list fills the box
+    session$setInputs(bulk_into = dirname(whole))
+    expect_equal(filled, c("bulk_dir", dirname(whole)))
 
     # The whole database, as HTML and PDF, into a folder made for it
     session$setInputs(bulk_scope = "db", bulk_formats = c("html", "pdf"),

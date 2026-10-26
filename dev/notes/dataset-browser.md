@@ -36,7 +36,8 @@ One pull request at a time on the session branch. The maintainer tests each one 
    - label coverage: columns without labels, and tables with DataLabels rows but no DataProperties rows;
    - split tables: Link rows shown as one dataset, with the join in the copied code; `collect_withlabels()` may need refactoring for this. To be confirmed with the maintainer before it is built, as they chose not to automate linked tables in pull request 2;
    - reopen at the last database, schema and table (browser storage);
-   - copy the dictionary as a table for Excel.
+   - copy the dictionary as a table for Excel;
+   - a control that sets and removes the dictionaries' logo, through `dictionary_logo()`'s stored setting (the maintainer asked for it on 26 Oct 2026; see `dictionaries.md`).
 
 The plan of 25 Oct 2026 also had the dictionary tables (its pull request 3, built as #16 and closed unmerged) and the linkage variable list (its pull request 5). The maintainer set both aside on 26 Oct 2026 with the linkage dictionary; `dictionaries.md` gives the reasons.
 
