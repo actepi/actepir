@@ -13,7 +13,8 @@
 #' console stays free while the browser is open. It opens in the system web
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
-#' open and close, and the columns and the help in tabs on the top bar. The
+#' open and close, and the columns, the dataset notes and the help in tabs
+#' on the top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -70,16 +71,22 @@
 #' `ref.DataProperties`. The info bar says which label table they came from.
 #' Choosing a label table reads the labels from it alone.
 #'
-#' *Show value labels* adds each column's value labels, which are read only
-#' when shown, as a table can have thousands. Notes with a code come first,
-#' in code order, then the others.
+#' *Show value labels*, on by default, adds each column's value labels,
+#' which are read only while shown, as a table can have thousands. Notes
+#' with a code come first, in code order, then the others.
 #'
-#' **Columns**
+#' **Columns and dataset notes**
 #'
 #' The *Columns* tab lists the table's columns with their position, name,
 #' variable label (*Description*), type and, when present, value labels and
 #' notes. The table fits the window and can be searched and sorted. Click
-#' rows to choose columns for the code.
+#' rows to choose columns for the code; the line above the table counts
+#' them. The buttons above the table expand and collapse every list of value
+#' labels, while value labels are shown, and clear the rows chosen.
+#'
+#' The *Dataset notes* tab holds the table's description (its dataset
+#' label), its notes and its linked tables, apart from the columns, as some
+#' tables have many notes. Its title gives the number of notes.
 #'
 #' **Code**
 #'
@@ -334,14 +341,20 @@ episerver_browse_stop <- function() {
   out
 }
 
-# The table's dataset label, notes and linked tables (dataset, from
-# .lbl_table()) for above its columns, or NULL when it has none
+# The Dataset notes tab: the table's dataset label (its description), notes
+# and linked tables (dataset, from .lbl_table()), or a line saying it has
+# none
 #' @noRd
 .browse_about <- function(dataset) {
   label <- dataset$label
   has_label <- length(label) && !is.na(label)
   links <- dataset$links
-  if (!has_label && !length(dataset$notes) && !nrow(links)) return(NULL)
+  if (!has_label && !length(dataset$notes) && !nrow(links)) {
+    return(shiny::div(
+      class = "browse-about",
+      shiny::p("This table has no description, notes or linked tables.")
+    ))
+  }
   shiny::div(
     class = "browse-about",
     if (has_label) shiny::h5(label),
@@ -503,18 +516,25 @@ episerver_browse_stop <- function() {
       "column of its layout."
     ),
     shiny::p(
-      "The Description of a column is its variable label. Show value labels ",
-      "adds its value labels, which are read only when shown. Notes are ",
-      "shown when any column has them, those with a code first, in code ",
-      "order. The table's dataset label, notes and linked tables are shown ",
-      "above its columns."
+      "The Description of a column is its variable label. Show value labels, ",
+      "on by default, adds its value labels, which are read only while ",
+      "shown; Expand value labels and Collapse value labels above the table ",
+      "open and close every list. Notes on columns are shown when any ",
+      "column has them, those with a code first, in code order."
+    ),
+    shiny::p(
+      "The Dataset notes tab holds the table's description (its dataset ",
+      "label), its notes and its linked tables. Its title gives the number ",
+      "of notes."
     ),
 
     shiny::h5("Choosing columns"),
     shiny::p(
       "Click rows of the table to choose columns for the code, and click a ",
-      "row again to drop it. The search box and the headings search and ",
-      "sort the table without changing the columns chosen."
+      "row again to drop it. Rows chosen are shaded, with a bar at their ",
+      "left, and the line above the table counts them. Clear selection ",
+      "drops them all. The search box and the headings search and sort the ",
+      "table without changing the columns chosen."
     ),
 
     shiny::h5("Code"),
@@ -632,16 +652,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       .epi_app_style(),
 
       # Browser-only rules: the dataset labels in the Table list, light on
-      # the chosen table's Nightshade, the table's description above its
-      # columns, and the value labels in the columns' table, whose list
-      # scrolls once open
+      # the chosen table's Nightshade, the Dataset notes tab, the line on the
+      # columns chosen, and the value labels in the columns' table, whose
+      # list scrolls once open
       shiny::tags$style(shiny::HTML("
         .browse-label { color: #777; }
         .selectize-dropdown .option.selected .browse-label { color: inherit;
                                                              opacity: 0.8; }
+        .browse-about { max-width: 900px; }
         .browse-about h5 { color: var(--epi-primary); font-weight: 600;
                            margin: 4px 0 6px 0; }
-        .browse-about p { margin-bottom: 4px; }
+        .browse-about p { margin-bottom: 6px; }
+        .browse-chosen { color: #555; }
         td.browse-values details summary { cursor: pointer;
                                            color: var(--epi-accent); }
         td.browse-values details div { max-height: 150px; overflow-y: auto; }
@@ -665,6 +687,29 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
             }
           }, true);
         });
+      ")),
+
+      # The buttons above the columns' table. Expand and Collapse open and
+      # close every value labels list, and work only while value labels
+      # are shown; Clear selection works only while rows are chosen.
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          function values() {
+            var off = !$('#show_values').prop('checked');
+            $('#values_open, #values_close').prop('disabled', off);
+          }
+          $(document).on('change', '#show_values', values);
+          $(values);
+          $(document).on('click', '#values_open, #values_close', function() {
+            $('#col_table td.browse-values details')
+              .prop('open', this.id === 'values_open');
+          });
+          $(document).on('shiny:inputchanged', function(e) {
+            if (e.name === 'col_table_rows_selected') {
+              $('#clear_rows').prop('disabled', !(e.value && e.value.length));
+            }
+          });
+        })();
       ")),
 
       # The columns' table fits the window below its top, so that it needs
@@ -733,7 +778,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
             "table reads the labels from it alone."
           ),
           shiny::checkboxInput("show_values", "Show value labels",
-                               value = FALSE)
+                               value = TRUE)
         ),
         bslib::accordion_panel(
           "Code", value = "code",
@@ -767,10 +812,37 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     ),
 
+    # The columns, with buttons for their value labels and the rows chosen
     bslib::nav_panel(
       "Columns", value = "columns",
-      shiny::uiOutput("about"),
+      shiny::div(
+        class = "options-row",
+        shiny::tags$button(
+          id = "values_open", type = "button", class = "btn btn-sm btn-primary",
+          shiny::icon("angles-down"), "Expand value labels"
+        ),
+        shiny::tags$button(
+          id = "values_close", type = "button", class = "btn btn-sm btn-primary",
+          shiny::icon("angles-up"), "Collapse value labels"
+        ),
+        shiny::tags$button(
+          id = "clear_rows", type = "button", disabled = NA,
+          class = "btn btn-sm btn-primary action-button",
+          shiny::icon("xmark"), "Clear selection"
+        ),
+        shiny::span(class = "browse-chosen",
+                    shiny::textOutput("chosen_note", inline = TRUE))
+      ),
       DT::dataTableOutput("col_table")
+    ),
+
+    # The table's description, notes and linked tables, apart from its
+    # columns, as some tables have many notes. The title gives their number.
+    bslib::nav_panel(
+      shiny::tagList("Dataset notes",
+                     shiny::textOutput("notes_count", inline = TRUE)),
+      value = "notes",
+      shiny::uiOutput("about")
     ),
 
     bslib::nav_panel("Help", value = "help", .browse_help()),
@@ -974,9 +1046,14 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     })
 
-    # ── The table's description and columns ────────────────────────────────
+    # ── The Dataset notes tab and the columns ──────────────────────────────
+    # The tab's title gives the number of notes
     output$about <- shiny::renderUI({
       .browse_about(lbl()$dataset)
+    })
+    output$notes_count <- shiny::renderText({
+      n <- length(lbl()$dataset$notes)
+      if (n) paste0("(", n, ")") else ""
     })
 
     output$col_table <- DT::renderDataTable({
@@ -1017,14 +1094,23 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     })
 
-    # ── Insert / copy code button ──────────────────────────────────────────
+    # ── Columns chosen, and the insert / copy code button ──────────────────
     # The columns chosen, by their rows in the table, which are the rows of
-    # columns() whatever the sorting
+    # columns() whatever the sorting. The line above the table counts them,
+    # and Clear selection clears them through DT's proxy.
     chosen_columns <- function() {
       cols <- columns()$data
       rows <- input$col_table_rows_selected
       as.character(cols$col[rows[rows <= nrow(cols)]])
     }
+    output$chosen_note <- shiny::renderText({
+      n <- length(chosen_columns())
+      if (!n) return("No columns chosen: the code reads them all.")
+      paste0(n, " column", if (n != 1) "s", " chosen for the code.")
+    })
+    shiny::observeEvent(input$clear_rows, {
+      DT::selectRows(DT::dataTableProxy("col_table"), NULL)
+    })
     table_code <- function(ch) {
       .browse_code(ch$db, ch$schema, ch$table, chosen_columns(),
                    mode    = or(input$insert_mode, "quickconnect"),

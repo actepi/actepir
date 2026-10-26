@@ -145,7 +145,7 @@ test_that("the columns' table escapes text and adds value labels and notes", {
 
 })
 
-test_that("the dataset label, notes and linked tables go above the columns", {
+test_that("the dataset label, notes and linked tables go on their own tab", {
 
   lbl <- .lbl_table(.lbl_normalise(data.frame(
     ColumnName = c("", "", "id"),
@@ -158,7 +158,9 @@ test_that("the dataset label, notes and linked tables go above the columns", {
   expect_match(html, "<h5>Admitted patient care</h5>", fixed = TRUE)
   expect_match(html, "<p>Extracted monthly.</p>", fixed = TRUE)
   expect_match(html, "<p>Linked tables: APC_Extra (on id).</p>", fixed = TRUE)
-  expect_null(.browse_about(.lbl_table(.lbl_normalise(NULL))$dataset))
+  expect_equal(strip_html(as.character(
+    .browse_about(.lbl_table(.lbl_normalise(NULL))$dataset))),
+    "This table has no description, notes or linked tables.")
 
 })
 
@@ -281,11 +283,15 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*Dataset Browser\\s*<",
                perl = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
-  for (tab in c("columns", "help")) {
-    at <- in_bar(paste0("data-value=\"", tab, "\""))
-    expect_gt(at, in_bar("Dataset Browser"))
-    expect_lt(at, in_bar("class=\"epi-logo\""))
-  }
+  tabs <- vapply(c("columns", "notes", "help"), function(tab) {
+    in_bar(paste0("data-value=\"", tab, "\""))
+  }, integer(1))
+  expect_false(is.unsorted(c(in_bar("Dataset Browser"), tabs,
+                             in_bar("class=\"epi-logo\""))))
+  expect_true(all(tabs > 0))
+  # The Dataset notes tab's title gives the number of notes
+  expect_match(navbar, "(?s)Dataset notes\\s*<span id=\"notes_count\"",
+               perl = TRUE)
   expect_false(has_id(page, "done"))
   expect_no_match(page, "gadget", fixed = TRUE)
 
@@ -308,6 +314,22 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   foot <- part("(?s)<div class=\"epi-actions\">.*?</div>")
   expect_match(foot, "id=\"insert_code\"[^>]*>(?s).*Copy Code", perl = TRUE)
   expect_match(foot, "id=\"bug_report\"", fixed = TRUE)
+  # Value labels are shown by default
+  expect_match(sidebar, "<input id=\"show_values\"[^>]* checked")
+  # Above the columns' table: buttons that expand and collapse the value
+  # labels and clear the rows chosen, which starts disabled, and a line on
+  # the columns chosen
+  columns <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"columns\".*?id=\"col_table\"")
+  expect_length(columns, 1)
+  for (id in c("values_open", "values_close", "clear_rows", "chosen_note")) {
+    expect_true(has_id(columns, id), label = id)
+  }
+  expect_match(columns, "<button id=\"clear_rows\" type=\"button\" disabled",
+               fixed = TRUE)
+  # The dataset's description and notes are on their own tab
+  notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"notes\".*?</div>")
+  expect_true(has_id(notes, "about"))
+  expect_false(has_id(columns, "about"))
   # Analysis is chosen; system databases are not offered
   expect_match(page, "<option value=\"Analysis\" selected>Analysis</option>",
                fixed = TRUE)
@@ -414,6 +436,7 @@ test_that("each table takes its labels from the first label table holding rows",
     expect_equal(about, paste("Admitted patient care Coded first. Coded",
                               "second. Not coded. Linked tables: APC_Extra",
                               "(on PatientID)."))
+    expect_equal(output$notes_count, "(3)")
 
     session$setInputs(table = "ED")
     expect_equal(info(), paste("Analysis.dbo.ED (table), 2 columns",
@@ -433,7 +456,8 @@ test_that("each table takes its labels from the first label table holding rows",
 
     session$setInputs(table = "Plain")
     expect_match(info(), "No label table holds labels for this table", fixed = TRUE)
-    expect_null(output$about$html)
+    expect_match(output$about$html, "This table has no description", fixed = TRUE)
+    expect_equal(output$notes_count, "")
 
     # Births takes its labels from ref.DataProperties, without a dataset
     # label, although ref.DataLabels holds one
@@ -550,6 +574,32 @@ test_that("read errors are reported in the info bar", {
   html <- run("SELECT TABLE_NAME, TABLE_TYPE")
   expect_match(strip_html(html), paste("The tables and views of Analysis.dbo",
                                        "could not be read"), fixed = TRUE)
+
+})
+
+test_that("the line above the table counts the columns chosen, and Clear selection clears them", {
+
+  cleared <- list()
+  local_mocked_bindings(selectRows = function(proxy, selected, ...) {
+    cleared[[length(cleared) + 1]] <<- list(id = proxy$id, selected = selected)
+  }, .package = "DT")
+  app <- episerver_browse_app(query = fake_browse_episerver()$query)
+
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      table = "APC")
+    expect_equal(output$chosen_note,
+                 "No columns chosen: the code reads them all.")
+    session$setInputs(col_table_rows_selected = 2)
+    expect_equal(output$chosen_note, "1 column chosen for the code.")
+    session$setInputs(col_table_rows_selected = c(2, 3))
+    expect_equal(output$chosen_note, "2 columns chosen for the code.")
+
+    session$setInputs(clear_rows = 1)
+    expect_length(cleared, 1)
+    expect_match(cleared[[1]]$id, "col_table$")
+    expect_null(cleared[[1]]$selected)
+  })
 
 })
 

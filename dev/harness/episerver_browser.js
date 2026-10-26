@@ -126,14 +126,32 @@ const fs = require('fs');
     console.log(`INFO ${t}:`, await info());
   }
 
-  // APC: its description above the columns, and the columns with their
-  // labels and notes
+  // APC: the columns with their labels, value labels (shown by default)
+  // and notes; the buttons above them; nothing between the info bar and
+  // the table but the buttons
+  const tabs = () => page.$$eval('.navbar-nav a.nav-link', as => as.map(a => a.textContent.replace(/\s+/g, ' ').trim()));
+  console.log('TABS for APC:', JSON.stringify(await tabs()));
   console.log('COLUMNS listed:', await rows(), '| headings:',
     JSON.stringify(await page.$$eval('#col_table .dataTables_scrollHead th', ths => ths.map(t => t.textContent.trim()))));
-  console.log('ABOUT:', await text('#about'));
   console.log('DESCRIPTIONS:', JSON.stringify(await page.$$eval('#col_table tbody tr', trs => trs.slice(0, 3).map(tr =>
     [...tr.children].map(td => td.textContent.trim())))));
+  console.log('TOOLS:', JSON.stringify(await page.$$eval('.tab-pane[data-value=columns] .options-row > *', es => es.map(e =>
+    [e.id || e.className, e.textContent.trim(), e.disabled === undefined ? null : e.disabled]))),
+    '| table header below info bar by', await page.evaluate(() => Math.round(
+      document.querySelector('#col_table .dataTables_scrollHead').getBoundingClientRect().top -
+      document.querySelector('#info_bar .info-bar').getBoundingClientRect().bottom)), 'px');
   await shot('02_columns');
+
+  // The Dataset notes tab: the description, notes and linked tables
+  await page.click('a[data-value=notes]');
+  await page.waitForTimeout(600);
+  console.log('DATASET NOTES:', await text('#about'));
+  await shot('02b_dataset_notes');
+  await select('table', 'Plain');
+  console.log('DATASET NOTES Plain:', await text('#about'), '| tabs:', JSON.stringify(await tabs()));
+  await select('table', 'APC');
+  await page.click('a[data-value=columns]');
+  await settle();
 
   // The table fits the window below its top, so the page needs no scrolling
   for (const [w, h] of [[1920, 950], [1536, 730]]) {
@@ -151,25 +169,45 @@ const fs = require('fs');
   await page.setViewportSize({ width: 1920, height: 950 });
   await page.waitForTimeout(600);
 
-  // Value labels: read when shown; opening a list does not choose its row
+  // Value labels: shown by default; Expand and Collapse open and close
+  // every list; opening a list does not choose its row
+  const chosenRows = () => page.$$eval('#col_table tbody tr.selected, #col_table tbody tr.active', r => r.length);
+  const openLists = () => page.$$eval('#col_table td.browse-values details[open]', ds => ds.length);
+  console.log('VALUE LABELS shown:', await page.$eval('#show_values', e => e.checked),
+    '| lists:', await page.$$eval('#col_table td.browse-values details', ds => ds.length));
+  await page.click('#values_open');
+  await page.waitForTimeout(300);
+  console.log('VALUE LABELS expanded:', await openLists(), '|', await text('#col_table td.browse-values details[open] div'));
+  await shot('04_value_labels');
+  await page.click('#values_close');
+  await page.waitForTimeout(300);
+  console.log('VALUE LABELS collapsed:', await openLists());
+  await page.click('#col_table td.browse-values details summary');
+  await page.waitForTimeout(300);
+  console.log('VALUE LABELS one opened:', await openLists(), '| rows chosen:', await chosenRows());
+  // Without value labels, Expand and Collapse are disabled, and look it
   await page.click('#show_values');
   await settle();
-  console.log('VALUE LABELS lists:', await page.$$eval('#col_table td.browse-values details', ds => ds.length));
-  await page.click('#col_table td.browse-values details summary');
-  await page.waitForTimeout(400);
-  console.log('VALUE LABELS open:', await text('#col_table td.browse-values details[open] div'),
-    '| rows chosen:', await page.$$eval('#col_table tbody tr.selected, #col_table tbody tr.active', r => r.length));
-  await shot('04_value_labels');
+  console.log('VALUE LABELS off: buttons', JSON.stringify(await page.$$eval('#values_open, #values_close', bs => bs.map(b =>
+    [b.disabled, getComputedStyle(b).opacity]))), '| column shown:',
+    await page.$$eval('#col_table .dataTables_scrollHead th', ths => ths.some(t => t.textContent.trim() === 'Value labels')));
+  await shot('04b_value_labels_off');
+  await page.click('#show_values');
+  await settle();
+  console.log('VALUE LABELS on again: buttons disabled', JSON.stringify(await page.$$eval('#values_open, #values_close', bs => bs.map(b => b.disabled))));
 
-  // Rows chosen give the select() in the code; chosen rows take the tint
+  // Rows chosen give the select() in the code. They are Lavender with
+  // Nightshade text, with an Iris bar at their left.
   await page.click('#col_table tbody tr:nth-child(2) td:nth-child(2)');
   await page.click('#col_table tbody tr:nth-child(3) td:nth-child(2)');
   await page.waitForTimeout(500);
-  console.log('ROWS chosen:', await page.$$eval('#col_table tbody tr.selected, #col_table tbody tr.active', r => r.length),
-    '| tint and text:', JSON.stringify(await page.$eval('#col_table tbody tr.selected td, #col_table tbody tr.active td', e => {
-      const s = getComputedStyle(e);
-      return [s.boxShadow, s.color];
-    })));
+  console.log('ROWS chosen:', await chosenRows(), '|', await text('#chosen_note'),
+    '| Clear selection disabled:', await page.$eval('#clear_rows', b => b.disabled));
+  console.log('ROWS colours (first cell, other cell):', JSON.stringify(await page.$$eval('#col_table tbody tr.selected td', tds => {
+    const s = e => { const c = getComputedStyle(e); return [c.boxShadow, c.color]; };
+    return [s(tds[0]), s(tds[1])];
+  })));
+  await shot('05_rows_chosen');
 
   // Buttons go to Iris, rgb(86, 44, 140), on hover
   const before = await background('#insert_code');
@@ -187,6 +225,12 @@ const fs = require('fs');
   console.log('CODE:', JSON.stringify(await clipboard()));
   await page.mouse.move(1200, 600);
   await page.waitForTimeout(2500);
+
+  // Clear selection clears the rows chosen, and is then disabled
+  await page.click('#clear_rows');
+  await settle();
+  console.log('CLEAR SELECTION: rows chosen', await chosenRows(), '|', await text('#chosen_note'),
+    '| disabled:', await page.$eval('#clear_rows', b => b.disabled));
 
   // A label table chosen is read alone, for the columns and the list
   await select('labels_source', 'ref.DataLabels');
@@ -212,7 +256,7 @@ const fs = require('fs');
   console.log('HELP tab:', JSON.stringify(await page.$$eval('.help h5', hs => hs.map(h => h.textContent))),
     '| text', await page.$eval('.help', e => getComputedStyle(e).fontSize),
     '| info bar shown', await page.$eval('#info_bar', e => e.checkVisibility()));
-  await shot('05_help');
+  await shot('06_help');
   await page.click('a[data-value=columns]');
   await settle();
 
@@ -224,7 +268,7 @@ const fs = require('fs');
   console.log('REPORT dialog:', await text('.modal-title'), '|', await text('.modal-body p'));
   await page.fill('#bug_what', 'The labels looked old.');
   await page.waitForTimeout(600);
-  await shot('06_report');
+  await shot('07_report');
   await page.click('#bug_copy');
   await page.waitForTimeout(800);
   const report = await clipboard();

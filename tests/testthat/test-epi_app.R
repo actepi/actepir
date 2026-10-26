@@ -339,3 +339,20 @@ test_that("each app has its own add-in and opens in the web browser", {
   }
 
 })
+
+test_that("selected table rows are Lavender with Nightshade text and an Iris bar", {
+
+  css <- as.character(.epi_app_style())
+  rule <- function(selector) {
+    regmatches(css, regexpr(paste0(selector, "[^{]*\\{[^}]*\\}"), css))
+  }
+
+  # In Bootstrap 5, bslib sets DataTables' variables on .table.dataTable
+  vars <- rule(":root, \\.table\\.dataTable\\.dataTable \\{")
+  expect_match(vars, "--dt-row-selected: 220, 200, 250;")
+  expect_match(vars, "--dt-row-selected-text: 50, 5, 87;")
+  expect_match(css, "--epi-select-bg:\\s*#DCC8FA")
+  expect_match(rule("table\\.dataTable tbody tr\\.selected > td:first-child"),
+               "inset 4px 0 0 var\\(--epi-accent\\)")
+
+})

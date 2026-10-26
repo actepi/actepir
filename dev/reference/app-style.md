@@ -50,7 +50,8 @@ The brand purples are in `act-brand.md`. In the apps:
 |---|---|---|
 | `--epi-primary` | `#320557` Nightshade | Top bar, primary buttons, section heading text, table headers, left border of the info bar and notifications |
 | `--epi-accent` | `#562C8C` Iris | Hover and keyboard focus of buttons, information and icon buttons, slider bars, radio and tick-box marks |
-| `--epi-info-bg` | `#eae6f1` | Info bar, notifications, section headings, selected table rows |
+| `--epi-info-bg` | `#eae6f1` | Info bar, notifications, section headings |
+| `--epi-select-bg`, `--dt-row-selected` | `#DCC8FA` Lavender | Selected table rows, with Nightshade text and an Iris bar at their left |
 | `--bslib-sidebar-bg` | `#f7f4fd` | Sidebars (set in `.epi_app_style()`) |
 | Notes | `#777` | Notes on settings |
 | Warnings | `#8a5300` | Warnings in the info bar and in notifications |
@@ -97,7 +98,7 @@ The brand purples are in `act-brand.md`. In the apps:
 - **Copying** goes through `.epi_copy_text()`, which shows a notification.
 - **Problem reports** go to `.epi_contact` (healthinfo@act.gov.au). The bug button (`.epi_bug_button()`) sits at the right of the sidebar's foot; `.epi_report_script()` and `.epi_report_server()` give the dialog. A tool writes its own state and settings with `.epi_problem_report()`, but never data; `.epi_session_report()` gives the session lines.
 - **Help tabs** are a `div(class = "help")`: 13px text, at most 900px wide, with headings (`h5`) in bold Nightshade.
-- **Selected table rows** (DataTables) take the info bar's tint with dark text, in Bootstrap 3 and 5.
+- **Selected table rows** (DataTables) are Lavender with Nightshade text and a 4px Iris bar at their left, in Bootstrap 3 and 5, so that they stand out from striped rows.
 - **Focus.** Focus rings and colours show for the keyboard only (`:focus-visible`), so a mouse click leaves no highlight.
 
 ## Do and do not

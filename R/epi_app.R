@@ -618,7 +618,7 @@
       --epi-primary-brdr: #24043f;  /* button borders */
       --epi-accent:       #562C8C;  /* Iris: accents, controls, selection focus */
       --epi-info-bg:      #eae6f1;  /* info bar */
-      --epi-select-bg:    #eae6f1;  /* selected row */
+      --epi-select-bg:    #DCC8FA;  /* Lavender: selected row */
       /* Spacing and type */
       --epi-font:      15px;   /* labels, choices and section headings */
       --epi-font-box:  14px;   /* text in boxes and their lists */
@@ -947,11 +947,13 @@
        Redefine the variable and override the .extra rule (covering the
        stripe/hover permutations); keep text dark. This build tags rows
        'active' rather than 'selected'. bslib's Bootstrap 5 theme sets the
-       variable on .table.dataTable, from the primary colour. */
+       variable on .table.dataTable, from the primary colour. Selected rows
+       are Lavender with Nightshade text, which passes AA, and an Iris bar
+       at their left. */
     :root, .table.dataTable.dataTable {
-      --dt-row-selected: 234, 230, 241;      /* #eae6f1 */
-      --dt-row-selected-text: 51, 51, 51;    /* #333 */
-      --dt-row-selected-link: 51, 51, 51;
+      --dt-row-selected: 220, 200, 250;      /* Lavender #DCC8FA */
+      --dt-row-selected-text: 50, 5, 87;     /* Nightshade */
+      --dt-row-selected-link: 50, 5, 87;
     }
     .table.dataTable tbody td.active,
     .table.dataTable tbody tr.active td,
@@ -964,7 +966,12 @@
     table.dataTable.hover tbody tr.active:hover td,
     table.dataTable.display tbody tr.active:hover td {
       background-color: var(--epi-select-bg) !important;
-      color: #333 !important;
+      color: var(--epi-primary) !important;
+    }
+    table.dataTable tbody tr.selected > td:first-child,
+    table.dataTable tbody tr.active > td:first-child {
+      box-shadow: inset 4px 0 0 var(--epi-accent),
+                  inset 0 0 0 9999px rgb(var(--dt-row-selected)) !important;
     }
     /* DataTables pagination (Bootstrap 3 markup: ul.pagination with
        li.paginate_button): replace Bootstrap blue links and active page */

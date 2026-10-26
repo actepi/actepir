@@ -63,7 +63,8 @@ By default the app runs in a background R process using
 console stays free while the browser is open. It opens in the system web
 browser and can be opened from the RStudio Addins menu (\emph{Open Dataset
 Browser}). The settings are in a sidebar on the left, in sections that
-open and close, and the columns and the help in tabs on the top bar. The
+open and close, and the columns, the dataset notes and the help in tabs
+on the top bar. The
 information button beside a setting shows notes on it, and the bug button
 at the foot of the sidebar prepares a report of a problem to send to
 \email{healthinfo@act.gov.au}.
@@ -106,16 +107,22 @@ table keeps its labels while they move from \code{DataLabels} to
 \code{ref.DataProperties}. The info bar says which label table they came from.
 Choosing a label table reads the labels from it alone.
 
-\emph{Show value labels} adds each column's value labels, which are read only
-when shown, as a table can have thousands. Notes with a code come first,
-in code order, then the others.
+\emph{Show value labels}, on by default, adds each column's value labels,
+which are read only while shown, as a table can have thousands. Notes
+with a code come first, in code order, then the others.
 
-\strong{Columns}
+\strong{Columns and dataset notes}
 
 The \emph{Columns} tab lists the table's columns with their position, name,
 variable label (\emph{Description}), type and, when present, value labels and
 notes. The table fits the window and can be searched and sorted. Click
-rows to choose columns for the code.
+rows to choose columns for the code; the line above the table counts
+them. The buttons above the table expand and collapse every list of value
+labels, while value labels are shown, and clear the rows chosen.
+
+The \emph{Dataset notes} tab holds the table's description (its dataset
+label), its notes and its linked tables, apart from the columns, as some
+tables have many notes. Its title gives the number of notes.
 
 \strong{Code}
 
