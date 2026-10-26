@@ -1,4 +1,4 @@
-test_that("primary buttons and Done go to Iris on hover", {
+test_that("primary buttons go to Iris on hover", {
 
   css <- as.character(.epi_app_style())
   rule <- function(selector) {
@@ -8,8 +8,9 @@ test_that("primary buttons and Done go to Iris on hover", {
   expect_match(css, "--epi-accent:\\s*#562C8C")
   expect_match(rule("\\.btn-primary:hover"),
                "background-color: var\\(--epi-accent\\)")
-  expect_match(rule("#done\\.btn-primary:hover"),
-               "background-color: var\\(--epi-accent\\)")
+  # No app uses miniUI, so its title bar and Done rules have gone
+  expect_no_match(css, "#done", fixed = TRUE)
+  expect_no_match(css, ".gadget", fixed = TRUE)
 
 })
 
@@ -23,7 +24,6 @@ test_that("a click leaves no highlight, but the keyboard's focus shows", {
   # Buttons are Iris for the keyboard's focus only, not after a click
   expect_match(rule("\\.btn-primary:hover"), ":focus-visible")
   expect_no_match(rule("\\.btn-primary:hover"), ":focus[,\\s{]")
-  expect_no_match(rule("#done\\.btn-primary:hover"), ":focus[,\\s{]")
   # Focus rings go after a click on buttons, section headings, ticks and
   # radio buttons, and a closed dropdown is plain
   ring <- rule("\\.btn:focus:not\\(:focus-visible\\)")
@@ -329,7 +329,7 @@ test_that("each app has its own add-in and opens in the web browser", {
   apps <- dcf[dcf[, "Binding"] %in% c("episerver_dsr", "episerver_browse"), ,
               drop = FALSE]
   expect_equal(unname(apps[, "Name"]),
-               c("Open DSR Calculator", "Open EpiServer Browser"))
+               c("Open DSR Calculator", "Open Dataset Browser"))
   expect_true(all(dcf[, "Binding"] %in% getNamespaceExports("actepir")))
   expect_false("addin_browse" %in% getNamespaceExports("actepir"))
 

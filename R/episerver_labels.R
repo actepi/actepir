@@ -149,25 +149,43 @@
 }
 
 # The dataset labels that the label tables `sources` hold for the tables of
-# schema, as Source (the row number in `sources`), TableName and Label
+# schema, as Source (the row number in `sources`), TableName and Label. Each
+# label table but the last also gives every table it holds rows for, with
+# no Label, so that .lbl_dataset_labels() can take each table's label from
+# the first label table that holds rows for it. Names and labels take the
+# database's collation, so that label tables of different collations can be
+# read together.
 #' @noRd
 .lbl_sql_dataset_labels <- function(db, sources, schema) {
   parts <- vapply(seq_len(nrow(sources)), function(i) {
     from <- .sql_ident(db, sources$TABLE_SCHEMA[i], sources$TABLE_NAME[i])
-    if (sources$Layout[i] == "properties") {
+    properties <- sources$Layout[i] == "properties"
+    in_schema <- paste("TableSchema =", .sql_quote(schema, TRUE))
+    labels <- if (properties) {
       sprintf(
-        "SELECT %d AS Source, TableName, PropertyText AS Label
+        "SELECT %d AS Source, TableName COLLATE DATABASE_DEFAULT AS TableName,
+           PropertyText COLLATE DATABASE_DEFAULT AS Label
          FROM %s
-         WHERE TableSchema = %s
+         WHERE %s
            AND PropertyType IN (N'DatasetLabel', N'DataLabel')",
-        i, from, .sql_quote(schema, TRUE))
+        i, from, in_schema)
     } else {
       sprintf(
-        "SELECT %d AS Source, Dataset AS TableName, LabelName AS Label
+        "SELECT %d AS Source, Dataset COLLATE DATABASE_DEFAULT AS TableName,
+           LabelName COLLATE DATABASE_DEFAULT AS Label
          FROM %s
          WHERE LabelType IN ('DtaLabel', 'DatasetLabel', 'DataLabel')",
         i, from)
     }
+    held <- if (i < nrow(sources)) {
+      sprintf(
+        "SELECT DISTINCT %d, %s COLLATE DATABASE_DEFAULT,
+           CAST(NULL AS nvarchar(1))
+         FROM %s%s",
+        i, if (properties) "TableName" else "Dataset", from,
+        if (properties) paste0("\n         WHERE ", in_schema) else "")
+    }
+    paste(c(labels, held), collapse = "\nUNION ALL\n")
   }, character(1))
   paste(parts, collapse = "\nUNION ALL\n")
 }
@@ -208,6 +226,24 @@
   out <- out[!duplicated(key), c("Column", "Key", "Type", "Code", "Text")]
   rownames(out) <- NULL
   out
+}
+
+# Each table's dataset label from the rows of .lbl_sql_dataset_labels(): the
+# label in the first label table that holds rows for the table, trimmed.
+# Named by the table's name in lower case, as SQL Server matches names;
+# tables without a label are left out.
+#' @noRd
+.lbl_dataset_labels <- function(rows) {
+  if (is.null(rows) || !nrow(rows)) {
+    return(stats::setNames(character(), character()))
+  }
+  key <- tolower(trimws(as.character(rows$TableName)))
+  label <- trimws(as.character(rows$Label))
+  label[is.na(label)] <- ""
+  first <- stats::ave(rows$Source, key, FUN = min)
+  keep <- rows$Source == first & nzchar(label)
+  out <- stats::setNames(label[keep], key[keep])
+  out[!duplicated(names(out))]
 }
 
 # The order of codes: numbers first, by value, then other codes as text

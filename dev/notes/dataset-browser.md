@@ -1,23 +1,14 @@
 # Dataset Browser
 
-`episerver_browse()` opens the Dataset Browser, formerly the EpiServer Browser. Analysts use it to find a database, schema, table or view on EpiServer, read its columns with their labels, and copy the R code that reads the table. It is opened from Addins > Open Dataset Browser or by calling `episerver_browse()`. It is being rebuilt to `dev/reference/app-style.md` and to read the new label table, `ref.DataProperties`. That work later grows into one place for every kind of data dictionary (see `dictionaries.md`).
+`episerver_browse()` opens the Dataset Browser, formerly the EpiServer Browser. Analysts use it to find a database, schema, table or view on EpiServer, read its columns with their labels, and copy the R code that reads the table. It is opened from Addins > Open Dataset Browser or by calling `episerver_browse()`. Pull request 1 rebuilt it to `dev/reference/app-style.md` and taught it to read the new label table, `ref.DataProperties`. That work later grows into one place for every kind of data dictionary (see `dictionaries.md`).
 
 ## Status
 
-Work in progress on the session branch `claude/sweet-ritchie-rt6bn7`. This is pull request 1 of the plan below, and no pull request has been opened yet. The commit "Dataset Browser: work in progress and handoff notes" holds:
+| Pull request | Content |
+|---|---|
+| 1 (open, waiting on the maintainer's test against EpiServer) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. Offline, `testServer()` and live tests, and the harness. |
 
-- `R/episerver_labels.R` (new, untested): the labels lookup described under Decisions.
-- `R/epi_app.R`: the problem report, the bug button and the page shown once an app stops are now shared:
-  - `.epi_problem_report()`, `.epi_bug_button()`, `.epi_report_script()`, `.epi_report_server()` and `.epi_stopped_script()`;
-  - their CSS, and the sidebar tint `--bslib-sidebar-bg: #f7f4fd`, are now in `.epi_app_style()`;
-  - the miniUI rules (`.gadget-*`, `#done`) are removed.
-- `R/episerver_dsr.R`: the DSR Calculator calls those shared functions. `.dsr_problem_report()` is gone.
-- Tests: the problem report test moved from `test-episerver_dsr.R` to `test-epi_app.R` and calls `.epi_problem_report()`.
-
-Nothing in the commit has been run. The commit has two known breakages, which the rest of pull request 1 removes:
-
-- `test-epi_app.R` still expects the `#done` hover rule and the add-in name "Open EpiServer Browser".
-- `R/episerver_browse.R` is still the miniUI app, and it has lost its title bar and Done styles.
+Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. Pull requests 2 to 6 have not started. After pull request 1 is merged, restart the session branch from `main` for pull request 2.
 
 ## Plan agreed with the maintainer (25 Oct 2026)
 
@@ -46,9 +37,16 @@ One pull request at a time on the session branch. The maintainer tests each one 
 
 | File | Holds |
 |---|---|
-| `R/episerver_labels.R` | `.lbl_layouts`, `.lbl_types`, `.sql_ident()`, `.sql_quote()`, `.lbl_sql_sources()`, `.lbl_where()`, `.lbl_sql_pick()`, `.lbl_sql_rows()`, `.lbl_sql_dataset_labels()`, `.lbl_normalise()`, `.lbl_code_order()`, `.lbl_table()` |
-| `R/episerver_browse.R` | Still the old miniUI app: to be rewritten |
-| `R/epi_app.R` | The shared app code, including the problem report (see `shared-apps.md`) |
+| `R/episerver_labels.R` | The labels lookup: `.lbl_layouts`, `.lbl_types`, `.sql_ident()`, `.sql_quote()`; the SQL (`.lbl_sql_sources()`, `.lbl_where()`, `.lbl_sql_pick()`, `.lbl_sql_rows()`, `.lbl_sql_dataset_labels()`); the rows (`.lbl_normalise()`, `.lbl_dataset_labels()`, `.lbl_code_order()`, `.lbl_table()`) |
+| `R/episerver_browse.R` | `episerver_browse()` and `episerver_browse_stop()`; `.browse_system_dbs`; the catalogue SQL (`.browse_sql_databases()`, `.browse_sql_schemas()`, `.browse_sql_tables()`, `.browse_sql_columns()`); the lists, columns' table and code (`.browse_databases()`, `.browse_table_choices()`, `.browse_type()`, `.browse_columns()`, `.browse_about()`, `.browse_labels_note()`, `.browse_code()`); the Help tab (`.browse_help()`); the app factory `episerver_browse_app()` |
+| `R/epi_app.R` | The shared app code, including the problem report and the page shown once an app stops (see `shared-apps.md`) |
+
+| Test file | Covers |
+|---|---|
+| `helper-browse.R` | `fake_browse_episerver()`: a synthetic EpiServer that answers the browser's SQL by reading it. The offline tests, the harness and the dry run all use it. |
+| `test-episerver_labels.R` | The lookup's SQL, normalising both layouts, the type names, the order of notes and codes, and each table's dataset label |
+| `test-episerver_browse.R` | The catalogue SQL, the lists, the columns' table, the info bar's labels line, the code, the page, and the app through `shiny::testServer()`: the fallback for each table, a label table chosen, a database without label tables, value labels read only when shown, read errors, the code button and the problem report |
+| `test-episerver_browse_live.R` | Every query against `Analysis`, the order and layouts of its label tables, the pick against each label table asked alone, the dataset labels, and the app; skipped offline |
 
 ## Decisions
 
@@ -60,6 +58,7 @@ One pull request at a time on the session branch. The maintainer tests each one 
 - **Fallback for each table.** A table takes its labels from the first label table, in that order, that holds rows for it (`.lbl_sql_pick()`: one `CASE WHEN EXISTS` query).
   - sqldta (`w4rhol/sqldta`) instead falls back only when the label table does not exist. The maintainer agreed to differ, for two reasons. Labels will move to DataProperties table by table. And sqldta's view (`examples/data_properties_view.sql`) files label sets that are not mapped under `dbo` only, so tables in other schemas would lose labels they have today.
   - During the move, R and Stata may therefore show different labels for a table.
+  - The Table list follows the same rule: a table's dataset label comes from the first label table that holds any rows for it, even if that one has no dataset label and a later one has. Otherwise the list and the description above the columns could show different labels for one table. `.lbl_sql_dataset_labels()` gets this in one query: each label table's dataset labels for the schema and, for every label table but the last, the names of the tables it holds rows for (`SELECT DISTINCT`, which an index on the name can serve). `.lbl_dataset_labels()` then takes each table's label in R. The parts of the `UNION ALL` take `COLLATE DATABASE_DEFAULT`, so that label tables of different collations do not conflict.
 - **The two layouts,** as in sqldta's `docs/setup.md`:
   - DataProperties: `TableSchema`, `TableName`, `ColumnName`, `PropertyType`, `PropertyCode`, `PropertyText`, matched by schema and name with `N'...'` literals.
   - DataLabels: `Dataset`, `VarName`, `LabelType`, `DataCode`, `LabelName`, matched by table name only, with plain literals.
@@ -68,57 +67,44 @@ One pull request at a time on the session branch. The maintainer tests each one 
   - Duplicates keep the first row, as `applydatalabels()` does.
   - Notes with codes come first, in code order (numerically when every code of the column's notes is a number), then the rest in row order, as sqldta applies them.
   - Value labels are sorted numerically first, then as text.
+  - Column names are matched to label rows in lower case, as SQL Server matches names.
 - **Value labels are read only when shown** (`.lbl_sql_rows(values = TRUE)`), because a table can have many thousands. The other rows are read when a table is chosen.
-- **Name.** The app is "Dataset Browser" and the add-in "Open Dataset Browser", which keeps the add-ins' "Open <tool>" pattern (the maintainer's choice). `episerver_browse()` and `episerver_browse_stop()` keep their names. Add `...` passed to `episerver_connect()`, documented with `@inheritDotParams episerver_connect encrypt trust_certificate`, as CLAUDE.md requires and `episerver_dsr()` does. `episerver_dsr()` inherits its parameters from `episerver_browse()`, so keep them documented there.
-- **Tables and views** are both listed. Label tables (names holding DataLabels, `DataProperties` and sqldta's `DataPropertyTables`) are left out.
-- **Layout (planned):**
-  - bslib `page_navbar()` with `.epi_theme()`, `.epi_app_style()` and the actepir lockup at the right. No Done button: use `.epi_stopped_script("Dataset Browser", "Open Dataset Browser", "episerver_browse")` and, in the foreground, `session$onSessionEnded(shiny::stopApp)`.
-  - Sidebar, 340px and resizable, in accordion sections:
-    - Dataset: Database (Analysis by default; system databases and those starting with an underscore hidden, as now), Schema, and a searchable Table list. Each option shows its dataset label; the label goes in the option text after a tab, and a selectize render function shows it muted. Tables and views are grouped.
-    - Labels: Labels table (Automatic by default, or any label table found) and Show value labels.
-    - Code: quickconnect, connect or none; Declare packages; Import with labels.
+- **Name.** The app is "Dataset Browser" and the add-in "Open Dataset Browser", which keeps the add-ins' "Open <tool>" pattern (the maintainer's choice). `episerver_browse()` and `episerver_browse_stop()` keep their names. `episerver_browse()` passes `...` to `episerver_connect()`, documented with `@inheritDotParams episerver_connect encrypt trust_certificate`, as CLAUDE.md requires and `episerver_dsr()` does. `episerver_dsr()` inherits its parameters from `episerver_browse()`, so they stay documented there.
+- **Tables and views** are both listed. Label tables (names holding DataLabels, `DataProperties` and sqldta's `DataPropertyTables`) are left out, in every schema.
+- **Layout,** as built:
+  - bslib `page_navbar()` with `.epi_theme()`, `.epi_app_style()` and the actepir lockup at the right. No Done button: `.epi_stopped_script("Dataset Browser", "Open Dataset Browser", "episerver_browse")` and, in the foreground, `session$onSessionEnded(shiny::stopApp)`.
+  - Sidebar, 340px and resizable, in accordion sections that start open:
+    - Dataset: Database (Analysis by default; system databases and those starting with an underscore hidden, as before), Schema (dbo by default), and a searchable Table list. Each option shows its dataset label: the label goes in the option text after a tab, and a selectize render function shows it muted (`.browse-label`, lighter on the chosen option's Nightshade). Tables and views are grouped. The table chosen stays chosen when the list changes and still holds it; otherwise the first table is chosen.
+    - Labels: Labels table (Automatic by default, or any label table found) and Show value labels. A label table chosen in another database counts as Automatic until the list is updated.
+    - Code: Connection (quickconnect, connect or none), Declare packages, Import with labels. The information buttons on Labels table and Connection hold their notes.
   - Foot (`.epi-actions`): Copy Code (Insert Code in the foreground) and `.epi_bug_button()`.
-  - Tabs: Columns and Help.
-  - Info bar: the table and its type, the number of columns, which label table the labels came from, and when DataProperties held none for the table. Read errors are shown as warnings or errors.
-  - The dataset label, dataset notes and linked tables appear above the column table.
-  - Column table (DT): #, Column, Description, Type, plus Value labels (a `<details>` list, when shown) and Notes (when any). Selected rows give the `select()` in the code.
-  - The table fits the window from a script, as the DSR Calculator's Explore plots do. This replaces the two sizing sliders.
-  - The code generator stays as it was for the same inputs; move it into a function (`.browse_code()`) with offline tests.
-  - Move the `.help` CSS (`.help`, `.help h5`) from the DSR Calculator to `.epi_app_style()` for the Help tab.
-- **Testability.** `episerver_browse_app(driver, max_attempts, ..., query = NULL)`, as `episerver_dsr_app()` has, with `shiny::testServer()` tests on a fake.
+  - Tabs: Columns and Help. The Help tab uses the shared `.help` style, moved from the DSR Calculator to `.epi_app_style()`.
+  - Info bar: the table, whether a table or a view, and its number of columns; where its labels came from (`.browse_labels_note()`), naming the earlier label tables that hold none for it; or that no label table holds labels for it, or that the database has none.
+  - Read errors: a failure to read the tables or the columns makes the info bar an error (`epi-error`); a failure to list the databases or label tables, or to read the dataset labels, the labels or the value labels, adds a warning (`epi-warn`) and the rest is still shown.
+  - The dataset label (a heading), dataset notes and linked tables appear above the column table (`.browse_about()`).
+  - Column table (DT, `bootstrap5`): #, Column, Description, Type, plus Value labels (a `<details>` list, when shown) and Notes (when any column has them). Text from the label tables is escaped. Selected rows give the `select()` in the code; clicks on a value labels list do not select its row.
+  - The table fits the window: a script sets `--browse-table-height` from the window's height less the table's distance from the top of the page (at least 200px), and DataTables' `scrollY` is `var(--browse-table-height, 50vh)`. This replaced the two sizing sliders.
+  - The code generator stays as it was for the same inputs, moved into `.browse_code()`. Its output was compared with the old app's code for all 108 combinations of connection, declare, labels, none to two columns, and the three forms of database and schema: all identical.
+- **Testability.** `episerver_browse_app(driver, max_attempts, ..., query = NULL)`, as `episerver_dsr_app()` has. One synthetic EpiServer, `fake_browse_episerver()` in `tests/testthat/helper-browse.R`, serves the offline tests, the harness (`dev/harness/fake_episerver.R` passes the browser's queries to it) and the dry run (`dev/harness/fake_live.R`). It reads the browser's SQL (the `EXISTS` conditions, the `WHERE` and type filters, the parts of the `UNION ALL`) rather than matching fixed strings, so the tests check the fallback itself. Its `properties = FALSE` gives an `Analysis` without `ref.DataProperties`.
+- **Selected rows** take the info bar's tint with dark text, as `dev/reference/app-style.md` says. bslib's Bootstrap 5 theme sets DataTables' `--dt-row-selected` on `.table.dataTable` from the primary colour, which painted them Nightshade, so the shared rule in `.epi_app_style()` now sets the variables there too.
 
 ## Open items
 
-Next steps for pull request 1, in order:
+Waiting on the maintainer:
 
-1. Rewrite `R/episerver_browse.R` as described above, using `R/episerver_labels.R`.
-2. Offline tests:
-   - for `episerver_labels.R`: SQL text, normalising both layouts, type mapping, order of notes and codes, and the choice of label table;
-   - for `.browse_code()`;
-   - `testServer()` tests of the app.
-3. A live test file, `tests/testthat/test-episerver_browse_live.R`. It should hold whether or not `ref.DataProperties` exists yet in `Analysis`.
-4. Update the harness:
-   - `dev/harness/fake_episerver.R`: the browser's new queries, with a DataProperties table, a DataLabels table, a table that falls back and a view;
-   - `dev/harness/fake_live.R`;
-   - `dev/harness/episerver_browser.js`: layout, info bar, labels source, hover, problem report and stopped page.
-5. Other files:
-   - `inst/rstudio/addins.dcf`: "Open Dataset Browser";
-   - `DESCRIPTION`: remove miniUI;
-   - `test-epi_app.R`: the hover test (no `#done`) and the add-in names.
-6. Notes and documentation:
-   - `shared-apps.md` and `dsr-calculator.md` still name `.dsr_problem_report()`;
-   - `app-style.md` (remove the miniUI section; the sidebar tint is now in the shared style);
-   - `dev/harness/README.md`;
-   - the roxygen for `episerver_browse()`.
-7. Run the three commands in CLAUDE.md, the harness and the dry run. Then open the pull request with the description CLAUDE.md asks for.
+- **`actepir::collect()` in the code.** With Import with labels off and Declare packages on, the quickconnect and none forms end in `actepir::collect()`. actepir does not export `collect()`, so that code fails. The old app gave the same code, and the generator was kept as it was, as decided. The proposed fix is `dplyr::collect()`.
+- **Column names that are not syntactic,** such as names with spaces, are written into `select()` unquoted, as before. Backquoting them would change the code for those inputs only.
 
 Other items:
 
-- **Environment.** The cloud environment of the session that started this blocked CRAN and Posit Package Manager. R was installed with apt and packages were built from `github.com/cran`. Use an environment with R and the package's dependencies already installed.
+- **Import with labels** applies the labels of `ref.DataLabels` only, until pull request 2. The Help tab and `?episerver_browse` say so.
+- **Searching the Table list.** selectize ignores typing in a single select while it holds an item, so the analyst deletes the table shown with Backspace before typing. This is how every single select in the apps behaves; the Help tab says so.
+- **Query times.** Choosing a table runs three queries (the pick, the rows and the columns), and a fourth while value labels are shown; choosing a schema runs the tables query and the dataset labels query, which reads the table names held by every label table but the last. Their times on EpiServer have not been measured.
+- **Environment.** This session's environment had R 4.6.1 and every dependency (30 of 30 packages loadable in `/var/log/r-setup.log`). roxygen2 was 8.1.1, so 8.0.0 was installed for the session, as `dev/harness/README.md` describes.
 
 ## How to check a change
 
-**Offline:** the three commands in CLAUDE.md, `Rscript dev/harness/run_app.R dev/harness/episerver_browser.js <out>/browse browse`, and `Rscript dev/harness/dryrun_live.R`.
+**Offline:** the three commands in CLAUDE.md; `Rscript dev/harness/run_app.R dev/harness/episerver_browser.js <out>/browse browse`, compared with the results in `dev/harness/README.md`, with its screenshots looked at; and `Rscript dev/harness/dryrun_live.R`, with and without `--without-dataproperties`.
 
 **Against EpiServer:** the maintainer runs `testthat::test_local()`, in which `test-episerver_browse_live.R` must run rather than skip. They then open the browser on:
 

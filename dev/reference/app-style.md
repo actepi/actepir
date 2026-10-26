@@ -8,7 +8,9 @@ The rules were set on the DSR Calculator and are implemented once, for every app
 |---|---|
 | `.epi_theme()` in `R/epi_app.R` | The bslib (Bootstrap 5) theme: brand purples, fonts, focus colours and the dialog margin. |
 | `.epi_app_style()` in `R/epi_app.R` | CSS for every app, whatever its framework: the tokens below, and rules on the classes of Shiny, Bootstrap 3 and 5, bslib and shinydashboard. |
-| `.epi_with_help()`, `.epi_tab_settings()`, `.epi_copy_text()`, `.epi_session_report()`, `.epi_contact` | Shared components: a setting's notes behind an information button, a tab's own settings panel, copying to the clipboard, and the session lines and address of a problem report. |
+| `.epi_with_help()`, `.epi_tab_settings()`, `.epi_copy_text()` | Shared components: a setting's notes behind an information button, a tab's own settings panel, and copying to the clipboard. |
+| `.epi_bug_button()`, `.epi_report_script()`, `.epi_report_server()`, `.epi_problem_report()`, `.epi_session_report()`, `.epi_contact` | The problem report: the bug button, the dialog, the report's text and session lines, and its address. |
+| `.epi_stopped_script()` | The page shown once an app stops. |
 
 `test-epi_app.R` checks the tokens and the rules that apply them. The browser scripts in `dev/harness/` check them in a page.
 
@@ -49,7 +51,7 @@ The brand purples are in `act-brand.md`. In the apps:
 | `--epi-primary` | `#320557` Nightshade | Top bar, primary buttons, section heading text, table headers, left border of the info bar and notifications |
 | `--epi-accent` | `#562C8C` Iris | Hover and keyboard focus of buttons, information and icon buttons, slider bars, radio and tick-box marks |
 | `--epi-info-bg` | `#eae6f1` | Info bar, notifications, section headings, selected table rows |
-| `--bslib-sidebar-bg` | `#f7f4fd` | Sidebars (set by each bslib app) |
+| `--bslib-sidebar-bg` | `#f7f4fd` | Sidebars (set in `.epi_app_style()`) |
 | Notes | `#777` | Notes on settings |
 | Warnings | `#8a5300` | Warnings in the info bar and in notifications |
 | Errors | `#b00020` | Errors in notes, the info bar and notifications |
@@ -61,11 +63,11 @@ The brand purples are in `act-brand.md`. In the apps:
 - **Page.** `bslib::page_navbar()` with `.epi_theme()`, `.epi_app_style()` and `.epi_logo()`. See "Adding a tool" in `dev/notes/shared-apps.md`.
 - **Top bar.** The app's name (`title`) at the left; its result views as tabs, 48px after the name; then `bslib::nav_spacer()` and `bslib::nav_item(.epi_logo(class = "epi-logo"))`, which puts the actepir lockup (the hex sticker's pyramid and the package's name, `dev/reference/hex-sticker.md`) at the right, 56px tall with 24px above and below. The bar is 104px tall.
 - **No ACT Government logo.** The apps are internal tools for analysts, and `act-brand.md` requires the ACT Government logo on external communications. The maintainer chose the package's own mark for them.
-- **No Done button.** The apps open in a browser tab, which the analyst closes. A background app keeps running, so it opens again at once, until its `_stop()` function or the end of the R session. When it stops, the tab says so and how to open it again. In the foreground (`background = FALSE`), closing the tab stops the app, which frees the console.
+- **No Done button.** The apps open in a browser tab, which the analyst closes. A background app keeps running, so it opens again at once, until its `_stop()` function or the end of the R session. When it stops, the tab says so and how to open it again (`.epi_stopped_script(app, addin, fn)`). In the foreground (`background = FALSE`), closing the tab stops the app, which frees the console.
 - **Settings sidebar.** `bslib::sidebar()`, 340px wide, resizable, open on desktop. Settings are grouped in `bslib::accordion()` sections that start open.
 - **Actions at the foot.** The sidebar's actions (Calculate, Copy Code, the bug button) are in a `div(class = "epi-actions")` as its last child, held in view at the foot.
 - **A tab's own settings.** Settings that belong to one tab, such as the Explore tab's, go in `.epi_tab_settings(id, settings, ...)`, with the tab's results in `...`. It is a panel down the left of the results, distinct from the app's sidebar: the same tint and spacing, 240px wide, always open and not resizable, but with no dividing border, rounded corners, as tall as its settings, and held in view while the results scroll (`.epi-tab-layout`). The results take the window's height beside it.
-- **Plots that must be seen whole** fit the window below their top. The Explore tab sets `--ex-plot-height` from a short script and caps each plot's SVG at it; ggiraph keeps the plot's shape.
+- **Plots and tables that must be seen whole** fit the window below their top. A short script sets a height from the window's height less the element's distance from the top of the page: the DSR Calculator's Explore tab sets `--ex-plot-height` and caps each plot's SVG at it, and ggiraph keeps the plot's shape; the Dataset Browser sets `--browse-table-height`, which a DataTable's `scrollY` takes as `var(--browse-table-height, 50vh)`.
 - **Resizing.** `.epi_app_style()` moves the resize handle of every left-hand bslib sidebar just outside its edge, as bslib puts it over the scrollbar (see the DSR Calculator's notes).
 
 ### shinydashboard apps (Bootstrap 3)
@@ -73,10 +75,6 @@ The brand purples are in `act-brand.md`. In the apps:
 - Add the style to the body: `dashboardBody(tags$head(.epi_app_style()), ...)`.
 - Controls in `dashboardSidebar()` and in `box()` take the same spacing and type. A box's heading takes the section heading's tint and weight.
 - shinydashboard's own colours (the blue header, skins, `box-primary` borders) are not yet themed; see Open items.
-
-### miniUI gadgets (Bootstrap 3)
-
-The EpiServer Browser uses miniUI and `.epi_app_style()`, and takes the same control spacing and type. It is to be rebuilt as a bslib app to this guide; `dev/notes/shared-apps.md` lists what it needs.
 
 ## Controls and spacing
 
@@ -95,9 +93,11 @@ The EpiServer Browser uses miniUI and `.epi_app_style()`, and takes the same con
 - **Icon buttons** (`class = "epi-icon-btn"`): an icon alone, in Iris, Nightshade on hover, with a `title` and `aria-label`.
 - **Info bar** (`div(class = "info-bar")`): the tint with a Nightshade left border and 12px text, above the results. Warnings in it are `p(class = "epi-warn")`; an error makes it `class = "info-bar epi-error"`.
 - **Notifications** (`shiny::showNotification()`): styled like the info bar. Use `type = "message"` for confirmations, `"warning"` for a step the analyst must take first, and `"error"` for failures.
-- **Dialogs** (`shiny::modalDialog()`): add `modal-dialog-scrollable` to the dialog so that it fits the window, and let one part of it scroll, with `overscroll-behavior: contain` so the wheel does not move the dialog. The DSR Calculator's problem report shows how (`.epi-report`).
+- **Dialogs** (`shiny::modalDialog()`): add `modal-dialog-scrollable` to the dialog so that it fits the window, and let one part of it scroll, with `overscroll-behavior: contain` so the wheel does not move the dialog. The problem report shows how (`.epi-report`).
 - **Copying** goes through `.epi_copy_text()`, which shows a notification.
-- **Problem reports** go to `.epi_contact` (healthinfo@act.gov.au). `.epi_session_report()` gives the session lines; a tool adds its own state and settings, but never data.
+- **Problem reports** go to `.epi_contact` (healthinfo@act.gov.au). The bug button (`.epi_bug_button()`) sits at the right of the sidebar's foot; `.epi_report_script()` and `.epi_report_server()` give the dialog. A tool writes its own state and settings with `.epi_problem_report()`, but never data; `.epi_session_report()` gives the session lines.
+- **Help tabs** are a `div(class = "help")`: 13px text, at most 900px wide, with headings (`h5`) in bold Nightshade.
+- **Selected table rows** (DataTables) take the info bar's tint with dark text, in Bootstrap 3 and 5.
 - **Focus.** Focus rings and colours show for the keyboard only (`:focus-visible`), so a mouse click leaves no highlight.
 
 ## Do and do not

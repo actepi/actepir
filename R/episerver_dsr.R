@@ -1926,10 +1926,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .ex-table th { color: var(--epi-primary); font-weight: 600;
                        text-align: left; }
         .ex-table td.num { text-align: right; }
-        .help { max-width: 900px; font-size: 13px; color: #333740; }
-        .help h5 { color: var(--epi-primary); font-weight: 600;
-                   margin: 18px 0 6px 0; }
-        .help h5:first-child { margin-top: 4px; }
         .help-scroll { overflow-x: auto; }
         .help-table td, .help-table th { vertical-align: top; }
         .help-table code { white-space: normal; overflow-wrap: break-word; }

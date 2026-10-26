@@ -14,7 +14,8 @@
 #   node <script.js> <app URL> <output dir>
 # Its output is printed, then the end of the app's error stream. Screenshots
 # and the install log go to the output directory; everything else goes to
-# temporary directories.
+# temporary directories. The Dataset Browser's queries are answered by
+# fake_browse_episerver() in tests/testthat/helper-browse.R.
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 2) {
@@ -49,6 +50,7 @@ if (status != 0) stop("R CMD INSTALL failed: see ", log, call. = FALSE)
 wd <- tempfile("actepir_wd_")
 dir.create(wd)
 writeLines(c(
+  sprintf('source("%s")', file.path(repo, "tests", "testthat", "helper-browse.R")),
   sprintf('source("%s")', file.path(harness, "fake_episerver.R")),
   sprintf('source("%s")', file.path(harness, "fake_abs.R")),
   'setHook(packageEvent("actepir", "onLoad"), function(...) {',

@@ -8,7 +8,7 @@ Description: Open the DSR Calculator in the web browser, in a background process
 Binding: episerver_dsr
 Interactive: true
 
-Name: Open EpiServer Browser
-Description: Open the EpiServer Browser in the web browser, in a background process, to browse EpiServer's databases, tables and columns.
+Name: Open Dataset Browser
+Description: Open the Dataset Browser in the web browser, in a background process, to find EpiServer's tables and views and read their columns and labels.
 Binding: episerver_browse
 Interactive: true

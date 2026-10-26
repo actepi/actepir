@@ -2,7 +2,7 @@
 % Please edit documentation in R/episerver_browse.R
 \name{episerver_browse_stop}
 \alias{episerver_browse_stop}
-\title{Stop the Background EpiServer Browser}
+\title{Stop the Background Dataset Browser}
 \usage{
 episerver_browse_stop()
 }

@@ -604,8 +604,8 @@
 
 
 # Theme shared by the apps: colours, the spacing and type of controls and
-# sections, the top bar, sidebars, buttons, notes, information buttons, the
-# problem report, the page shown once an app stops, notifications,
+# sections, the top bar, sidebars, buttons, notes, information buttons, Help
+# tabs, the problem report, the page shown once an app stops, notifications,
 # DataTables and sliders. The rules use the classes of Shiny,
 # Bootstrap 3 and 5, bslib and shinydashboard, so that controls in any app
 # take them without CSS of their own. dev/reference/app-style.md sets them
@@ -775,6 +775,11 @@
       color: var(--epi-primary);
     }
     .epi-help .epi-note { margin: 0 0 4px 0; }
+    /* A Help tab (div.help): 13px text, Nightshade headings */
+    .help { max-width: 900px; font-size: 13px; color: #333740; }
+    .help h5 { color: var(--epi-primary); font-weight: 600;
+               margin: 18px 0 6px 0; }
+    .help h5:first-child { margin-top: 4px; }
     /* In shinydashboard's sidebar, inside its padding and in its colours */
     section.sidebar .epi-help > summary {
       top: var(--epi-gap); right: var(--epi-pad); color: inherit;
@@ -941,8 +946,9 @@
        inset box-shadow keyed on the --dt-row-selected RGB variable.
        Redefine the variable and override the .extra rule (covering the
        stripe/hover permutations); keep text dark. This build tags rows
-       'active' rather than 'selected'. */
-    :root {
+       'active' rather than 'selected'. bslib's Bootstrap 5 theme sets the
+       variable on .table.dataTable, from the primary colour. */
+    :root, .table.dataTable.dataTable {
       --dt-row-selected: 234, 230, 241;      /* #eae6f1 */
       --dt-row-selected-text: 51, 51, 51;    /* #333 */
       --dt-row-selected-link: 51, 51, 51;
