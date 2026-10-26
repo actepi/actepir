@@ -259,6 +259,133 @@ test_that("the search finds columns by name and by the labels the browser reads"
 
 })
 
+test_that("the preview and the profile read each type as R can, long columns last", {
+
+  expect_equal(.browse_sql_value("Sex", "int"), "[Sex]")
+  expect_equal(.browse_sql_value("Flag", "BIT"), "CAST([Flag] AS tinyint)")
+  expect_equal(.browse_sql_value("Id", "varbinary"),
+               "CONVERT(varchar(max), CAST([Id] AS varbinary(max)), 1)")
+  expect_equal(.browse_sql_value("Area", "geography"), "[Area].ToString()")
+  expect_equal(.browse_sql_value("Node", "hierarchyid"), "[Node].ToString()")
+  expect_equal(.browse_sql_value("Any", "sql_variant"), "CAST([Any] AS nvarchar(4000))")
+  expect_equal(.browse_sql_value("Doc", "xml"), "CAST([Doc] AS nvarchar(max))")
+
+  cols <- data.frame(col = c("Notes", "Sex", "Doc", "Odd]Name"),
+                     dtype = c("nvarchar", "int", "xml", "varchar"),
+                     charlen = c(-1, NA, -1, 10))
+  preview <- .browse_sql_preview("Analysis", "dbo", "APC", cols)
+  expect_match(preview, "^SELECT TOP 100 \\[Sex\\] AS \\[Sex\\],\n\\s+\\[Odd\\]\\]Name\\] AS")
+  expect_match(preview, "FROM [Analysis].[dbo].[APC]", fixed = TRUE)
+  # The long columns come last
+  expect_true(regexpr("[Notes] AS", preview, fixed = TRUE) >
+                regexpr("[Odd]]Name] AS", preview, fixed = TRUE))
+  expect_true(regexpr("AS [Doc]", preview, fixed = TRUE) >
+                regexpr("[Odd]]Name] AS", preview, fixed = TRUE))
+
+  profile <- .browse_sql_profile("Analysis", "dbo", "APC", "Flag", "bit")
+  expect_match(profile, "CAST(COUNT_BIG(*) AS float) AS TotalRows", fixed = TRUE)
+  expect_match(profile, "CASE WHEN [Flag] IS NULL THEN 0 ELSE 1 END", fixed = TRUE)
+  expect_match(profile, "COUNT_BIG(DISTINCT CAST([Flag] AS tinyint))", fixed = TRUE)
+  expect_match(profile, "MIN(CAST([Flag] AS tinyint)) AS MinValue", fixed = TRUE)
+  expect_match(profile, "CAST(NULL AS float) AS Blank", fixed = TRUE)
+  # Blank text for text types; nothing compared for types that cannot be
+  text <- .browse_sql_profile("Analysis", "dbo", "Deaths", "Cause", "varchar")
+  expect_match(text, "LTRIM(RTRIM([Cause])) = ''", fixed = TRUE)
+  xml <- .browse_sql_profile("Analysis", "dbo", "T", "Doc", "xml")
+  expect_match(xml, "CAST(NULL AS float) AS DistinctValues", fixed = TRUE)
+  expect_match(xml, "NULL AS MinValue", fixed = TRUE)
+  expect_no_match(xml, "DISTINCT", fixed = TRUE)
+
+  counts <- .browse_sql_profile_counts("Analysis", "dbo", "APC", "Flag", "bit")
+  expect_match(counts, "SELECT TOP 1000 CAST([Flag] AS tinyint) AS ProfileValue",
+               fixed = TRUE)
+  expect_match(counts, "GROUP BY CAST([Flag] AS tinyint)", fixed = TRUE)
+  expect_match(counts, "ORDER BY COUNT_BIG(*) DESC, CAST([Flag] AS tinyint)",
+               fixed = TRUE)
+
+})
+
+test_that("values show as text, and value labels are matched as text or numbers", {
+
+  expect_equal(.browse_text(c(1, 2.5, 1e6, NA)), c("1", "2.5", "1000000", NA))
+  expect_equal(.browse_text(c(3L, NA)), c("3", NA))
+  expect_equal(.browse_text(as.Date("2024-03-05")), "2024-03-05")
+  expect_equal(.browse_text(as.POSIXct("2024-03-05 08:30:00", tz = "UTC")),
+               "2024-03-05 08:30:00")
+  expect_equal(.browse_text(c("a", NA)), c("a", NA))
+  expect_equal(.browse_cut(c(strrep("x", 201), "short", NA)),
+               c(paste0(strrep("x", 200), "\u2026"), "short", NA))
+
+  vals <- data.frame(Code = c("01", "2", "X"), Text = c("One", "Two", "Ex"))
+  expect_equal(.browse_value_labels(c("1", "2", "X", "3", NA, "2.0"), vals),
+               c("One", "Two", "Ex", NA, NA, "Two"))
+  expect_equal(.browse_value_labels(c("1", "2"), NULL), c(NA_character_, NA))
+
+})
+
+test_that("the preview shows value labels in place of codes, or the codes", {
+
+  data <- data.frame(SEX = c(1L, 4L, NA), Note = c("a", strrep("y", 250), NA),
+                     stringsAsFactors = FALSE)
+  cols <- data.frame(col = c("Sex", "Note"), dtype = c("int", "varchar"))
+  lbl <- list(values = list(sex = data.frame(Code = c("1", "2"),
+                                             Text = c("Male", "Female"))))
+  d <- .browse_preview(data, cols, lbl)
+  expect_named(d, c("Sex", "Note"))
+  expect_equal(d$Sex, c("Male", "4", "NA"))
+  expect_equal(nchar(d$Note[2]), 201)
+  expect_equal(d$Note[3], "NA")
+  expect_equal(.browse_preview(data, cols, lbl, codes = TRUE)$Sex, c("1", "4", "NA"))
+  expect_equal(nrow(.browse_preview(data[0, ], cols, lbl)), 0)
+
+})
+
+test_that("a profile gives the counts with their labels and the codes without labels", {
+
+  summary <- data.frame(TotalRows = 150, Present = 135, DistinctValues = 5,
+                        MinValue = 1, MaxValue = 10, Blank = NA)
+  counts <- data.frame(ProfileValue = c(1, 2, NA, 4, 9, 10),
+                       ProfileCount = c(45, 45, 15, 15, 15, 15))
+  vals <- data.frame(Code = c("1", "2", "9", "10"),
+                     Text = c("Male", "Female", "Not stated", "Other"))
+  p <- .browse_profile(summary, counts, vals)
+  expect_equal(p$summary$Measure, c("Rows", "Missing (NULL)", "Distinct values",
+                                    "Minimum", "Maximum", "Value labels",
+                                    "Codes without labels"))
+  expect_equal(p$summary$Value, c("150", "15 (10.0%)", "5", "1 (Male)", "10 (Other)",
+                                  "4", "1 code: 4"))
+  expect_named(p$counts, c("Value", "Label", "Rows", "Per cent"))
+  expect_equal(p$counts$Value, c("1", "2", "NA", "4", "9", "10"))
+  expect_equal(p$counts$Label, c("Male", "Female", "", "(no label)", "Not stated",
+                                 "Other"))
+  expect_equal(p$counts$`Per cent`, c(30, 30, 10, 10, 10, 10))
+  expect_equal(p$unlabelled, "4")
+  expect_true(p$complete)
+
+  # Counts that stop at 1,000; text with blanks; no value labels
+  many <- data.frame(ProfileValue = sprintf("v%04d", 1:1000), ProfileCount = 1)
+  p <- .browse_profile(data.frame(TotalRows = 2000, Present = 1990,
+                                  DistinctValues = 1500, MinValue = "  ",
+                                  MaxValue = "v1500", Blank = 12), many,
+                       data.frame(Code = "v0001", Text = "First"))
+  expect_false(p$complete)
+  expect_equal(p$summary$Value[p$summary$Measure == "Blank text"], "12 (0.6%)")
+  expect_match(p$summary$Value[p$summary$Measure == "Codes without labels"],
+               "^999 codes: v0002, .* and 989 more among the 1,000 most common values$")
+  expect_false("Label" %in% names(.browse_profile(summary, counts)$counts))
+
+  # A type that cannot be grouped; a table without rows
+  p <- .browse_profile(data.frame(TotalRows = 10, Present = 4, DistinctValues = NA,
+                                  MinValue = NA, MaxValue = NA, Blank = NA))
+  expect_null(p$counts)
+  expect_equal(p$summary$Measure, c("Rows", "Missing (NULL)"))
+  p <- .browse_profile(data.frame(TotalRows = 0, Present = NA, DistinctValues = 0,
+                                  MinValue = NA, MaxValue = NA, Blank = NA),
+                       counts[0, ])
+  expect_equal(p$summary$Value[1:2], c("0", "0"))
+
+})
+
 test_that("types show lengths, and precision and scale when there is a scale", {
 
   expect_equal(
@@ -478,7 +605,8 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*Dataset Browser\\s*<",
                perl = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
-  tabs <- vapply(c("tables", "columns", "collection", "search", "help"), function(tab) {
+  tabs <- vapply(c("tables", "columns", "preview", "profile", "collection", "search",
+                   "help"), function(tab) {
     in_bar(paste0("data-value=\"", tab, "\""))
   }, integer(1))
   expect_false(is.unsorted(c(in_bar("Dataset Browser"), tabs,
@@ -534,6 +662,17 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"collection\".*?</div>")
   expect_true(has_id(notes, "about"))
   expect_false(has_id(columns, "about"))
+  # The Preview tab; the Profile tab, its settings in a panel at its left
+  preview <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"preview\".*?id=\"preview_table\"")
+  for (id in c("preview_codes", "preview_note")) {
+    expect_true(has_id(preview, id), label = id)
+  }
+  profile <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"profile\".*?data-value=\"collection\"")
+  expect_match(profile, "epi-tab-layout", fixed = TRUE)
+  for (id in c("profile_settings", "profile_column", "profile_go", "profile_note",
+               "profile_summary", "profile_table")) {
+    expect_true(has_id(profile, id), label = id)
+  }
   # The Tables tab; the Var Finder tab, its settings in a panel at its left
   tables <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"tables\".*?id=\"tables_table\"")
   expect_true(has_id(tables, "tables_note"))
@@ -917,6 +1056,91 @@ test_that("the Var Finder tab finds columns, and a click opens the column's tabl
     expect_null(found())
     session$setInputs(search_in = character(), search_run = "sex")
     expect_match(warned, "Choose where to look.", fixed = TRUE)
+  })
+
+})
+
+test_that("the Preview tab reads its rows once, until the table or the columns chosen change", {
+
+  fake <- fake_browse_episerver()
+  reads <- function() sum(startsWith(fake$calls(), "SELECT TOP 100 "))
+  app <- episerver_browse_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC", view = "preview",
+                      preview_codes = FALSE)
+    expect_equal(output$preview_note, paste(
+      "100 rows of Analysis.dbo.APC, in no set order, with every column.",
+      "Value labels are shown in place of their codes."
+    ))
+    expect_equal(nrow(preview_rows()$data), 100)
+    expect_equal(reads(), 1)
+    # Value labels from the label table, read though they are not shown
+    expect_match(output$preview_table, "Sex of the patient", fixed = TRUE)
+
+    # Switching tabs and showing codes read nothing again
+    session$setInputs(view = "columns")
+    session$setInputs(view = "preview", preview_codes = TRUE)
+    expect_match(output$preview_note, "Codes are shown.", fixed = TRUE)
+    expect_equal(reads(), 1)
+
+    # Columns chosen are read again, in the table's order
+    session$setInputs(col_table_rows_selected = c(3L, 2L))
+    expect_equal(names(preview_rows()$data), c("Sex", "AgeYrs"))
+    expect_match(output$preview_note, "with the 2 columns chosen in the Columns tab",
+                 fixed = TRUE)
+    expect_equal(reads(), 2)
+
+    # Another table: every column, and the rows chosen of the last ignored
+    # until its columns' table is drawn
+    session$setInputs(table = "Deaths")
+    expect_equal(output$preview_note, paste(
+      "All 30 rows of Analysis.dbo.Deaths, in no set order, with every",
+      "column. Codes are shown."
+    ))
+  })
+
+})
+
+test_that("the Profile tab profiles the column chosen, only when asked", {
+
+  sent <- list()
+  capture <- function(session, inputId, label = NULL, choices = NULL,
+                      selected = NULL, ...) {
+    sent[[inputId]] <<- list(choices = choices, selected = selected)
+  }
+  local_mocked_bindings(updateSelectInput = capture, .package = "shiny")
+  fake <- fake_browse_episerver()
+  profiles <- function() sum(grepl("AS TotalRows", fake$calls(), fixed = TRUE))
+  app <- episerver_browse_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC", view = "profile")
+    expect_equal(sent$profile_column$choices[1:3], c("PatientID", "Sex", "AgeYrs"))
+    expect_equal(sent$profile_column$selected, "PatientID")
+    expect_match(output$profile_note, "Choose a column and click Profile.", fixed = TRUE)
+    expect_equal(profiles(), 0)
+
+    # The first column chosen in the Columns tab is offered
+    session$setInputs(col_table_rows_selected = 2L)
+    expect_equal(sent$profile_column$selected, "Sex")
+    session$setInputs(profile_column = "Sex", profile_go = 1)
+    expect_equal(profiles(), 1)
+    expect_equal(output$profile_note,
+                 "Profile of Analysis.dbo.APC.Sex (Sex of the patient).")
+    expect_match(output$profile_summary$html, "Codes without labels", fixed = TRUE)
+    expect_equal(profile()$counts$Label[4], "(no label)")
+    expect_match(output$profile_table, "Per cent", fixed = TRUE)
+
+    # Text: blank values; a profile of another table's column is not shown
+    session$setInputs(table = "Deaths")
+    expect_null(profile())
+    session$setInputs(profile_column = "Cause", profile_go = 2)
+    expect_match(output$profile_summary$html, "Blank text", fixed = TRUE)
+    expect_true(profile()$complete)
+    expect_equal(profile()$counts$Rows, c(8, 8, 7, 7))
   })
 
 })

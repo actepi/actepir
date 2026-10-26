@@ -63,9 +63,9 @@ By default the app runs in a background R process using
 console stays free while the browser is open. It opens in the system web
 browser and can be opened from the RStudio Addins menu (\emph{Open Dataset
 Browser}). The settings are in a sidebar on the left, in sections that
-open and close, and the tables of the schema, the columns, the dataset
-notes, a finder of columns in the database and the help in tabs on the
-top bar. The
+open and close, and the tables of the schema, the columns, a preview of
+the rows, a profile of a column, the dataset notes, a finder of columns in
+the database and the help in tabs on the top bar. The
 information button beside a setting shows notes on it, and the bug button
 at the foot of the sidebar prepares a report of a problem to send to
 \email{healthinfo@act.gov.au}.
@@ -138,6 +138,15 @@ whose names, variable labels or value labels hold the text typed, in the
 labels the browser reads: with \emph{Labels table} set to Automatic, only in
 the label table each table's labels come from. Click a column to open its
 table.
+
+\strong{Preview and profile}
+
+The \emph{Preview} tab shows 100 rows of the columns chosen (every column when
+none are), with value labels in place of their codes unless \emph{Show codes}
+is ticked. The \emph{Profile} tab describes one column over the whole table:
+its missing and distinct values, minimum and maximum, and the rows of
+each value with its label, listing codes without a value label. It runs
+only when \emph{Profile} is clicked.
 
 \strong{Code}
 

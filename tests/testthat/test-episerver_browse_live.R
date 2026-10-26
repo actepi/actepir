@@ -249,6 +249,62 @@ test_that("the search finds columns by name, variable label and value label", {
 
 })
 
+test_that("the preview and the profile read every type of column in Analysis.dbo", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+  tables <- db$query(.browse_sql_tables("Analysis", "dbo"))
+
+  # ACTGHSMYX: two columns, with their value labels in place of codes
+  cols <- db$query(.browse_sql_columns("Analysis", "dbo", "ACTGHSMYX"))
+  two <- cols[toupper(cols$col) %in% c("SVYYEAR", "RSEX_Y20"), ]
+  rows <- db$query(.browse_sql_preview("Analysis", "dbo", "ACTGHSMYX", two))
+  expect_equal(toupper(names(rows)), toupper(two$col))
+  expect_true(nrow(rows) > 0 && nrow(rows) <= 100)
+  l <- .lbl_read(db$query, "Analysis", "dbo", "ACTGHSMYX")
+  shown <- .browse_preview(rows, two, .lbl_table(l$rows))
+  sex <- shown[[which(toupper(names(shown)) == "RSEX_Y20")]]
+  expect_true(any(sex %in% c("Male", "Female")))
+
+  # Its profile: every row counted, with the labels of its codes
+  summary <- db$query(.browse_sql_profile("Analysis", "dbo", "ACTGHSMYX",
+                                          two$col[toupper(two$col) == "RSEX_Y20"],
+                                          two$dtype[toupper(two$col) == "RSEX_Y20"]))
+  counts <- db$query(.browse_sql_profile_counts("Analysis", "dbo", "ACTGHSMYX",
+                                                two$col[toupper(two$col) == "RSEX_Y20"],
+                                                two$dtype[toupper(two$col) == "RSEX_Y20"]))
+  expect_equal(sum(counts$ProfileCount), summary$TotalRows)
+  p <- .browse_profile(summary, counts, .lbl_table(l$rows)$values$rsex_y20)
+  expect_true(all(c("Male", "Female") %in% p$counts$Label))
+
+  # A sample of tables previewed with every column, and one column of each
+  # type among them profiled
+  seen <- character()
+  for (t in live_sample(tables)) {
+    cols <- db$query(.browse_sql_columns("Analysis", "dbo", t))
+    rows <- db$query(.browse_sql_preview("Analysis", "dbo", t, cols))
+    expect_setequal(tolower(names(rows)), tolower(cols$col))
+    expect_equal(ncol(.browse_preview(rows, cols, list(values = list()))),
+                 nrow(cols), label = t)
+    for (i in which(!tolower(cols$dtype) %in% seen)) {
+      seen <- c(seen, tolower(cols$dtype[i]))
+      label <- paste(t, cols$col[i], cols$dtype[i])
+      summary <- db$query(.browse_sql_profile("Analysis", "dbo", t, cols$col[i],
+                                              cols$dtype[i]))
+      expect_named(summary, c("TotalRows", "Present", "DistinctValues",
+                              "MinValue", "MaxValue", "Blank"))
+      if (!tolower(cols$dtype[i]) %in% .browse_uncomparable) {
+        counts <- db$query(.browse_sql_profile_counts("Analysis", "dbo", t,
+                                                      cols$col[i], cols$dtype[i]))
+        if (.browse_profile(summary, counts)$complete) {
+          expect_equal(sum(counts$ProfileCount), summary$TotalRows, label = label)
+        }
+      }
+    }
+  }
+
+})
+
 test_that("the code the browser copies reads the table in every form", {
 
   skip_if_no_episerver()
@@ -322,6 +378,15 @@ test_that("the app lists and describes a table against EpiServer", {
                       search_run = "RSEX_Y20")
     expect_null(found()$error)
     expect_true("ACTGHSMYX" %in% found()$results$Table)
+
+    # The Preview tab and the Profile tab
+    session$setInputs(view = "preview", preview_codes = FALSE)
+    expect_null(preview_rows()$error)
+    expect_match(output$preview_note, "of Analysis.dbo.ACTGHSMYX", fixed = TRUE)
+    session$setInputs(view = "profile", profile_column = "RSEX_Y20",
+                      profile_go = 1)
+    expect_null(profile()$error)
+    expect_true("Male" %in% profile()$counts$Label)
 
     # A view, when dbo has one
     views <- tables()$data$TABLE_NAME[tables()$data$TABLE_TYPE == "VIEW"]

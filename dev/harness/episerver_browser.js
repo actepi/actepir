@@ -412,6 +412,76 @@ const fs = require('fs');
     await page.evaluate(() => $('#table').val()), '|', await info());
   await select('schema', 'dbo');
 
+  // The Preview tab: 100 rows, with value labels in place of codes and each
+  // variable label in its heading's title; switching tabs keeps the table
+  // drawn, so nothing is read again; Show codes; the columns chosen
+  const previewHeads = () => page.$$eval('#preview_table .dataTables_scrollHead th',
+    ths => ths.map(th => [th.textContent.trim(), th.title]));
+  const mark = () => page.evaluate(() => {
+    document.querySelector('#preview_table table.dataTable').dataset.mark = 'kept';
+  });
+  const kept = () => page.evaluate(() =>
+    (document.querySelector('#preview_table table.dataTable') || { dataset: {} }).dataset.mark === 'kept');
+  await select('table', 'APC');
+  await page.click('a[data-value=preview]');
+  await settle();
+  console.log('PREVIEW note:', await text('#preview_note'), '| rows', (await cells('#preview_table')).length);
+  console.log('PREVIEW headings:', JSON.stringify((await previewHeads()).slice(0, 4)));
+  console.log('PREVIEW first rows:', JSON.stringify((await cells('#preview_table')).slice(0, 10).map(r => r.slice(0, 4))));
+  await shot('11_preview');
+  await mark();
+  await page.click('a[data-value=columns]');
+  await settle();
+  await page.click('a[data-value=preview]');
+  await settle();
+  console.log('PREVIEW back from Columns: same table drawn', await kept());
+  await page.check('#preview_codes');
+  await settle();
+  console.log('PREVIEW Show codes:', JSON.stringify((await cells('#preview_table')).slice(0, 10).map(r => r[1])));
+  await page.uncheck('#preview_codes');
+  await settle();
+  await page.click('a[data-value=columns]');
+  await settle();
+  await page.click('#col_table tbody tr:nth-child(2) td:nth-child(2)');
+  await page.click('#col_table tbody tr:nth-child(3) td:nth-child(2)');
+  await settle();
+  await page.click('a[data-value=preview]');
+  await settle();
+  console.log('PREVIEW columns chosen:', await text('#preview_note'), '|',
+    JSON.stringify((await previewHeads()).map(h => h[0])));
+  // A table chosen on the Tables tab while the Columns tab is hidden: the
+  // rows chosen in APC do not carry over
+  await page.click('a[data-value=tables]');
+  await settle();
+  await page.click('#tables_table tbody tr:nth-child(5) td:first-child');
+  await settle();
+  await page.click('a[data-value=preview]');
+  await settle();
+  console.log('PREVIEW ED:', await text('#preview_note'), '|', JSON.stringify((await previewHeads()).map(h => h[0])));
+
+  // The Profile tab: its settings in a panel at its left; the column offered
+  // is the first chosen in the Columns tab; Profile reads the profile
+  await select('table', 'APC');
+  await page.click('a[data-value=profile]');
+  await settle();
+  console.log('PROFILE panel:', JSON.stringify(await page.evaluate(() => ({
+    width: Math.round(document.querySelector('#profile_settings').getBoundingClientRect().width),
+    column: $('#profile_column').val() }))), '| note', await text('#profile_note'));
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILE Sex:', await text('#profile_note'), '|', JSON.stringify(await page.$$eval(
+    '#profile_summary tr', trs => trs.map(tr => [tr.querySelector('th').textContent, tr.querySelector('td').textContent]))));
+  console.log('PROFILE counts:', JSON.stringify(await cells('#profile_table')));
+  await shot('12_profile');
+  await select('table', 'Deaths');
+  await select('profile_column', 'Cause');
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILE Deaths.Cause:', JSON.stringify(await page.$$eval(
+    '#profile_summary tr', trs => trs.map(tr => [tr.querySelector('th').textContent, tr.querySelector('td').textContent]))),
+    '| counts', JSON.stringify((await cells('#profile_table')).map(r => [r[0].length, r[1]])));
+  await select('table', 'APC');
+
   // Help: the shared Help style, without the info bar
   await page.click('a[data-value=help]');
   await page.waitForTimeout(600);

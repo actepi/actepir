@@ -153,13 +153,52 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
                stringsAsFactors = FALSE)
   }
 
+  # The rows of each table, invented, for the Preview and Profile tabs: 150
+  # for dbo.APC, so that the preview stops at 100, and 30 for the others.
+  # Sex, RSEX_Y20 and Triage hold codes with value labels, one without
+  # (4, 3 and "3") and NULLs; Cause holds blank text.
+  rows_of <- function(key) {
+    d <- columns[[key]]
+    if (is.null(d)) return(NULL)
+    n <- if (key == "Analysis.dbo.APC") 150 else 30
+    i <- seq_len(n)
+    cycle <- function(x) x[(i - 1) %% length(x) + 1]
+    out <- lapply(seq_len(nrow(d)), function(j) {
+      col <- d$col[j]
+      switch(
+        col,
+        PatientID = i,
+        Sex = cycle(c(1L, 2L, 2L, 1L, 9L, 2L, 1L, 4L, NA, 10L)),
+        AgeYrs = (i * 7L) %% 100L,
+        SVYYEAR = 2015L + i %% 10L,
+        RSEX_Y20 = cycle(c(1L, 2L, 2L, 1L, 3L, NA)),
+        Triage = cycle(c("1", "2", "3", "2", NA)),
+        PresentationDateTime = as.POSIXct("2024-01-01 08:00:00", tz = "UTC") +
+          i * 3600,
+        Weight = 2500 + i * 12.5,
+        Cause = cycle(c("Ischaemic heart disease", "  ", NA,
+                        strrep("Long text ", 30))),
+        Diagnosis1 = cycle(c("I21.0", "J18.9", "S72.0")),
+        if (d$dtype[j] %in% c("int", "decimal")) i else rep(NA_character_, n)
+      )
+    })
+    names(out) <- d$col
+    as.data.frame(out, stringsAsFactors = FALSE, check.names = FALSE)
+  }
+  # The column a profile query reads: the first [name] before FROM
+  profiled <- function(sql) {
+    select <- sub("(?s)\\s*FROM \\[.*$", "", sql, perl = TRUE)
+    sub("^\\[(.*)\\]$", "\\1", regmatches(select, regexpr("\\[[^]]+\\]", select)))
+  }
+
   # Reading the SQL: the quoted values in order, the first [database], and
   # the [database].[schema].[table] after FROM
   quoted <- function(sql) {
     gsub("^N?'|'$", "", regmatches(sql, gregexpr("N?'[^']*'", sql))[[1]])
   }
   database <- function(sql) {
-    sub("^\\[([^]]+)\\]$", "\\1", regmatches(sql, regexpr("\\[[^]]+\\]", sql)))
+    sub("^FROM \\[([^]]+)\\]$", "\\1",
+        regmatches(sql, regexpr("FROM \\[[^]]+\\]", sql)))
   }
   from <- function(sql) {
     m <- regmatches(sql, regexec(
@@ -251,6 +290,39 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
     }
     if (grepl("AS ApproxRows", sql, fixed = TRUE)) {
       return(details(db, quoted(sql)[1]))
+    }
+
+    # The preview, and a column's profile and counts
+    if (startsWith(sql, "SELECT TOP 100 ")) {
+      d <- rows_of(paste0(db, ".", from(sql)))
+      cols <- sub("^AS \\[(.*)\\]$", "\\1",
+                  regmatches(sql, gregexpr("AS \\[[^]]+\\]", sql))[[1]])
+      return(utils::head(d[cols], 100))
+    }
+    if (grepl("AS TotalRows", sql, fixed = TRUE)) {
+      x <- rows_of(paste0(db, ".", from(sql)))[[profiled(sql)]]
+      present <- x[!is.na(x)]
+      has <- function(f) grepl(f, sql, fixed = TRUE)
+      return(data.frame(
+        TotalRows = length(x), Present = length(present),
+        DistinctValues = if (has("COUNT_BIG(DISTINCT")) length(unique(present)) else NA,
+        MinValue = if (has("MIN(") && length(present)) min(present) else NA,
+        MaxValue = if (has("MAX(") && length(present)) max(present) else NA,
+        Blank = if (has("LTRIM(RTRIM(")) sum(trimws(present) == "") else NA,
+        stringsAsFactors = FALSE
+      ))
+    }
+    if (grepl("AS ProfileValue", sql, fixed = TRUE)) {
+      x <- rows_of(paste0(db, ".", from(sql)))[[profiled(sql)]]
+      values <- unique(x)
+      n <- vapply(seq_along(values), function(k) {
+        if (is.na(values[k])) sum(is.na(x)) else sum(x %in% values[k])
+      }, integer(1))
+      # Most rows first, then by value, NULL first as SQL Server sorts it
+      o <- order(-n, !is.na(values), values)
+      return(utils::head(data.frame(ProfileValue = values[o],
+                                    ProfileCount = as.numeric(n[o]),
+                                    stringsAsFactors = FALSE), 1000))
     }
     # Every column of a schema, or the columns of a database whose names
     # hold a term

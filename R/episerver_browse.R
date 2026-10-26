@@ -13,9 +13,9 @@
 #' console stays free while the browser is open. It opens in the system web
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
-#' open and close, and the tables of the schema, the columns, the dataset
-#' notes, a finder of columns in the database and the help in tabs on the
-#' top bar. The
+#' open and close, and the tables of the schema, the columns, a preview of
+#' the rows, a profile of a column, the dataset notes, a finder of columns in
+#' the database and the help in tabs on the top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -102,6 +102,15 @@
 #' labels the browser reads: with *Labels table* set to Automatic, only in
 #' the label table each table's labels come from. Click a column to open its
 #' table.
+#'
+#' **Preview and profile**
+#'
+#' The *Preview* tab shows 100 rows of the columns chosen (every column when
+#' none are), with value labels in place of their codes unless *Show codes*
+#' is ticked. The *Profile* tab describes one column over the whole table:
+#' its missing and distinct values, minimum and maximum, and the rows of
+#' each value with its label, listing codes without a value label. It runs
+#' only when *Profile* is clicked.
 #'
 #' **Code**
 #'
@@ -399,6 +408,100 @@ episerver_browse_stop <- function() {
     paste(.sql_quote(names), collapse = ", "),
     if (properties) "PropertyText" else "LabelName",
     .sql_like(term)
+  )
+}
+
+# Types that the preview reads last, as SQL Server's ODBC driver reads long
+# columns only after the others: (max) types (charlen -1) and these. Of them
+# and the spatial types, none can be compared, grouped or counted distinct
+# except the (max) types.
+#' @noRd
+.browse_long_types <- c("text", "ntext", "image", "xml")
+#' @noRd
+.browse_uncomparable <- c("text", "ntext", "image", "xml", "geography",
+                          "geometry")
+
+# A column's value as R reads it, by its type (`dtype`, as in
+# INFORMATION_SCHEMA): bit as 0 or 1; binary types as hexadecimal text;
+# spatial types and hierarchyid as their text; sql_variant and xml as text;
+# others as they are
+#' @noRd
+.browse_sql_value <- function(col, dtype) {
+  id <- .sql_ident(col)
+  switch(
+    tolower(dtype),
+    bit = sprintf("CAST(%s AS tinyint)", id),
+    binary = , varbinary = , image = , timestamp = , rowversion =
+      sprintf("CONVERT(varchar(max), CAST(%s AS varbinary(max)), 1)", id),
+    geography = , geometry = , hierarchyid = sprintf("%s.ToString()", id),
+    sql_variant = sprintf("CAST(%s AS nvarchar(4000))", id),
+    xml = sprintf("CAST(%s AS nvarchar(max))", id),
+    id
+  )
+}
+
+# The first 100 rows of table schema.table of db, in no set order, with the
+# columns of `cols` (from .browse_sql_columns()), each read as
+# .browse_sql_value() gives it, the long ones last
+#' @noRd
+.browse_sql_preview <- function(db, schema, table, cols) {
+  long <- cols$charlen %in% -1 | tolower(cols$dtype) %in% .browse_long_types
+  cols <- cols[order(long), , drop = FALSE]
+  values <- vapply(seq_len(nrow(cols)), function(i) {
+    paste(.browse_sql_value(cols$col[i], cols$dtype[i]), "AS",
+          .sql_ident(cols$col[i]))
+  }, character(1))
+  sprintf("SELECT TOP 100 %s\n     FROM %s",
+          paste(values, collapse = ",\n       "), .sql_ident(db, schema, table))
+}
+
+# One column's profile, over every row of table schema.table of db: its
+# rows, the rows where it is not NULL, its distinct values, its least and
+# greatest values, and, for text, the rows that are blank. Counts are cast
+# to float, as odbc reads bigint as integer64. Types that cannot be compared
+# give no distinct values, least or greatest.
+#' @noRd
+.browse_sql_profile <- function(db, schema, table, col, dtype) {
+  id <- .sql_ident(col)
+  value <- .browse_sql_value(col, dtype)
+  comparable <- !tolower(dtype) %in% .browse_uncomparable
+  text <- tolower(dtype) %in% c("char", "varchar", "nchar", "nvarchar")
+  none <- "CAST(NULL AS float)"
+  sprintf(
+    "SELECT CAST(COUNT_BIG(*) AS float) AS TotalRows,
+            CAST(SUM(CASE WHEN %s IS NULL THEN 0 ELSE 1 END) AS float) AS Present,
+            %s AS DistinctValues,
+            %s AS MinValue,
+            %s AS MaxValue,
+            %s AS Blank
+     FROM %s",
+    id,
+    if (comparable) {
+      sprintf("CAST(COUNT_BIG(DISTINCT %s) AS float)", value)
+    } else none,
+    if (comparable) sprintf("MIN(%s)", value) else "NULL",
+    if (comparable) sprintf("MAX(%s)", value) else "NULL",
+    if (text) {
+      sprintf("CAST(SUM(CASE WHEN LTRIM(RTRIM(%s)) = '' THEN 1 ELSE 0 END) AS float)",
+              id)
+    } else none,
+    .sql_ident(db, schema, table)
+  )
+}
+
+# The rows of each value of one column of table schema.table of db, the
+# most common 1,000 values, NULL among them, as ProfileValue and
+# ProfileCount
+#' @noRd
+.browse_sql_profile_counts <- function(db, schema, table, col, dtype) {
+  value <- .browse_sql_value(col, dtype)
+  sprintf(
+    "SELECT TOP 1000 %1$s AS ProfileValue,
+            CAST(COUNT_BIG(*) AS float) AS ProfileCount
+     FROM %2$s
+     GROUP BY %1$s
+     ORDER BY COUNT_BIG(*) DESC, %1$s",
+    value, .sql_ident(db, schema, table)
   )
 }
 
@@ -744,6 +847,138 @@ episerver_browse_stop <- function() {
     rownames(results) <- NULL
   }
   list(results = results, capped = capped)
+}
+
+# ── Preview and profile ─────────────────────────────────────────────────────
+
+# Values as text: whole numbers without decimals or exponents, dates and
+# times as R prints them, and NA as NA
+#' @noRd
+.browse_text <- function(x) {
+  if (inherits(x, c("POSIXt", "Date"))) {
+    out <- format(x)
+  } else if (is.numeric(x) && !inherits(x, "integer64")) {
+    out <- as.character(x)
+    whole <- !is.na(x) & is.finite(x) & x == round(x) & abs(x) < 1e15
+    out[whole] <- formatC(x[whole], format = "f", digits = 0)
+  } else {
+    out <- as.character(x)
+  }
+  out[is.na(x)] <- NA_character_
+  out
+}
+
+# Text cut at `n` characters, marked with an ellipsis
+#' @noRd
+.browse_cut <- function(x, n = 200) {
+  long <- !is.na(x) & nchar(x) > n
+  x[long] <- paste0(substr(x[long], 1, n), "\u2026")
+  x
+}
+
+# The value labels of `codes` (text, as .browse_text() gives them) in
+# `vals`, a column's value labels (Code and Text, from .lbl_table()):
+# matched as text, then as numbers, so that 1 finds a code written "01";
+# NA where none matches
+#' @noRd
+.browse_value_labels <- function(codes, vals) {
+  if (is.null(vals) || !nrow(vals)) return(rep(NA_character_, length(codes)))
+  key <- trimws(codes)
+  i <- match(key, trimws(vals$Code))
+  num <- suppressWarnings(as.numeric(key))
+  again <- is.na(i) & !is.na(num)
+  i[again] <- match(num[again], suppressWarnings(as.numeric(vals$Code)))
+  vals$Text[i]
+}
+
+# The Preview tab's table: the rows read (`data`, from
+# .browse_sql_preview()) in the order of `cols`, each value as text, cut at
+# 200 characters, with the value labels of `lbl` (.lbl_table()) in place of
+# their codes unless `codes`, and NULL as NA. Columns are matched in any
+# case.
+#' @noRd
+.browse_preview <- function(data, cols, lbl, codes = FALSE) {
+  out <- lapply(as.character(cols$col), function(name) {
+    x <- .browse_text(data[[match(tolower(name), tolower(names(data)))]])
+    if (!codes) {
+      label <- .browse_value_labels(x, lbl$values[[tolower(name)]])
+      x <- ifelse(is.na(label), x, label)
+    }
+    x <- .browse_cut(x)
+    x[is.na(x)] <- "NA"
+    x
+  })
+  names(out) <- cols$col
+  as.data.frame(out, check.names = FALSE, stringsAsFactors = FALSE)
+}
+
+# The Profile tab's results from one column's profile (`summary`, from
+# .browse_sql_profile()), its counts (`counts`, from
+# .browse_sql_profile_counts(), or NULL for a type that cannot be grouped)
+# and its value labels (`vals`, Code and Text, or NULL): the summary as
+# Measure and Value; the counts with their labels and per cent of rows; the
+# codes found without a value label; and whether the counts hold every
+# value, as they stop at 1,000
+#' @noRd
+.browse_profile <- function(summary, counts = NULL, vals = NULL) {
+  big <- function(n) formatC(n, format = "f", digits = 0, big.mark = ",")
+  total <- summary$TotalRows[1]
+  present <- summary$Present[1]
+  if (is.na(present)) present <- 0
+  share <- function(n) {
+    paste0(big(n), if (total > 0) sprintf(" (%.1f%%)", 100 * n / total))
+  }
+  labelled <- !is.null(vals) && nrow(vals) > 0
+  with_label <- function(x) {
+    x <- .browse_text(x)
+    label <- .browse_value_labels(x, vals)
+    .browse_cut(ifelse(is.na(label), x, paste0(x, " (", label, ")")))
+  }
+
+  out <- NULL
+  unlabelled <- character()
+  complete <- FALSE
+  if (!is.null(counts)) {
+    value <- .browse_text(counts$ProfileValue)
+    out <- data.frame(Value = ifelse(is.na(value), "NA", .browse_cut(value)),
+                      stringsAsFactors = FALSE)
+    if (labelled) {
+      label <- .browse_value_labels(value, vals)
+      out$Label <- ifelse(!is.na(label), label,
+                          ifelse(is.na(value), "", "(no label)"))
+      unlabelled <- value[!is.na(value) & is.na(label)]
+    }
+    out$Rows <- counts$ProfileCount
+    out$`Per cent` <- if (total > 0) {
+      100 * counts$ProfileCount / total
+    } else rep(NA_real_, nrow(counts))
+    complete <- nrow(counts) < 1000
+  }
+
+  distinct <- summary$DistinctValues[1]
+  measures <- c(
+    Rows = big(total),
+    `Missing (NULL)` = share(total - present),
+    `Blank text` = if (!is.na(summary$Blank[1])) share(summary$Blank[1]),
+    `Distinct values` = if (!is.na(distinct)) big(distinct),
+    Minimum = if (!is.na(distinct) && present > 0) with_label(summary$MinValue[1]),
+    Maximum = if (!is.na(distinct) && present > 0) with_label(summary$MaxValue[1]),
+    `Value labels` = if (labelled) big(nrow(vals)),
+    `Codes without labels` = if (labelled && !is.null(counts)) {
+      n <- length(unlabelled)
+      paste0(
+        if (!n) "None" else {
+          paste0(big(n), " code", if (n != 1) "s", ": ",
+                 paste(utils::head(unlabelled, 10), collapse = ", "),
+                 if (n > 10) paste0(" and ", big(n - 10), " more"))
+        },
+        if (!complete) " among the 1,000 most common values"
+      )
+    }
+  )
+  list(summary = data.frame(Measure = names(measures), Value = unname(measures),
+                            stringsAsFactors = FALSE),
+       counts = out, unlabelled = unlabelled, complete = complete)
 }
 
 # R code that reads table schema.table of db: a pipe from
@@ -1094,6 +1329,27 @@ episerver_browse_stop <- function() {
       "table without changing the columns chosen."
     ),
 
+    shiny::h5("Preview"),
+    shiny::p(
+      "The Preview tab shows 100 rows of the table, in no set order, with the ",
+      "columns chosen, or every column when none are. Value labels are shown ",
+      "in place of their codes; Show codes shows the codes. A column's ",
+      "variable label shows when the pointer is over its heading. The rows ",
+      "are read when the tab is shown, and read again only when the table or ",
+      "the columns chosen change."
+    ),
+
+    shiny::h5("Profile"),
+    shiny::p(
+      "The Profile tab describes one column over every row of the table: its ",
+      "rows, missing (NULL) values, blank text, distinct values, minimum and ",
+      "maximum, and the rows of each value, with its value label, for the ",
+      "1,000 most common values. Codes found without a value label are ",
+      "listed. The column offered is the first chosen in the Columns tab. A ",
+      "profile reads the whole table, so it runs only when Profile is ",
+      "clicked, and a large table can take a while."
+    ),
+
     shiny::h5("Code"),
     shiny::p(
       "Copy Code copies R code that reads the table, with a ",
@@ -1238,7 +1494,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       # Browser-only rules: the dataset labels in the Table list, light on
       # the chosen table's Nightshade, the Collection tab, the line on the
       # columns chosen, the value labels in the columns' table, whose list
-      # scrolls once open, and the folder list of Dictionaries of all tables
+      # scrolls once open, the folder list of Dictionaries of all tables, and
+      # the profile's summary
       shiny::tags$style(shiny::HTML("
         .browse-label { color: #777; }
         .selectize-dropdown .option.selected .browse-label { color: inherit;
@@ -1256,6 +1513,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                           margin-bottom: var(--epi-gap); }
         .browse-folders .list-group-item { font-size: var(--epi-font-box);
           padding: var(--epi-box-pad-y) var(--epi-box-pad-x); }
+        .browse-profile { width: auto; min-width: 360px;
+                          margin-bottom: var(--epi-gap); }
+        .browse-profile th { font-weight: 600; padding-right: 24px; }
       ")),
 
       # A click on a folder in the list of Dictionaries of all tables
@@ -1311,10 +1571,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # The tables of the Tables, Columns and Var Finder tabs fit the window
-      # below their top, so that they need no page scrolling: a script sets
-      # --browse-table-height on each, which caps its scrolling body
-      # (scrollY)
+      # The tables of the Tables, Columns, Preview, Profile and Var Finder
+      # tabs fit the window below their top, so that they need no page
+      # scrolling: a script sets --browse-table-height on each, which caps
+      # its scrolling body (scrollY)
       shiny::tags$script(shiny::HTML("
         (function() {
           function fit(id) {
@@ -1330,7 +1590,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
           }
           function soon() {
             setTimeout(function() {
-              ['col_table', 'tables_table', 'search_table'].forEach(fit);
+              ['col_table', 'tables_table', 'search_table', 'preview_table',
+               'profile_table'].forEach(fit);
             }, 0);
           }
           $(window).on('resize', soon);
@@ -1497,6 +1758,44 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                     shiny::textOutput("chosen_note", inline = TRUE))
       ),
       DT::dataTableOutput("col_table")
+    ),
+
+    # 100 rows of the columns chosen, with value labels in place of codes,
+    # read when the tab is shown
+    bslib::nav_panel(
+      "Preview", value = "preview",
+      shiny::div(
+        class = "options-row",
+        shiny::checkboxInput("preview_codes", "Show codes", value = FALSE),
+        shiny::span(class = "browse-chosen",
+                    shiny::textOutput("preview_note", inline = TRUE))
+      ),
+      DT::dataTableOutput("preview_table")
+    ),
+
+    # One column's profile, read only when Profile is clicked
+    bslib::nav_panel(
+      "Profile", value = "profile",
+      .epi_tab_settings(
+        "profile_settings",
+        shiny::tagList(
+          shiny::selectInput("profile_column", "Column", choices = NULL,
+                             width = "100%"),
+          shiny::div(
+            class = "epi-stack",
+            shiny::actionButton("profile_go", "Profile",
+                                icon = shiny::icon("chart-column"),
+                                class = "btn-sm btn-primary")
+          )
+        ),
+        shiny::div(
+          class = "options-row",
+          shiny::span(class = "browse-chosen",
+                      shiny::textOutput("profile_note", inline = TRUE))
+        ),
+        shiny::uiOutput("profile_summary"),
+        DT::dataTableOutput("profile_table")
+      )
     ),
 
     # The table's description, notes and linked tables, apart from its
@@ -1692,6 +1991,24 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       .lbl_table(labels()$rows, values()$rows)
     })
 
+    # The table's value labels whether or not they are shown, for the
+    # preview, the profile and the dictionary: those shown, or read for them
+    all_values <- shiny::reactive({
+      l <- labels()
+      if (is.null(l$source)) return(list(rows = .lbl_normalise(NULL)))
+      v <- values()
+      if (!is.null(v)) return(v)
+      ch <- chosen()
+      r <- read(.lbl_sql_rows(ch$db, l$source, ch$schema, ch$table,
+                              values = TRUE))
+      list(rows = .lbl_normalise(r$data),
+           error = if (!is.null(r$error)) {
+             paste0("The value labels could not be read from ",
+                    l$source$TABLE_SCHEMA, ".", l$source$TABLE_NAME, ": ",
+                    r$error)
+           })
+    })
+
     # ── Info bar ───────────────────────────────────────────────────────────
     output$info_bar <- shiny::renderUI({
       shiny::req(input$db, input$schema)
@@ -1750,9 +2067,14 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       .browse_about(lbl()$dataset)
     })
 
+    # The table the columns' table was last drawn for, as its rows chosen
+    # belong to it until it is drawn again
+    col_table_for <- shiny::reactiveVal(NULL)
+
     output$col_table <- DT::renderDataTable({
       cols <- columns()
       shiny::req(is.null(cols$error))
+      col_table_for(chosen())
       show_values <- isTRUE(input$show_values) && !is.null(values())
       d <- .browse_columns(cols$data, lbl(), values = show_values)
 
@@ -1790,9 +2112,12 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     # ── Columns chosen, and the insert / copy code button ──────────────────
     # The columns chosen, by their rows in the table, which are the rows of
-    # columns() whatever the sorting. The line above the table counts them,
-    # and Clear selection clears them through DT's proxy.
+    # columns() whatever the sorting. None while the table is not yet drawn
+    # for the table chosen, as when another table is chosen while the
+    # Columns tab is hidden. The line above the table counts them, and Clear
+    # selection clears them through DT's proxy.
     chosen_columns <- function() {
+      if (!identical(col_table_for(), chosen())) return(character())
       cols <- columns()$data
       rows <- input$col_table_rows_selected
       as.character(cols$col[rows[rows <= nrow(cols)]])
@@ -2034,26 +2359,210 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       bslib::nav_select("view", "columns")
     })
 
+    # ── The Preview tab ────────────────────────────────────────────────────
+    # 100 rows of the columns chosen, or of all when none are, read when the
+    # tab is shown. The rows are kept: showing the tab again reads them
+    # again only when the table or the columns chosen have changed, and
+    # Show codes and the labels change only what is shown. Nothing is read
+    # before the tab is first shown, as Shiny also holds back the outputs of
+    # a hidden tab; after that, switching tabs changes nothing it reads.
+    preview_seen <- shiny::reactiveVal(FALSE)
+    shiny::observe({
+      if (identical(input$view, "preview")) preview_seen(TRUE)
+    })
+    preview_rows <- shiny::reactive({
+      shiny::req(preview_seen())
+      ch <- chosen()
+      cols <- columns()
+      shiny::req(is.null(cols$error), nrow(cols$data) > 0)
+      pick <- chosen_columns()
+      use <- if (length(pick)) {
+        cols$data[cols$data$col %in% pick, , drop = FALSE]
+      } else cols$data
+      r <- read(.browse_sql_preview(ch$db, ch$schema, ch$table, use))
+      list(name = paste(ch$db, ch$schema, ch$table, sep = "."), cols = use,
+           all = !length(pick), data = r$data, error = r$error)
+    })
+
+    output$preview_note <- shiny::renderText({
+      p <- preview_rows()
+      if (!is.null(p$error)) {
+        return(paste0("The rows of ", p$name, " could not be read: ", p$error))
+      }
+      n <- nrow(p$data)
+      k <- nrow(p$cols)
+      paste0(
+        if (n < 100) paste0("All ", n, " row", if (n != 1) "s") else "100 rows",
+        " of ", p$name, ", in no set order, with ",
+        if (p$all) "every column" else {
+          paste0("the ", k, " column", if (k != 1) "s",
+                 " chosen in the Columns tab")
+        },
+        ". ",
+        if (isTRUE(input$preview_codes)) "Codes are shown." else {
+          "Value labels are shown in place of their codes."
+        }
+      )
+    })
+
+    output$preview_table <- DT::renderDataTable({
+      p <- preview_rows()
+      shiny::req(is.null(p$error))
+      shown <- .lbl_table(labels()$rows, all_values()$rows)
+      d <- .browse_preview(p$data, p$cols, shown,
+                           codes = isTRUE(input$preview_codes))
+      # Each column's variable label, shown when the pointer is over its
+      # heading
+      heads <- htmltools::tags$table(htmltools::tags$thead(htmltools::tags$tr(
+        lapply(names(d), function(n) {
+          htmltools::tags$th(n, title = unname(shown$label[tolower(n)]))
+        })
+      )))
+      DT::datatable(
+        d,
+        container = heads,
+        options   = list(
+          paging         = FALSE,
+          dom            = "t",
+          ordering       = FALSE,
+          scrollX        = TRUE,
+          scrollY        = "var(--browse-table-height, 50vh)",
+          scrollCollapse = TRUE,
+          autoWidth      = FALSE
+        ),
+        rownames  = FALSE,
+        selection = "none",
+        class     = "compact stripe hover",
+        style     = "bootstrap5"
+      )
+    })
+
+    # ── The Profile tab ────────────────────────────────────────────────────
+    # One column's profile (.browse_profile()), read only when Profile is
+    # clicked, as it reads every row of the table. The column offered is the
+    # first chosen in the Columns tab, or the one already offered.
+    shiny::observe({
+      cols <- columns()$data
+      shiny::req(!is.null(cols))
+      pick <- chosen_columns()
+      current <- shiny::isolate(input$profile_column)
+      selected <- if (length(pick)) {
+        pick[1]
+      } else if (length(current) && current %in% cols$col) {
+        current
+      } else as.character(cols$col[1])
+      shiny::updateSelectInput(session, "profile_column",
+                               choices = as.character(cols$col),
+                               selected = selected)
+    })
+
+    profiled <- shiny::reactiveVal(NULL)
+    shiny::observeEvent(input$profile_go, {
+      ch <- chosen()
+      cols <- columns()$data
+      i <- match(input$profile_column, cols$col)
+      if (is.na(i)) {
+        shiny::showNotification("Choose a column to profile.", duration = 6,
+                                type = "warning")
+        return(invisible(NULL))
+      }
+      col <- as.character(cols$col[i])
+      dtype <- cols$dtype[i]
+      shown <- .lbl_table(labels()$rows, all_values()$rows)
+      r <- tryCatch(
+        shiny::withProgress(message = "Profiling", value = 0.2, {
+          summary <- query(.browse_sql_profile(ch$db, ch$schema, ch$table,
+                                               col, dtype))
+          shiny::incProgress(0.4)
+          counts <- if (!tolower(dtype) %in% .browse_uncomparable) {
+            query(.browse_sql_profile_counts(ch$db, ch$schema, ch$table,
+                                             col, dtype))
+          }
+          .browse_profile(summary, counts, shown$values[[tolower(col)]])
+        }),
+        error = function(e) list(error = conditionMessage(e))
+      )
+      profiled(c(r, list(table = ch, column = col, dtype = dtype,
+                         label = unname(shown$label[tolower(col)]))))
+    })
+    # The profile of a column of the table chosen, or NULL
+    profile <- shiny::reactive({
+      p <- profiled()
+      ch <- tryCatch(chosen(), error = function(e) NULL)
+      if (is.null(p) || !identical(p$table, ch)) NULL else p
+    })
+
+    output$profile_note <- shiny::renderText({
+      p <- profile()
+      if (is.null(p)) {
+        return(paste("Choose a column and click Profile. A profile reads every",
+                     "row of the table, so a large table can take a while."))
+      }
+      name <- paste(p$table$db, p$table$schema, p$table$table, p$column,
+                    sep = ".")
+      if (!is.null(p$error)) {
+        return(paste0("The profile of ", name, " could not be read: ", p$error))
+      }
+      paste0(
+        "Profile of ", name,
+        if (length(p$label) && !is.na(p$label)) paste0(" (", p$label, ")"),
+        ".",
+        if (is.null(p$counts)) {
+          paste0(" Values of type ", p$dtype, " cannot be counted.")
+        } else if (!p$complete) {
+          " The 1,000 most common values are listed."
+        }
+      )
+    })
+
+    output$profile_summary <- shiny::renderUI({
+      p <- profile()
+      shiny::req(p, is.null(p$error))
+      htmltools::tags$table(
+        class = "table table-sm browse-profile",
+        htmltools::tags$tbody(lapply(seq_len(nrow(p$summary)), function(i) {
+          htmltools::tags$tr(htmltools::tags$th(p$summary$Measure[i]),
+                             htmltools::tags$td(p$summary$Value[i]))
+        }))
+      )
+    })
+
+    output$profile_table <- DT::renderDataTable({
+      p <- profile()
+      shiny::req(p, is.null(p$error), p$counts)
+      DT::formatRound(
+        DT::formatRound(
+          DT::datatable(
+            p$counts,
+            options   = list(
+              paging         = FALSE,
+              dom            = "ft",
+              scrollY        = "var(--browse-table-height, 50vh)",
+              scrollCollapse = TRUE,
+              autoWidth      = FALSE
+            ),
+            rownames  = FALSE,
+            selection = "none",
+            class     = "compact stripe hover",
+            style     = "bootstrap5"
+          ),
+          "Rows", digits = 0
+        ),
+        "Per cent", digits = 1
+      )
+    })
+
     # ── Dictionary ─────────────────────────────────────────────────────────
-    # The dictionary of the table chosen, from the labels shown. Its value
-    # labels are read for it when they are not shown.
+    # The dictionary of the table chosen, from the labels shown, with its
+    # value labels whether or not they are shown
     dictionary <- function() {
       ch <- chosen()
       cols <- columns()
       if (!is.null(cols$error)) stop(cols$error, call. = FALSE)
       l <- labels()
-      rows <- l$rows
-      if (!is.null(l$source)) {
-        v <- values()
-        if (is.null(v)) {
-          r <- read(.lbl_sql_rows(ch$db, l$source, ch$schema, ch$table,
-                                  values = TRUE))
-          if (!is.null(r$error)) stop(r$error, call. = FALSE)
-          v <- list(rows = .lbl_normalise(r$data))
-        }
-        rows <- rbind(rows, v$rows)
-      }
-      .dict_assemble(ch, cols$data, rows, l$source)
+      v <- all_values()
+      if (!is.null(v$error)) stop(v$error, call. = FALSE)
+      .dict_assemble(ch, cols$data, rbind(l$rows, v$rows), l$source)
     }
     dict_download <- function(format) {
       shiny::downloadHandler(
@@ -2164,7 +2673,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
       ids <- c("view", "db", "schema", "table", "labels_source",
                "show_values", "insert_mode", "declare_pkgs", "use_labels",
-               "col_table_rows_selected")
+               "col_table_rows_selected", "preview_codes", "profile_column")
       .epi_problem_report(
         "Dataset Browser", "Browser", what,
         state = c(
