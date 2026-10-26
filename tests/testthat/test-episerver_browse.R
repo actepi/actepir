@@ -262,6 +262,31 @@ test_that("the code collects with dplyr and backquotes names that need it", {
 
 })
 
+test_that("the code names the label table chosen", {
+
+  expect_equal(
+    .browse_code("Analysis", "dbo", "APC", "Sex",
+                 label_table = c("ref", "DataLabels")),
+    paste0("data <- actepir::episerver_quickconnect(\"APC\") |>\n",
+           "  dplyr::select(Sex) |>\n",
+           "  actepir::collect_withlabels(lbl_schema = \"ref\", ",
+           "lbl_table = \"DataLabels\")\n")
+  )
+  for (mode in c("connect", "none")) {
+    expect_match(
+      .browse_code("Analysis", "dbo", "APC", mode = mode, declare = FALSE,
+                   label_table = c("dbo", "DataLabels")),
+      "\n  collect_withlabels(lbl_schema = \"dbo\", lbl_table = \"DataLabels\")\n",
+      fixed = TRUE
+    )
+  }
+  # Without labels, collect() names no label table
+  expect_equal(.browse_code("Analysis", "dbo", "APC", labels = FALSE,
+                            label_table = c("ref", "DataLabels")),
+               .browse_code("Analysis", "dbo", "APC", labels = FALSE))
+
+})
+
 # ── Page ────────────────────────────────────────────────────────────────────
 
 test_that("the page follows the app style: top bar, sidebar sections and tabs", {
@@ -625,12 +650,17 @@ test_that("the code button gives the code for the table and columns chosen", {
     session$setInputs(schema = "stage", insert_mode = "quickconnect",
                       use_labels = TRUE, col_table_rows_selected = NULL)
     session$setInputs(insert_code = 3)
+    # A label table chosen is named in the code
+    session$setInputs(labels_source = "ref.DataLabels")
+    session$setInputs(insert_code = 4)
   })
 
   expect_equal(sent, c(
     .browse_code("Analysis", "dbo", "APC", c("AgeYrs", "Sex"), "connect",
                  declare = TRUE, labels = FALSE),
-    .browse_code("Analysis", "stage", "APC", character(), "quickconnect")
+    .browse_code("Analysis", "stage", "APC", character(), "quickconnect"),
+    .browse_code("Analysis", "stage", "APC", character(), "quickconnect",
+                 label_table = c("ref", "DataLabels"))
   ))
 
 })

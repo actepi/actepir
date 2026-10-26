@@ -102,9 +102,9 @@
 #' * *Declare packages*: `pkg::` prefixes in the quickconnect and none forms,
 #'   and `library()` calls in the connect form;
 #' * *Import with labels*: [collect_withlabels()] in place of `collect()`.
-#'   It applies the variable and value labels that Automatic finds, which
-#'   may differ from those shown when *Labels table* names another label
-#'   table.
+#'   It applies the variable and value labels of the label table the browser
+#'   reads: when *Labels table* names one, the code names it in `lbl_schema`
+#'   and `lbl_table`.
 #'
 #' **Background process**
 #'
@@ -408,12 +408,13 @@ episerver_browse_stop <- function() {
 # table tb ("none"). `columns` are the columns chosen for select(), in
 # backquotes when they are not syntactic R names; with `declare`, the
 # quickconnect and none forms prefix their packages and the connect form
-# calls library(); `labels` collects with collect_withlabels(), otherwise
-# dplyr's collect().
+# calls library(); `labels` collects with collect_withlabels(), naming the
+# label table `label_table` (its schema and name) when it is given,
+# otherwise with dplyr's collect().
 #' @noRd
 .browse_code <- function(db, schema, table, columns = character(),
                          mode = "quickconnect", declare = TRUE,
-                         labels = TRUE) {
+                         labels = TRUE, label_table = NULL) {
 
   # Package qualifier for inline (quickconnect / none) code
   q <- function(pkg, fn) if (declare) paste0(pkg, "::", fn) else fn
@@ -434,7 +435,14 @@ episerver_browse_stop <- function() {
     ""
   }
 
-  collect_call <- if (labels) "collect_withlabels()" else "collect()"
+  collect_call <- if (!labels) {
+    "collect()"
+  } else if (is.null(label_table)) {
+    "collect_withlabels()"
+  } else {
+    sprintf('collect_withlabels(lbl_schema = "%s", lbl_table = "%s")',
+            label_table[1], label_table[2])
+  }
   collect_pkg  <- if (labels) "actepir" else "dplyr"
 
   # Argument tail shared by quickconnect and lazytable calls
@@ -561,8 +569,8 @@ episerver_browse_stop <- function() {
       " to the calls, or ", code("library()"), " calls to the connect form. ",
       "Import with labels collects the data with ",
       code("collect_withlabels()"), ", which applies the variable and value ",
-      "labels that Automatic finds. When Labels table names another label ",
-      "table, the labels applied may differ from those shown."
+      "labels of the label table the browser reads. When Labels table names ",
+      "a label table, the code names it too."
     ),
 
     shiny::h5("Problems"),
@@ -793,7 +801,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
             "table with episerver_lazytable(); none gives the pipe alone, ",
             "from a lazy table tb made earlier. Import with labels uses ",
             "collect_withlabels(), which applies the variable and value ",
-            "labels that Automatic finds."
+            "labels of the label table the browser reads."
           ),
           shiny::checkboxInput("declare_pkgs", "Declare packages",
                                value = TRUE),
@@ -1102,11 +1110,17 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     shiny::observeEvent(input$clear_rows, {
       DT::selectRows(DT::dataTableProxy("col_table"), NULL)
     })
+    # The code names the label table chosen in Labels table, so that it
+    # applies the labels the browser shows
     table_code <- function(ch) {
+      label_table <- if (!auto()) {
+        c(active()$TABLE_SCHEMA, active()$TABLE_NAME)
+      }
       .browse_code(ch$db, ch$schema, ch$table, chosen_columns(),
                    mode    = or(input$insert_mode, "quickconnect"),
                    declare = isTRUE(input$declare_pkgs),
-                   labels  = isTRUE(input$use_labels))
+                   labels  = isTRUE(input$use_labels),
+                   label_table = label_table)
     }
     shiny::observeEvent(input$insert_code, {
       ch <- tryCatch(chosen(), error = function(e) NULL)

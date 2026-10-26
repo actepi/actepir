@@ -47,6 +47,26 @@ test_that("value labels are applied to a column without a variable label", {
 
 })
 
+test_that("variable names match the data's column names in any case", {
+
+  data <- data.frame(SEX = c(1, 2), code = c("A", "B"))
+  out <- applydatalabels(data, labels)
+  expect_named(out, c("SEX", "code"))
+  expect_equal(attr(out$SEX, "labels"), c(Male = 1, Female = 2))
+  expect_equal(attr(out$SEX, "label"), "Sex of patient")
+  expect_equal(attr(out$code, "labels"), c(Alpha = "A"))
+
+  # Rows for one column and code in different cases count as one
+  mixed <- tibble::tibble(VarName   = c("Sex", "SEX", "sex"),
+                          LabelType = c("Var", "Opt", "opt"),
+                          DataCode  = c(NA, "1", "1"),
+                          LabelName = c("Sex", "Male", "A second label of 1"))
+  out <- applydatalabels(data.frame(Sex = 1), mixed)
+  expect_equal(attr(out$Sex, "labels"), c(Male = 1))
+  expect_equal(attr(out$Sex, "label"), "Sex")
+
+})
+
 test_that("no labels leave the data as they were", {
 
   data <- data.frame(Sex = c(1, 2))

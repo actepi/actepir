@@ -201,6 +201,16 @@ test_that("the code the browser copies reads the table in every form", {
                  label = label)
   }
 
+  # With a label table chosen, the code applies the labels of that table
+  run <- new.env()
+  eval(parse(text = .browse_code("Analysis", "dbo", "ACTGHSMYX", columns,
+                                 label_table = c("ref", "DataLabels"))), run)
+  labels <- episerver_getlabels(episerver_quickconnect("ACTGHSMYX"),
+                                lbl_schema = "ref", lbl_table = "DataLabels")
+  sex <- labels[toupper(labels$VarName) == "RSEX_Y20" &
+                  labels$LabelType == "Opt", ]
+  expect_setequal(names(attr(run$data$RSEX_Y20, "labels")), sex$LabelName)
+
 })
 
 test_that("the app lists and describes a table against EpiServer", {

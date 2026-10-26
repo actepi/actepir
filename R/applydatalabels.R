@@ -9,7 +9,7 @@
 #' "DataCode" : containing the underlying code (level)
 #' "LabelName" : the variable or value label
 #' 
-#' All columns should be character.  VarNames must be in the same case as the column names in the data they are to be applied to.
+#' All columns should be character.  VarName is matched to the column names of the data in any case, as SQL Server matches them.
 #' 
 #' @param data The dataframe of data which the labels will be applied to. Argument should be supplied as an object.
 #' @param labels The dataframe containing the labels to be applied. Argument should be supplied as an object.
@@ -52,14 +52,15 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
   # clean and prepare labels file
   label_info = labels %>% 
     
+    # standardise names and types, which match in any case
+    dplyr::mutate(varname = tolower(varname), labeltype = tolower(labeltype)) %>% 
+    
     # remove duplicate entries
     dplyr::group_by(varname,labeltype,datacode) %>% 
     dplyr::mutate(rank=dplyr::row_number()) %>% 
     dplyr::filter(rank == 1) %>% 
     dplyr::ungroup() %>% 
     
-    # standardise types
-    dplyr::mutate(labeltype = tolower(labeltype)) %>% 
     dplyr::filter(labeltype %in% c("opt","var")) %>% 
     
     # roll up into lists, one row per variable, with NA for a variable
@@ -80,11 +81,11 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
   # apply labels to data
   for (i in base::seq_along(label_info$varname)) {
     
-    # isolate variable name for iteration
-    var <- label_info$varname[i]
+    # isolate the column of the data that the variable name matches
+    var <- names(data)[match(label_info$varname[i], tolower(names(data)))]
     
     # ensure variable name exists in dataset
-    if (!var %in% names(data)) {
+    if (is.na(var)) {
       next  # Skip variable if not exist in dataset
     }
     
