@@ -1,17 +1,17 @@
 # Dataset Browser
 
-`episerver_browse()` opens the Dataset Browser, formerly the EpiServer Browser. Analysts use it to find a database, schema, table or view on EpiServer, read its columns with their labels, and copy the R code that reads the table. It is opened from Addins > Open Dataset Browser or by calling `episerver_browse()`. Pull request 1 rebuilt it to `dev/reference/app-style.md` and taught it to read the new label table, `ref.DataProperties`. That work later grows into one place for every kind of data dictionary (see `dictionaries.md`).
+`episerver_browse()` opens the Dataset Browser, formerly the EpiServer Browser. Analysts use it to find a database, schema, table or view on EpiServer, read its columns with their labels, and copy the R code that reads the table. It is opened from Addins > Open Dataset Browser or by calling `episerver_browse()`. Pull request 1 rebuilt it to `dev/reference/app-style.md` and taught it to read the new label table, `ref.DataProperties`. Its labels will also make the full data dictionary planned in `dictionaries.md`.
 
 ## Status
 
 | Pull request | Content |
 |---|---|
 | #13, plan pull request 1 (merged; the live and offline tests passed in the maintainer's runs on 26 Oct 2026) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. After review: the description and dataset notes on a Collection tab of their own; value labels shown by default, with Expand and Collapse buttons; chosen rows in Lavender with an Iris bar, a line counting them and Clear selection. Offline, `testServer()` and live tests, and the harness. |
-| #14, plan pull request 2 (open, waiting on the maintainer's test against EpiServer) | `episerver_getlabels()` and `collect_withlabels()` read labels through the same lookup as the browser. `applydatalabels()` applies value labels to a column without a variable label, and matches column names in any case. The copied code names the label table chosen in Labels table. Offline and live tests. |
+| #14, plan pull request 2 (merged) | `episerver_getlabels()` and `collect_withlabels()` read labels through the same lookup as the browser. `applydatalabels()` applies value labels to a column without a variable label, and matches column names in any case. The copied code names the label table chosen in Labels table. Offline and live tests. |
 
-Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. The maintainer's run of `testthat::test_local()` in RStudio on 26 Oct 2026 ran every live test and passed them. Three offline tests failed there, because the code button reads Insert Code in RStudio and the tests expected Copy Code; one of them, in `test-episerver_dsr.R`, failed on `main` too. The tests now fix the label by mocking `rstudioapi::isAvailable()` (see `shared-apps.md`), and the maintainer's second run passed. Pull request 1 was merged as #13, and pull request 2 is #14, on `claude/elegant-pasteur-05gapn`, restarted from `main` after the merge. Pull requests 3 to 6 have not started.
+Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. The maintainer's run of `testthat::test_local()` in RStudio on 26 Oct 2026 ran every live test and passed them. Three offline tests failed there, because the code button reads Insert Code in RStudio and the tests expected Copy Code; one of them, in `test-episerver_dsr.R`, failed on `main` too. The tests now fix the label by mocking `rstudioapi::isAvailable()` (see `shared-apps.md`), and the maintainer's second run passed. Pull request 1 was merged as #13 and pull request 2 as #14, followed by the launcher fix #15 (see `shared-apps.md`). The first plan's pull request 3, the dictionary tables, was built as #16 and closed unmerged when the maintainer set the linkage dictionary aside (see `dictionaries.md`). Pull requests 3 and 4 of the revised plan have not started.
 
-## Plan agreed with the maintainer (25 Oct 2026)
+## Plan agreed with the maintainer (25 Oct 2026, revised 26 Oct 2026)
 
 One pull request at a time on the session branch. The maintainer tests each one against EpiServer and merges it before the next starts; after a merge, restart the branch from `main`.
 
@@ -22,14 +22,12 @@ One pull request at a time on the session branch. The maintainer tests each one 
    - `lbl_db`, `lbl_schema` and `lbl_table`, when given, name the one label table to read, as the browser's Labels table choice does; left empty, the lookup chooses as the browser's Automatic does. This is what the arguments were written to mean.
    - The labels of linked tables (Link rows) are not applied automatically: `collect_withlabels()` applies the labels of the table collected. sqldta joins linked tables because Stata has no equivalent of dbplyr for writing the join; in R the analyst writes it, and split tables are rarely used. This may be revisited if `ref.DataProperties` comes to support one-to-many links. Plan pull request 2 originally included linked tables; the maintainer dropped them.
    - After their test of #14, the maintainer decided that the copied code names the label table chosen in Labels table, so that the data get the labels the browser shows, and that `applydatalabels()` matches column names in any case, as EpiServer's collations are case-insensitive.
-3. **Dictionary tables.** The SQL that creates them in `Analysis.ref`, and a script that converts the maintainer's `definitions.xlsx` into an INSERT script for SSMS (see `dictionaries.md`).
-4. **Dictionaries.**
-   - One builder for a full dictionary or a profile's (Linkage) dictionary, exported as PDF (Typst) and standalone HTML.
+3. **Full dictionaries** (see `dictionaries.md`).
+   - One builder for a full dictionary of any table, from its label tables, exported as PDF (Typst) and standalone HTML.
    - The per-user logo setting.
    - `episerver_dictionary()` for scripts and batches.
-   - A Dictionary choice (full or a profile) and a Download menu in the browser.
-5. **Variable list.** The linkage variable list workbook, built by the same builder (see `dictionaries.md`).
-6. **Improvements, all approved:**
+   - A Download menu in the browser.
+4. **Improvements, all approved,** after the full dictionaries, building on them where they touch the dictionary:
    - search a database for a column by name, label or value label;
    - a Tables tab (every table and view with its dataset label, approximate rows from `sys.partitions`, column count, last modified, whether labelled);
    - preview the first 100 rows with labels;
@@ -38,6 +36,8 @@ One pull request at a time on the session branch. The maintainer tests each one 
    - split tables: Link rows shown as one dataset, with the join in the copied code; `collect_withlabels()` may need refactoring for this. To be confirmed with the maintainer before it is built, as they chose not to automate linked tables in pull request 2;
    - reopen at the last database, schema and table (browser storage);
    - copy the dictionary as a table for Excel.
+
+The plan of 25 Oct 2026 also had the dictionary tables (its pull request 3, built as #16 and closed unmerged) and the linkage variable list (its pull request 5). The maintainer set both aside on 26 Oct 2026 with the linkage dictionary; `dictionaries.md` gives the reasons.
 
 ## Where the code is
 
