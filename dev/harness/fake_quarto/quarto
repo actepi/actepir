@@ -1,0 +1,13 @@
+#!/bin/sh
+# dev/harness/fake_quarto/quarto
+#
+# Stands in for the Quarto in RStudio in a cloud session, which has none, for
+# the one command actepir runs: `quarto typst compile <in.typ> <out.pdf>`.
+# It compiles with the Typst 0.13 of pip's typst package (pip install
+# "typst>=0.13,<0.14"). Put this folder first on the PATH, for example
+#   PATH="$PWD/dev/harness/fake_quarto:$PATH" Rscript dev/harness/run_app.R ...
+if [ "$1" != "typst" ] || [ "$2" != "compile" ]; then
+  echo "fake_quarto: only 'typst compile <in> <out>' is supported" >&2
+  exit 2
+fi
+exec python3 -I -c 'import sys, typst; typst.compile(sys.argv[1], output=sys.argv[2])' "$3" "$4"

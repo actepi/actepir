@@ -305,22 +305,19 @@
   NA_character_
 }
 
-# The variable and value labels of table schema.table of database db, as
-# episerver_getlabels() returns them: a tibble in the DataLabels layout,
-# with Dataset (the table), VarName, LabelType (Var or Opt), DataCode (NA
-# for Var) and LabelName, variable labels first and value labels in code
-# order. `label` names one label table to read, as c(db, schema, table) in
-# either layout; without it the labels come from the first label table of
-# db that holds rows for the table, as in the Dataset Browser. query(sql)
-# runs a query. A message says when there are no labels.
+# The labels of table schema.table of database db, value labels among them.
+# `label` names one label table to read, as c(db, schema, table) in either
+# layout; without it the labels come from the first label table of db that
+# holds rows for the table, as in the Dataset Browser. query(sql) runs a
+# query. Returns the label table read (source, a row as from
+# .lbl_sql_sources(), or NULL), its database (db), the normalised rows
+# (rows), and, when no label table holds rows for the table, why (none).
 #' @noRd
-.lbl_get <- function(query, db, schema, table, label = NULL) {
+.lbl_read <- function(query, db, schema, table, label = NULL) {
   name <- function(...) paste(c(...), collapse = ".")
   none <- function(...) {
-    message(...)
-    tibble::tibble(Dataset = character(), VarName = character(),
-                   LabelType = character(), DataCode = character(),
-                   LabelName = character())
+    list(source = NULL, db = db, rows = .lbl_normalise(NULL),
+         none = paste0(...))
   }
 
   if (is.null(label)) {
@@ -356,11 +353,33 @@
     query(.lbl_sql_rows(lbl_db, source, schema, table)),
     query(.lbl_sql_rows(lbl_db, source, schema, table, values = TRUE))
   ))
+  list(source = source, db = lbl_db, rows = rows, none = NULL)
+}
+
+# The variable and value labels of table schema.table of database db, as
+# episerver_getlabels() returns them: a tibble in the DataLabels layout,
+# with Dataset (the table), VarName, LabelType (Var or Opt), DataCode (NA
+# for Var) and LabelName, variable labels first and value labels in code
+# order. The arguments are those of .lbl_read(). A message says when there
+# are no labels.
+#' @noRd
+.lbl_get <- function(query, db, schema, table, label = NULL) {
+  name <- function(...) paste(c(...), collapse = ".")
+  none <- function(...) {
+    message(...)
+    tibble::tibble(Dataset = character(), VarName = character(),
+                   LabelType = character(), DataCode = character(),
+                   LabelName = character())
+  }
+
+  r <- .lbl_read(query, db, schema, table, label)
+  if (!is.null(r$none)) return(none(r$none))
+  rows <- r$rows
   vars <- rows[rows$Type == "VariableLabel", , drop = FALSE]
   vals <- rows[rows$Type == "ValueLabel", , drop = FALSE]
   vals <- vals[.lbl_code_order(vals$Code), , drop = FALSE]
   if (!nrow(vars) && !nrow(vals)) {
-    return(none(name(lbl_db, source$TABLE_SCHEMA, source$TABLE_NAME),
+    return(none(name(r$db, r$source$TABLE_SCHEMA, r$source$TABLE_NAME),
                 " holds no labels for ", name(schema, table), "."))
   }
   tibble::tibble(

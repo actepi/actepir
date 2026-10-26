@@ -65,7 +65,7 @@ const fs = require('fs');
     [...i.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim())
   ]))));
   console.log('SIDEBAR width:', await page.$eval('aside#settings', s => Math.round(s.getBoundingClientRect().width)),
-    '| foot:', JSON.stringify(await page.$$eval('.epi-actions > *', es => es.map(e => e.id))),
+    '| foot:', JSON.stringify(await page.$$eval('.epi-actions > *', es => es.map(e => e.id || e.querySelector('[id]').id))),
     '| resizable:', await page.$eval('aside#settings', s => !!s.closest('.bslib-sidebar-layout').querySelector('.bslib-sidebar-resize-handle')));
   // Section headings: the info bar's tint, rgb(234, 230, 241), in bold
   // Nightshade, rgb(50, 5, 87)
@@ -243,6 +243,41 @@ const fs = require('fs');
   await select('labels_source', 'dbo.DataLabels');
   console.log('LABELS dbo.DataLabels:', await info());
   await select('labels_source', 'auto');
+
+  // Download: the table's dictionary as PDF and HTML, in a menu that opens
+  // upwards. Without Quarto, the PDF's item is disabled and not a link.
+  await page.click('#dict_download');
+  await page.waitForTimeout(400);
+  console.log('DOWNLOAD MENU:', JSON.stringify(await page.$$eval(
+    '#dict_download + .dropdown-menu .dropdown-item',
+    items => items.map(i => [i.textContent.trim(), i.classList.contains('disabled')]))),
+    '| opens', await page.evaluate(() => {
+      const menu = document.querySelector('#dict_download + .dropdown-menu').getBoundingClientRect();
+      return menu.bottom <= document.querySelector('#dict_download').getBoundingClientRect().top ? 'up' : 'down';
+    }));
+  await shot('08_download_menu');
+  for (const id of ['dict_html', 'dict_pdf']) {
+    if (!(await page.$('#' + id))) continue;
+    if (!(await page.isVisible('#' + id))) await page.click('#dict_download');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#' + id)]);
+    const file = `${out}/${download.suggestedFilename()}`;
+    await download.saveAs(file);
+    console.log('DOWNLOAD', id + ':', download.suggestedFilename(), '| starts',
+      JSON.stringify(fs.readFileSync(file).subarray(0, 5).toString()));
+    if (id !== 'dict_html') continue;
+    // The HTML file on its own: its heading, columns and search
+    const html = await context.newPage();
+    await html.goto('file://' + file);
+    await html.fill('#search', 'female');
+    console.log('DICTIONARY HTML:', await html.textContent('h1'), '|',
+      (await html.textContent('.source')).trim(), '| rows',
+      await html.$$eval('table.columns > tbody > tr', r => r.length), '| search "female":',
+      (await html.textContent('#count')).trim(), '| requests',
+      JSON.stringify(await html.evaluate(() => performance.getEntriesByType('resource').length)));
+    await html.fill('#search', '');
+    await html.screenshot({ path: `${out}/08b_dictionary_html.png` });
+    await html.close();
+  }
 
   // Another schema and a database without label tables
   await select('schema', 'stage');

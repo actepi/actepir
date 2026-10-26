@@ -106,6 +106,13 @@
 #'   reads: when *Labels table* names one, the code names it in `lbl_schema`
 #'   and `lbl_table`.
 #'
+#' **Dictionary**
+#'
+#' *Download*, beside the code button, gives the table's data dictionary as a
+#' PDF or a standalone HTML file, as [episerver_dictionary()] writes them,
+#' from the labels of the label table read. The PDF needs the Quarto that
+#' comes with RStudio; without it, its item is disabled.
+#'
 #' **Background process**
 #'
 #' In background mode the app keeps running when its browser tab is closed.
@@ -573,6 +580,18 @@ episerver_browse_stop <- function() {
       "a label table, the code names it too."
     ),
 
+    shiny::h5("Dictionary"),
+    shiny::p(
+      "Download, beside the code button, gives the table's data dictionary ",
+      "as a PDF or an HTML file: its description, notes and linked tables, ",
+      "and its columns with the labels from the label table read, value ",
+      "labels included whether or not they are shown. The PDF shows the ",
+      "first 50 value labels of a column; the HTML file shows them all, with ",
+      "a search box, and can be sent on as it is. The PDF needs the Quarto ",
+      "that comes with RStudio. ", code("episerver_dictionary()"),
+      " gives the same files in a script."
+    ),
+
     shiny::h5("Problems"),
     shiny::p(paste0(
       "The bug button at the foot of the sidebar prepares a report to send ",
@@ -629,6 +648,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
   db_choices <- .browse_databases(databases$data$name)
 
   code_button_label <- if (in_rstudio) "Insert Code" else "Copy Code"
+
+  # The PDF dictionary needs Quarto; without it its item is disabled
+  has_quarto <- !is.null(.dict_quarto())
 
   # Shows each table's dataset label muted after its name in the Table list,
   # and the name alone once chosen. selectize styles the elements by the
@@ -815,6 +837,32 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
           "insert_code", code_button_label,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
+        ),
+        # Download: the table's dictionary, in a menu that opens upwards
+        shiny::div(
+          class = "dropup",
+          shiny::tags$button(
+            id = "dict_download", type = "button",
+            class = "btn btn-sm btn-primary dropdown-toggle",
+            `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+            shiny::icon("download"), "Download"
+          ),
+          shiny::tags$ul(
+            class = "dropdown-menu",
+            # Shiny enables a download link once it has its address, so
+            # without Quarto the PDF's item is not a link
+            shiny::tags$li(if (has_quarto) {
+              shiny::downloadLink("dict_pdf", "Dictionary as PDF",
+                                  class = "dropdown-item")
+            } else {
+              shiny::tags$span(class = "dropdown-item disabled",
+                               `aria-disabled` = "true",
+                               "Dictionary as PDF (needs Quarto)")
+            }),
+            shiny::tags$li(shiny::downloadLink(
+              "dict_html", "Dictionary as HTML", class = "dropdown-item"
+            ))
+          )
         ),
         .epi_bug_button()
       )
@@ -1131,6 +1179,48 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
       .epi_send_code(session, table_code(ch))
     })
+
+    # ── Dictionary ─────────────────────────────────────────────────────────
+    # The dictionary of the table chosen, from the labels shown. Its value
+    # labels are read for it when they are not shown.
+    dictionary <- function() {
+      ch <- chosen()
+      cols <- columns()
+      if (!is.null(cols$error)) stop(cols$error, call. = FALSE)
+      l <- labels()
+      rows <- l$rows
+      if (!is.null(l$source)) {
+        v <- values()
+        if (is.null(v)) {
+          r <- read(.lbl_sql_rows(ch$db, l$source, ch$schema, ch$table,
+                                  values = TRUE))
+          if (!is.null(r$error)) stop(r$error, call. = FALSE)
+          v <- list(rows = .lbl_normalise(r$data))
+        }
+        rows <- rbind(rows, v$rows)
+      }
+      .dict_assemble(ch, cols$data, rows, l$source)
+    }
+    dict_download <- function(format) {
+      shiny::downloadHandler(
+        filename = function() paste0(chosen()$table, "_dictionary.", format),
+        content  = function(file) {
+          tryCatch(.dict_write(dictionary(), format, file), error = function(e) {
+            shiny::showNotification(
+              paste("The dictionary could not be made:", conditionMessage(e)),
+              duration = 10, type = "error"
+            )
+            stop(e)
+          })
+        }
+      )
+    }
+    output$dict_pdf  <- dict_download("pdf")
+    output$dict_html <- dict_download("html")
+    # The links are in a closed menu: they need their addresses while hidden
+    for (id in c("dict_pdf", "dict_html")) {
+      shiny::outputOptions(output, id, suspendWhenHidden = FALSE)
+    }
 
     # ── Problem report ─────────────────────────────────────────────────────
     # The bug button sends what the browser knows (bug_client); the report
