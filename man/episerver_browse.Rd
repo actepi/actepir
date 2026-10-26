@@ -139,8 +139,9 @@ the pipe, from an existing lazy table \code{tb});
 \item \emph{Declare packages}: \verb{pkg::} prefixes in the quickconnect and none forms,
 and \code{library()} calls in the connect form;
 \item \emph{Import with labels}: \code{\link[=collect_withlabels]{collect_withlabels()}} in place of \code{collect()}.
-It applies the labels of \code{ref.DataLabels} in the table's database, which
-may differ from those shown when they come from another label table.
+It applies the variable and value labels that Automatic finds, which
+may differ from those shown when \emph{Labels table} names another label
+table.
 }
 
 \strong{Background process}

@@ -102,8 +102,9 @@
 #' * *Declare packages*: `pkg::` prefixes in the quickconnect and none forms,
 #'   and `library()` calls in the connect form;
 #' * *Import with labels*: [collect_withlabels()] in place of `collect()`.
-#'   It applies the labels of `ref.DataLabels` in the table's database, which
-#'   may differ from those shown when they come from another label table.
+#'   It applies the variable and value labels that Automatic finds, which
+#'   may differ from those shown when *Labels table* names another label
+#'   table.
 #'
 #' **Background process**
 #'
@@ -559,9 +560,9 @@ episerver_browse_stop <- function() {
       "Declare packages adds ", code("actepir::"), " and ", code("dplyr::"),
       " to the calls, or ", code("library()"), " calls to the connect form. ",
       "Import with labels collects the data with ",
-      code("collect_withlabels()"), ", which applies the labels of ",
-      code("ref.DataLabels"), " in the table's database. Labels shown from ",
-      "another label table are not applied."
+      code("collect_withlabels()"), ", which applies the variable and value ",
+      "labels that Automatic finds. When Labels table names another label ",
+      "table, the labels applied may differ from those shown."
     ),
 
     shiny::h5("Problems"),
@@ -791,8 +792,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
             "connect opens a connection with episerver_connect() and the ",
             "table with episerver_lazytable(); none gives the pipe alone, ",
             "from a lazy table tb made earlier. Import with labels uses ",
-            "collect_withlabels(), which applies the labels of ",
-            "ref.DataLabels."
+            "collect_withlabels(), which applies the variable and value ",
+            "labels that Automatic finds."
           ),
           shiny::checkboxInput("declare_pkgs", "Declare packages",
                                value = TRUE),

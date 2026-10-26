@@ -15,17 +15,17 @@ collect_withlabels(
 )
 }
 \arguments{
-\item{dataset}{The name of the dataset that labels are associated with. Argument
-should be supplied as character or object.}
+\item{dataset}{A lazy query on an EpiServer table, such as one from
+\code{\link{episerver_quickconnect}} or \code{\link{episerver_lazytable}}.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be
-supplied as character.}
+\item{lbl_db}{The database of one label table to read the labels from. Argument should be
+supplied as character. If not supplied while \code{lbl_table} or \code{lbl_schema} is, will default to the table's database.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be
-supplied as character.}
+\item{lbl_schema}{The schema of one label table to read the labels from. Argument should be
+supplied as character. If not supplied while \code{lbl_table} or \code{lbl_db} is, will default to \code{ref}.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should
-be supplied as character.}
+\item{lbl_table}{The name of one label table to read the labels from, in place of the label table chosen automatically. Argument should be
+supplied as character. If not supplied while \code{lbl_schema} or \code{lbl_db} is, will default to \code{DataLabels}.}
 
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
 If \code{NULL} (default), the function will automatically select the appropriate
@@ -58,25 +58,24 @@ then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
 This function is a wraparound function which combines the \code{episerver_getlabels} and \code{dplyr::collect} functions and feeds them to the \code{applydatalabels} function.  It will allow the user to collect the result of a lazy query with associated labels when the query is placed against an EpiServer location.  The function will always search EpiServer and cannot be used for other servers of file locations.
 }
 \details{
-Almost all non-administrative users will not need to use the lbl_* arguments.  In most cases, when accessing the "Analysis" database, you will not need to supply the "dataset" argument.
+The labels are those of the table the lazy query reads, from the first label table of its database that holds rows for it, as in the Dataset Browser (see \code{\link[=episerver_getlabels]{episerver_getlabels()}}). Variable labels and value labels are applied; notes and the labels of linked tables are not. Almost all non-administrative users will not need to use the lbl_* arguments.
 }
 \examples{
 \dontrun{
-# One-step process: apply labels as part of collect() 
+# One-step process: apply labels as part of collect()
 # statement when a dbplyr lazy object is passed to it
-dat = episerver_connect("APC") \%>\% 
+dat = episerver_quickconnect("APC") \%>\%
   collect_withlabels()
 
-# One-step process: apply labels as part of collect() 
-# statement but source labels from another location
-dat = episerver_connect("APC") \%>\% 
+# One-step process: apply labels as part of collect()
+# statement but source labels from one label table
+dat = episerver_quickconnect("APC", db = "HospitalAPC") \%>\%
   collect_withlabels(
-    dataset = "APC", 
-    lbl_table = "DataLabelsNew", 
-    lbl_schema = "dbo", 
+    lbl_table = "DataLabelsNew",
+    lbl_schema = "dbo",
     lbl_db = "HospitalAPC"
     )
 }
-  
+
 }
 \keyword{episerver}

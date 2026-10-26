@@ -163,7 +163,7 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
   }
   as_properties <- function(d) {
     if (!"Dataset" %in% names(d)) return(d)
-    data.frame(TableSchema = NA_character_, TableName = d$Dataset,
+    data.frame(TableSchema = rep(NA_character_, nrow(d)), TableName = d$Dataset,
                ColumnName = d$VarName, PropertyType = d$LabelType,
                PropertyCode = d$DataCode, PropertyText = d$LabelName,
                stringsAsFactors = FALSE)

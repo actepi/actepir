@@ -93,6 +93,12 @@ Pull request #13, the first of the Dataset Browser's plan (`dev/notes/dataset-br
 | `episerver_browser.js`, Help, report and stop | Help has 5 sections in 13px text, without the info bar. The report has the sections What happened, Browser, Settings, R code for these settings and R session, with the label tables and where the labels came from. Closing the connection shows "The Dataset Browser is no longer running." |
 | `dryrun_live.R` | 18 tests, 252 expectations, 0 failed, 1 skipped: the browser's 7 tests and the calculator's 11. The test that runs the copied code skips, as it connects through ODBC itself and needs a SQL Server driver. With `--without-dataproperties`, 18 tests, 249 expectations, 0 failed, 1 skipped. |
 
+Plan pull request 2 (`dev/notes/dataset-browser.md`) added `test-episerver_getlabels_live.R`. Its tests that use the app's connection run in the dry run against `fake_browse_episerver()`; the two that read lazy tables need an ODBC driver and skip. The browser's and the calculator's results above were unchanged.
+
+| Run | Results |
+|---|---|
+| `dryrun_live.R` | 22 tests, 285 expectations, 0 failed, 3 skipped (the three tests that need an ODBC driver). With `--without-dataproperties`, 22 tests, 281 expectations, 0 failed, 3 skipped. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.
