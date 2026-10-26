@@ -6,7 +6,7 @@ The full data dictionary of any table or view on EpiServer, built from its label
 
 | Pull request | Content |
 |---|---|
-| Plan pull request 3 (open, waiting on the maintainer's test against EpiServer) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files and the browser's Download menu. `create_dictionary()` removed. |
+| #18, plan pull request 3 (open, waiting on the maintainer's test against EpiServer) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files and the browser's Download menu. `create_dictionary()` removed. |
 
 The design was agreed with the maintainer on 25 Oct 2026, narrowed on 26 Oct 2026 when the linkage dictionary was set aside, and settled the same day (see Decisions).
 
