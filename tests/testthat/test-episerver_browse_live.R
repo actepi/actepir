@@ -173,6 +173,36 @@ test_that("the Table list's dataset labels follow the label table of each table"
 
 })
 
+test_that("the code the browser copies reads the table in every form", {
+
+  skip_if_no_episerver()
+  # The code connects through ODBC itself, not through .epi_connection()
+  skip_if_no_sqlserver_driver()
+  withr::local_package("dplyr")
+
+  columns <- c("SVYYEAR", "RSEX_Y20")
+  forms <- expand.grid(mode = c("quickconnect", "connect", "none"),
+                       declare = c(TRUE, FALSE), labels = c(TRUE, FALSE),
+                       stringsAsFactors = FALSE)
+  for (i in seq_len(nrow(forms))) {
+    f <- forms[i, ]
+    label <- paste(f$mode, if (f$declare) "declared" else "bare",
+                   if (f$labels) "with labels" else "without labels")
+    run <- new.env()
+    if (f$mode == "none") run$tb <- episerver_quickconnect("ACTGHSMYX")
+    eval(parse(text = .browse_code("Analysis", "dbo", "ACTGHSMYX", columns,
+                                   f$mode, f$declare, f$labels)), run)
+    if (!is.null(run$conn)) DBI::dbDisconnect(run$conn)
+
+    expect_named(run$data, columns, label = label)
+    expect_gt(nrow(run$data), 0)
+    # With labels, the sex of respondents takes its value labels
+    expect_equal(inherits(run$data$RSEX_Y20, "haven_labelled"), f$labels,
+                 label = label)
+  }
+
+})
+
 test_that("the app lists and describes a table against EpiServer", {
 
   skip_if_no_episerver()

@@ -46,7 +46,7 @@ One pull request at a time on the session branch. The maintainer tests each one 
 | `helper-browse.R` | `fake_browse_episerver()`: a synthetic EpiServer that answers the browser's SQL by reading it. The offline tests, the harness and the dry run all use it. |
 | `test-episerver_labels.R` | The lookup's SQL, normalising both layouts, the type names, the order of notes and codes, and each table's dataset label |
 | `test-episerver_browse.R` | The catalogue SQL, the lists, the columns' table, the info bar's labels line, the code, the page, and the app through `shiny::testServer()`: the fallback for each table, a label table chosen, a database without label tables, value labels read only when shown, read errors, the code button and the problem report |
-| `test-episerver_browse_live.R` | Every query against `Analysis`, the order and layouts of its label tables, the pick against each label table asked alone, the dataset labels, and the app; skipped offline |
+| `test-episerver_browse_live.R` | Every query against `Analysis`, the order and layouts of its label tables, the pick against each label table asked alone, the dataset labels, every form of the copied code, and the app; skipped offline |
 
 ## Decisions
 
@@ -84,18 +84,15 @@ One pull request at a time on the session branch. The maintainer tests each one 
   - The dataset label (a heading), dataset notes and linked tables appear above the column table (`.browse_about()`).
   - Column table (DT, `bootstrap5`): #, Column, Description, Type, plus Value labels (a `<details>` list, when shown) and Notes (when any column has them). Text from the label tables is escaped. Selected rows give the `select()` in the code; clicks on a value labels list do not select its row.
   - The table fits the window: a script sets `--browse-table-height` from the window's height less the table's distance from the top of the page (at least 200px), and DataTables' `scrollY` is `var(--browse-table-height, 50vh)`. This replaced the two sizing sliders.
-  - The code generator stays as it was for the same inputs, moved into `.browse_code()`. Its output was compared with the old app's code for all 108 combinations of connection, declare, labels, none to two columns, and the three forms of database and schema: all identical.
+  - The code generator moved into `.browse_code()`. It gives the old app's code with two changes, which the maintainer approved on 26 Oct 2026:
+    - without Import with labels, the quickconnect and none forms end in `dplyr::collect()` when packages are declared. The old code had `actepir::collect()`, which fails, as actepir does not export `collect()`;
+    - column names that are not syntactic R names (with spaces, reserved words such as `if`, or a leading digit or underscore) are backquoted in `select()`, by `deparse(as.name(x), backtick = TRUE)`. The old code wrote them bare, which does not parse.
+  - Its output was compared with the old app's for 144 combinations: connection, declare, labels, none to three columns (the third named `Age group`), and the three forms of database and schema. 90 are identical, and each of the other 54 differs by one or both of the two changes alone.
+  - The live test "the code the browser copies reads the table in every form" runs all 12 forms of the code on `ACTGHSMYX`. As the code connects through ODBC itself, it also needs a SQL Server driver, so it is skipped in the dry run.
 - **Testability.** `episerver_browse_app(driver, max_attempts, ..., query = NULL)`, as `episerver_dsr_app()` has. One synthetic EpiServer, `fake_browse_episerver()` in `tests/testthat/helper-browse.R`, serves the offline tests, the harness (`dev/harness/fake_episerver.R` passes the browser's queries to it) and the dry run (`dev/harness/fake_live.R`). It reads the browser's SQL (the `EXISTS` conditions, the `WHERE` and type filters, the parts of the `UNION ALL`) rather than matching fixed strings, so the tests check the fallback itself. Its `properties = FALSE` gives an `Analysis` without `ref.DataProperties`.
 - **Selected rows** take the info bar's tint with dark text, as `dev/reference/app-style.md` says. bslib's Bootstrap 5 theme sets DataTables' `--dt-row-selected` on `.table.dataTable` from the primary colour, which painted them Nightshade, so the shared rule in `.epi_app_style()` now sets the variables there too.
 
 ## Open items
-
-Waiting on the maintainer:
-
-- **`actepir::collect()` in the code.** With Import with labels off and Declare packages on, the quickconnect and none forms end in `actepir::collect()`. actepir does not export `collect()`, so that code fails. The old app gave the same code, and the generator was kept as it was, as decided. The proposed fix is `dplyr::collect()`.
-- **Column names that are not syntactic,** such as names with spaces, are written into `select()` unquoted, as before. Backquoting them would change the code for those inputs only.
-
-Other items:
 
 - **Import with labels** applies the labels of `ref.DataLabels` only, until pull request 2. The Help tab and `?episerver_browse` say so.
 - **Searching the Table list.** selectize ignores typing in a single select while it holds an item, so the analyst deletes the table shown with Backspace before typing. This is how every single select in the apps behaves; the Help tab says so.

@@ -225,6 +225,41 @@ test_that("the code reads the table as before, with the columns chosen", {
 
 })
 
+test_that("the code collects with dplyr and backquotes names that need it", {
+
+  # Without labels, collect() is dplyr's: actepir does not export it
+  expect_equal(
+    .browse_code("Analysis", "dbo", "APC", labels = FALSE),
+    paste0("data <- actepir::episerver_quickconnect(\"APC\") |>\n",
+           "  dplyr::collect()\n")
+  )
+  expect_no_match(
+    paste(vapply(c("quickconnect", "connect", "none"), function(mode) {
+      .browse_code("Analysis", "dbo", "APC", mode = mode, labels = FALSE)
+    }, character(1)), collapse = ""),
+    "actepir::collect(", fixed = TRUE
+  )
+
+  # Names that are not syntactic are backquoted, with backquotes escaped
+  columns <- c("Sex", "Age group", "if", "2nd", "a`b", "x.y")
+  expect_match(.browse_code("Analysis", "dbo", "APC", columns),
+               "dplyr::select(Sex, `Age group`, `if`, `2nd`, `a\\`b`, x.y)",
+               fixed = TRUE)
+  expect_match(.browse_code("Analysis", "dbo", "APC", columns, "connect"),
+               "  select(Sex, `Age group`, `if`, `2nd`, `a\\`b`, x.y) |>",
+               fixed = TRUE)
+
+  # The none form runs on a lazy table tb; a data frame stands in for it
+  tb <- data.frame(Sex = 1, "Age group" = 2, "if" = 3, "2nd" = 4, "a`b" = 5,
+                   x.y = 6, Other = 7, check.names = FALSE)
+  run <- new.env()
+  run$tb <- tb
+  eval(parse(text = .browse_code("Analysis", "dbo", "APC", columns, "none",
+                                 labels = FALSE)), run)
+  expect_equal(run$data, tb[columns])
+
+})
+
 # ── Page ────────────────────────────────────────────────────────────────────
 
 test_that("the page follows the app style: top bar, sidebar sections and tabs", {

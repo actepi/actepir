@@ -391,9 +391,11 @@ episerver_browse_stop <- function() {
 # R code that reads table schema.table of db: a pipe from
 # episerver_quickconnect() ("quickconnect"), episerver_connect() and
 # episerver_lazytable() calls ("connect"), or the pipe alone from a lazy
-# table tb ("none"). `columns` are the columns chosen for select(); with
-# `declare`, the quickconnect and none forms prefix their packages and the
-# connect form calls library(); `labels` collects with collect_withlabels().
+# table tb ("none"). `columns` are the columns chosen for select(), in
+# backquotes when they are not syntactic R names; with `declare`, the
+# quickconnect and none forms prefix their packages and the connect form
+# calls library(); `labels` collects with collect_withlabels(), otherwise
+# dplyr's collect().
 #' @noRd
 .browse_code <- function(db, schema, table, columns = character(),
                          mode = "quickconnect", declare = TRUE,
@@ -403,7 +405,9 @@ episerver_browse_stop <- function() {
   q <- function(pkg, fn) if (declare) paste0(pkg, "::", fn) else fn
 
   # select() pipe segment, only when columns are chosen
-  sel_args <- paste(columns, collapse = ", ")
+  names <- vapply(columns, function(x) deparse(as.name(x), backtick = TRUE),
+                  character(1), USE.NAMES = FALSE)
+  sel_args <- paste(names, collapse = ", ")
   have_sel <- length(columns) > 0
   dplyr_select <- if (have_sel) {
     paste0("  ", q("dplyr", "select"), "(", sel_args, ") |>\n")
@@ -417,6 +421,7 @@ episerver_browse_stop <- function() {
   }
 
   collect_call <- if (labels) "collect_withlabels()" else "collect()"
+  collect_pkg  <- if (labels) "actepir" else "dplyr"
 
   # Argument tail shared by quickconnect and lazytable calls
   arg_tail <- if (db == "Analysis" && schema == "dbo") {
@@ -432,7 +437,7 @@ episerver_browse_stop <- function() {
     paste0(
       "data <- ", q("actepir", "episerver_quickconnect"), "(", arg_tail, ") |>\n",
       dplyr_select,
-      "  ", q("actepir", collect_call), "\n"
+      "  ", q(collect_pkg, collect_call), "\n"
     )
   } else if (mode == "connect") {
     # Multi-object form with optional library() declarations
@@ -450,7 +455,7 @@ episerver_browse_stop <- function() {
     paste0(
       "data <- tb |>\n",
       dplyr_select,
-      "  ", q("actepir", collect_call), "\n"
+      "  ", q(collect_pkg, collect_call), "\n"
     )
   }
 }
