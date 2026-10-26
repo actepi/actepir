@@ -162,46 +162,30 @@ episerver_dictionary <- function(tables = NULL, db = NULL, schema = NULL,
 
   # A whole database: its tables and views that have labels
   if (whole) {
-    where <- paste(c(db, if (!is_invalid(schema)) schema), collapse = ".")
+    schema <- if (is_invalid(schema)) NULL else schema
+    where <- paste(c(db, schema), collapse = ".")
     label <- .lbl_target(c(db, "", ""), lbl_db, lbl_schema, lbl_table)$label
-    listed <- .dict_tables(query, db, if (!is_invalid(schema)) schema, label)
-    found <- listed[listed$labelled, , drop = FALSE]
-    if (!nrow(listed)) {
-      message("There are no tables or views in ", where, " that you can read.")
+    listed <- .dict_tables(query, db, schema, label)
+    if (!any(listed$labelled)) {
+      message(.dict_summary(listed, where), " No dictionary was written.")
       return(invisible(.dict_flat_empty()))
     }
-    if (!nrow(found)) {
-      message("No table or view of ", where, " has labels, so no dictionary ",
-              "was written.")
-      return(invisible(.dict_flat_empty()))
-    }
-    targets <- lapply(seq_len(nrow(found)), function(i) {
-      list(db = db, schema = found$schema[i], table = found$table[i],
-           label = label)
-    })
+    targets <- .dict_targets(listed, db, label)
   }
 
-  dictionaries <- lapply(targets, function(t) {
-    .dict_build(query, t$db, t$schema, t$table, t$label)
-  })
-  for (d in dictionaries) {
-    folder <- if (whole && is_invalid(schema)) file.path(dir, d$schema) else dir
-    if (length(formats)) dir.create(folder, showWarnings = FALSE)
-    for (format in formats) {
-      path <- file.path(folder, paste0(d$table, "_dictionary.", format))
-      .dict_write(d, format, path, title, subtitle, max_values, quarto)
-      message("Wrote ", path)
+  done <- .dict_write_all(query, targets, formats, dir,
+                          by_schema = whole && is.null(schema), title, subtitle,
+                          max_values, quarto, keep_going = whole,
+                          say = function(path) message("Wrote ", path))
+  if (whole) {
+    message(.dict_summary(listed, where))
+    if (length(done$failed)) {
+      warning("The dictionaries of these could not be written:\n",
+              paste0(names(done$failed), ": ", done$failed, collapse = "\n"),
+              call. = FALSE)
     }
   }
-  if (whole) {
-    message(if (nrow(found) < nrow(listed)) {
-      paste0(nrow(found), " of the ", nrow(listed), " tables and views of ",
-             where, " have labels; the others were left out.")
-    } else {
-      paste0("Every table and view of ", where, " has labels.")
-    })
-  }
-  invisible(tibble::as_tibble(do.call(rbind, c(lapply(dictionaries, .dict_flat),
+  invisible(tibble::as_tibble(do.call(rbind, c(lapply(done$dictionaries, .dict_flat),
                                                list(.dict_flat_empty())))))
 
 }
@@ -387,6 +371,69 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
   out <- do.call(rbind, c(parts, list(.dict_flat_empty())))
   rownames(out) <- NULL
   out
+}
+
+# The tables of `listed` (.dict_tables()) that have labels, as targets of
+# .dict_write_all(), each read with label table `label` (NULL for Automatic)
+#' @noRd
+.dict_targets <- function(listed, db, label = NULL) {
+  lapply(which(listed$labelled), function(i) {
+    list(db = db, schema = listed$schema[i], table = listed$table[i],
+         label = label)
+  })
+}
+
+# What a database's listing (.dict_tables()) found, as a sentence; `where`
+# names the database, or the database and schema
+#' @noRd
+.dict_summary <- function(listed, where) {
+  n <- nrow(listed)
+  found <- sum(listed$labelled)
+  if (!n) return(paste0("There are no tables or views in ", where, " that you can read."))
+  if (!found) return(paste0("No table or view of ", where, " has labels."))
+  if (found == n) return(paste0("Every table and view of ", where, " has labels."))
+  paste0(found, " of the ", n, " tables and views of ", where, " have labels; ",
+         "the others were left out.")
+}
+
+# Builds and writes the dictionaries of `targets` (lists of db, schema, table
+# and label) as `formats` in `dir`, or in a folder of each table's schema
+# within it when `by_schema`. say(path) is called for each file written and
+# step(i, n) after each table. With keep_going, a table that fails is
+# reported in `failed` (its error, named by the table) and the others are
+# written; otherwise its error stops them. Returns the dictionaries built and
+# the failures.
+#' @noRd
+.dict_write_all <- function(query, targets, formats, dir, by_schema = FALSE,
+                            title = formals(episerver_dictionary)$title,
+                            subtitle = formals(episerver_dictionary)$subtitle,
+                            max_values = formals(episerver_dictionary)$max_values,
+                            quarto = .dict_quarto(),
+                            keep_going = FALSE, say = function(path) NULL,
+                            step = function(i, n) NULL) {
+  dictionaries <- list()
+  failed <- character()
+  for (i in seq_along(targets)) {
+    t <- targets[[i]]
+    built <- tryCatch({
+      d <- .dict_build(query, t$db, t$schema, t$table, t$label)
+      folder <- if (by_schema) file.path(dir, d$schema) else dir
+      if (length(formats)) dir.create(folder, showWarnings = FALSE)
+      for (format in formats) {
+        path <- file.path(folder, paste0(d$table, "_dictionary.", format))
+        .dict_write(d, format, path, title, subtitle, max_values, quarto)
+        say(path)
+      }
+      d
+    }, error = function(e) {
+      if (!keep_going) stop(e)
+      failed[[paste(t$db, t$schema, t$table, sep = ".")]] <<- conditionMessage(e)
+      NULL
+    })
+    if (!is.null(built)) dictionaries[[length(dictionaries) + 1]] <- built
+    step(i, length(targets))
+  }
+  list(dictionaries = dictionaries, failed = failed)
 }
 
 # The dictionary as data, without rows

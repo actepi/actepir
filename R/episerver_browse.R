@@ -111,7 +111,10 @@
 #' *Download*, beside the code button, gives the table's data dictionary as a
 #' PDF or a standalone HTML file, as [episerver_dictionary()] writes them,
 #' from the labels of the label table read. The PDF needs the Quarto that
-#' comes with RStudio; without it, its item is disabled.
+#' comes with RStudio; without it, its item is disabled. *Dictionaries of all
+#' tables*, in the same menu, writes the dictionaries of every table and view
+#' with labels in the schema, or in the whole database, to a folder chosen,
+#' as HTML, PDF or both.
 #'
 #' **Background process**
 #'
@@ -489,6 +492,129 @@ episerver_browse_stop <- function() {
   }
 }
 
+# Windows' folder dialog (utils::choose.dir()) and opening a folder in
+# Explorer (shell.exec()), or NULL where R has neither, as off Windows. They
+# are looked up, so that R CMD check on other systems does not miss them.
+#' @noRd
+.browse_choose_fn <- function() {
+  get0("choose.dir", envir = asNamespace("utils"), mode = "function",
+       inherits = FALSE)
+}
+#' @noRd
+.browse_open_fn <- function() {
+  get0("shell.exec", envir = baseenv(), mode = "function", inherits = FALSE)
+}
+
+# A folder chosen in Windows' folder dialog, starting at `default`, or NA
+#' @noRd
+.browse_choose_dir <- function(default = "") {
+  choose <- .browse_choose_fn()
+  if (is.null(choose)) return(NA_character_)
+  choose(default = if (dir.exists(default)) normalizePath(default) else "",
+         caption = "Choose the folder for the dictionaries")
+}
+
+# Opens `folder` in Explorer, where it can
+#' @noRd
+.browse_open_dir <- function(folder) {
+  open <- .browse_open_fn()
+  if (!is.null(open) && dir.exists(folder)) open(normalizePath(folder))
+  invisible(NULL)
+}
+
+# The dialog of Download > Dictionaries of all tables: the tables and views
+# (of the schema chosen, or of the whole database), the files (PDF only with
+# Quarto) and the folder, which Choose fills from Windows' folder dialog
+#' @noRd
+.browse_bulk_dialog <- function(db, schema, has_quarto, folder,
+                                can_choose = !is.null(.browse_choose_fn())) {
+  files <- shiny::checkboxGroupInput(
+    "bulk_formats", "Files",
+    choiceNames  = list("HTML", if (has_quarto) "PDF" else {
+      "PDF (needs Quarto, which comes with RStudio)"
+    }),
+    choiceValues = list("html", "pdf"),
+    selected     = c("html", if (has_quarto) "pdf")
+  )
+  if (!has_quarto) {
+    files <- htmltools::tagQuery(files)$find("input")$
+      filter(function(x, i) identical(x$attribs$value, "pdf"))$
+      addAttrs(disabled = NA)$allTags()
+  }
+  dialog <- shiny::modalDialog(
+    title = "Dictionaries of all tables", easyClose = TRUE,
+    shiny::p(
+      "Writes the dictionary of every table and view that has labels to a ",
+      "folder on this computer, from the label table read. Tables and views ",
+      "without labels are left out, and files of the same names are replaced."
+    ),
+    shiny::radioButtons(
+      "bulk_scope", "Tables and views",
+      choiceNames  = list(paste0("Of the schema ", db, ".", schema),
+                          paste0("Of the whole database ", db,
+                                 ", each schema in a folder of its name")),
+      choiceValues = list("schema", "db"), width = "100%"
+    ),
+    files,
+    shiny::textInput("bulk_dir", "Folder", value = folder, width = "100%"),
+    if (can_choose) {
+      shiny::div(class = "options-row", shiny::actionButton(
+        "bulk_choose", "Choose\u2026", icon = shiny::icon("folder-open"),
+        class = "btn-sm btn-primary"
+      ))
+    },
+    shiny::p(class = "epi-note",
+             "A PDF takes a second or two to make, so the dictionaries of a ",
+             "large database can take some minutes."),
+    footer = shiny::tagList(
+      shiny::actionButton("bulk_write", "Write dictionaries",
+                          icon = shiny::icon("download"),
+                          class = "btn-sm btn-primary"),
+      shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                         `data-bs-dismiss` = "modal", "Close")
+    )
+  )
+  htmltools::tagQuery(dialog)$find(".modal-dialog")$
+    addClass("modal-dialog-scrollable")$allTags()
+}
+
+# The dialog once the dictionaries are written: how many, as which files and
+# where; the tables and views left out (.dict_summary()); those that failed;
+# and a button that opens the folder, on Windows
+#' @noRd
+.browse_bulk_done <- function(listed, done, formats, folder, where,
+                              can_open = !is.null(.browse_open_fn())) {
+  n <- length(done$dictionaries)
+  failed <- done$failed
+  shiny::modalDialog(
+    title = "Dictionaries written", easyClose = TRUE,
+    shiny::p(if (n) {
+      paste0("Wrote ", n, " dictionar", if (n == 1) "y" else "ies", ", as ",
+             paste(toupper(formats), collapse = " and "), ", to ", folder, ".")
+    } else {
+      "No dictionary was written."
+    }),
+    shiny::p(.dict_summary(listed, where)),
+    if (length(failed)) {
+      shiny::tagList(
+        shiny::p(class = "epi-note epi-error", "These could not be written:"),
+        shiny::tags$ul(lapply(names(failed), function(name) {
+          shiny::tags$li(paste0(name, ": ", failed[[name]]))
+        }))
+      )
+    },
+    footer = shiny::tagList(
+      if (can_open && n) {
+        shiny::actionButton("bulk_open", "Open the folder",
+                            icon = shiny::icon("folder-open"),
+                            class = "btn-sm btn-primary")
+      },
+      shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                         `data-bs-dismiss` = "modal", "Close")
+    )
+  )
+}
+
 # The Help tab: finding a table, where its labels come from, choosing
 # columns and the code
 #' @noRd
@@ -590,6 +716,13 @@ episerver_browse_stop <- function() {
       "a search box, and can be sent on as it is. The PDF needs the Quarto ",
       "that comes with RStudio. ", code("episerver_dictionary()"),
       " gives the same files in a script."
+    ),
+    shiny::p(
+      "Dictionaries of all tables, in the same menu, writes the dictionaries ",
+      "of every table and view with labels in the schema, or in the whole ",
+      "database, to a folder on this computer, as HTML, PDF or both. Tables ",
+      "and views without labels are left out. A PDF takes a second or two, ",
+      "so a large database can take some minutes."
     ),
 
     shiny::h5("Problems"),
@@ -861,6 +994,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
             }),
             shiny::tags$li(shiny::downloadLink(
               "dict_html", "Dictionary as HTML", class = "dropdown-item"
+            )),
+            shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
+            shiny::tags$li(shiny::actionLink(
+              "dict_bulk", "Dictionaries of all tables\u2026",
+              class = "dropdown-item"
             ))
           )
         ),
@@ -1221,6 +1359,72 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     for (id in c("dict_pdf", "dict_html")) {
       shiny::outputOptions(output, id, suspendWhenHidden = FALSE)
     }
+
+    # The dictionaries of every table and view with labels in the schema
+    # or the database, written to a folder on this computer, from the label
+    # table read. The folder is kept for the next time.
+    bulk_dir <- shiny::reactiveVal(file.path(getwd(), "dictionaries"))
+    shiny::observeEvent(input$dict_bulk, {
+      shiny::req(input$db, input$schema)
+      shiny::showModal(.browse_bulk_dialog(input$db, input$schema,
+                                           !is.null(.dict_quarto()), bulk_dir()))
+    })
+    shiny::observeEvent(input$bulk_choose, {
+      folder <- .browse_choose_dir(input$bulk_dir)
+      if (length(folder) && !is.na(folder)) {
+        shiny::updateTextInput(session, "bulk_dir", value = folder)
+      }
+    })
+    shiny::observeEvent(input$bulk_write, {
+      formats <- intersect(c("html", if (!is.null(.dict_quarto())) "pdf"),
+                           input$bulk_formats)
+      folder <- trimws(or(input$bulk_dir, ""))
+      problem <- if (!length(formats)) {
+        "Choose HTML, PDF or both."
+      } else if (!nzchar(folder)) {
+        "Give a folder for the dictionaries."
+      } else if (!dir.exists(folder) &&
+                 !dir.create(folder, recursive = TRUE, showWarnings = FALSE)) {
+        paste0("The folder ", folder, " could not be made.")
+      }
+      if (!is.null(problem)) {
+        shiny::showNotification(problem, duration = 8, type = "warning")
+        return(invisible(NULL))
+      }
+      bulk_dir(folder)
+      db <- input$db
+      schema <- if (identical(input$bulk_scope, "db")) NULL else input$schema
+      where <- paste(c(db, schema), collapse = ".")
+      label <- if (!auto()) {
+        c(db = db, schema = active()$TABLE_SCHEMA, table = active()$TABLE_NAME)
+      }
+      shiny::removeModal()
+      result <- tryCatch(
+        shiny::withProgress(message = "Writing dictionaries", value = 0, {
+          listed <- .dict_tables(query, db, schema, label)
+          done <- .dict_write_all(
+            query, .dict_targets(listed, db, label), formats, folder,
+            by_schema = is.null(schema), keep_going = TRUE,
+            step = function(i, n) {
+              shiny::incProgress(1 / n, detail = paste(i, "of", n))
+            }
+          )
+          list(listed = listed, done = done)
+        }),
+        error = function(e) {
+          shiny::showNotification(
+            paste("The dictionaries could not be written:", conditionMessage(e)),
+            duration = 10, type = "error"
+          )
+          NULL
+        }
+      )
+      if (!is.null(result)) {
+        shiny::showModal(.browse_bulk_done(result$listed, result$done, formats,
+                                           folder, where))
+      }
+    })
+    shiny::observeEvent(input$bulk_open, .browse_open_dir(bulk_dir()))
 
     # ── Problem report ─────────────────────────────────────────────────────
     # The bug button sends what the browser knows (bug_client); the report

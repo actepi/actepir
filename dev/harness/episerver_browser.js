@@ -279,6 +279,30 @@ const fs = require('fs');
     await html.close();
   }
 
+  // Dictionaries of all tables: the dialog, then the whole database's
+  // dictionaries written to a folder in the output directory
+  if (!(await page.isVisible('#dict_bulk'))) await page.click('#dict_download');
+  await page.click('#dict_bulk');
+  await page.waitForSelector('#bulk_write', { state: 'visible' });
+  await page.waitForTimeout(500);
+  console.log('BULK DIALOG:', await text('.modal-title'), '|', JSON.stringify(await page.$$eval(
+    '#bulk_scope input, #bulk_formats input',
+    inputs => inputs.map(i => [i.value, i.checked, i.disabled]))),
+    '| folder', JSON.stringify(await page.inputValue('#bulk_dir')),
+    '| choose', !!(await page.$('#bulk_choose')));
+  await shot('08c_bulk_dialog');
+  await page.check('#bulk_scope input[value=db]');
+  await page.fill('#bulk_dir', `${out}/bulk`);
+  await page.click('#bulk_write');
+  await page.waitForFunction(() => /Dictionaries written/.test(
+    (document.querySelector('.modal-title') || {}).textContent || ''), null, { timeout: 120000 });
+  await page.waitForTimeout(500);
+  console.log('BULK DONE:', JSON.stringify(await page.$$eval('.modal-body p', ps => ps.map(p => p.textContent.trim()))),
+    '| files', JSON.stringify(fs.readdirSync(`${out}/bulk`, { recursive: true }).filter(f => f.endsWith('.html')).sort()));
+  await shot('08d_bulk_done');
+  await page.click('.modal-footer button[data-bs-dismiss=modal]');
+  await page.waitForTimeout(500);
+
   // Another schema and a database without label tables
   await select('schema', 'stage');
   console.log('SCHEMA', await page.evaluate(() => $('#schema').val()) + ':', await info());

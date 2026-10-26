@@ -1,12 +1,12 @@
 # Data dictionaries
 
-The full data dictionary of any table or view on EpiServer, built from its label tables. `episerver_dictionary()` writes it as a PDF and a standalone HTML file and returns it as a data frame, for tables named or for every table with labels in a database or schema; the Dataset Browser's Download menu gives the same files for the table chosen. It is pull request 3 of the plan in `dataset-browser.md`; the browser's improvements follow as pull request 4.
+The full data dictionary of any table or view on EpiServer, built from its label tables. `episerver_dictionary()` writes it as a PDF and a standalone HTML file and returns it as a data frame, for tables named or for every table with labels in a database or schema. The Dataset Browser's Download menu gives the same files for the table chosen, and writes them to a folder for every table with labels in the schema or database. It is pull request 3 of the plan in `dataset-browser.md`; the browser's improvements follow as pull request 4.
 
 ## Status
 
 | Pull request | Content |
 |---|---|
-| #18, plan pull request 3 (open, waiting on the maintainer's test against EpiServer) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files and the browser's Download menu. `create_dictionary()` removed. |
+| #18, plan pull request 3 (open, waiting on the maintainer's test against EpiServer) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files, and the browser's Download menu with Dictionaries of all tables. `create_dictionary()` removed. |
 
 The design was agreed with the maintainer on 25 Oct 2026, narrowed on 26 Oct 2026 when the linkage dictionary was set aside, and settled the same day (see Decisions).
 
@@ -14,12 +14,12 @@ The design was agreed with the maintainer on 25 Oct 2026, narrowed on 26 Oct 202
 
 | File | Holds |
 |---|---|
-| `R/episerver_dictionary.R` | `episerver_dictionary()` and `dictionary_logo()`; a database's tables and whether they have labels (`.dict_tables()`); the dictionary (`.dict_build()`, `.dict_assemble()`, `.dict_flat()`, `.dict_flat_empty()`, `.dict_text()`, `.dict_data()`, `.dict_write()`); the PDF (`.dict_quarto()`, `.dict_run_quarto()`, `.dict_pdf()`); the HTML (`.dict_html()`); the logo (`.dict_logo()`, `.dict_logo_file()`, `.dict_lockup()`, `.png_info()`) |
+| `R/episerver_dictionary.R` | `episerver_dictionary()` and `dictionary_logo()`; a database's tables and whether they have labels (`.dict_tables()`, `.dict_targets()`, `.dict_summary()`); writing many dictionaries (`.dict_write_all()`, which `episerver_dictionary()` and the browser share); the dictionary (`.dict_build()`, `.dict_assemble()`, `.dict_flat()`, `.dict_flat_empty()`, `.dict_text()`, `.dict_data()`, `.dict_write()`); the PDF (`.dict_quarto()`, `.dict_run_quarto()`, `.dict_pdf()`); the HTML (`.dict_html()`); the logo (`.dict_logo()`, `.dict_logo_file()`, `.dict_lockup()`, `.png_info()`) |
 | `R/episerver_labels.R` | `.lbl_read()`, which reads a table's labels for the dictionary and for `.lbl_get()` (`episerver_getlabels()`), and `.lbl_named()`, the label table that the `lbl_*` arguments name, with its layout |
-| `R/episerver_browse.R` | The Download menu in the sidebar's foot and its handlers (`dictionary()`, `dict_download()` in the server) |
+| `R/episerver_browse.R` | The Download menu in the sidebar's foot and its handlers (`dictionary()`, `dict_download()` in the server); Dictionaries of all tables: its dialogs (`.browse_bulk_dialog()`, `.browse_bulk_done()`), Windows' folder dialog and Explorer (`.browse_choose_fn()`, `.browse_choose_dir()`, `.browse_open_fn()`, `.browse_open_dir()`) and its handlers (`bulk_dir`, `input$bulk_write` in the server) |
 | `inst/dictionary/dictionary.typ` | The PDF's Typst template |
 | `inst/dictionary/dictionary.css`, `dictionary.js` | The HTML file's style and script, written into each file |
-| `tests/testthat/test-episerver_dictionary.R` | The dictionary from the fake, as data, its text, the HTML file, the PDF with Quarto mocked, finding Quarto, `episerver_dictionary()` with the connection mocked, for tables and for a database, `dictionary_logo()`, and the Download menu through `testServer()`. One test compiles PDFs where Quarto is found. |
+| `tests/testthat/test-episerver_dictionary.R` | The dictionary from the fake, as data, its text, the HTML file, the PDF with Quarto mocked, finding Quarto, `episerver_dictionary()` with the connection mocked, for tables and for a database, `dictionary_logo()`, and the Download menu and Dictionaries of all tables through `testServer()`. One test compiles PDFs where Quarto is found. |
 | `tests/testthat/test-episerver_dictionary_live.R` | The labels of 11 tables of `Analysis.dbo` against `episerver_getlabels()`'s, the tables of `Analysis.dbo` with whether they have labels against `.lbl_read()`, and `episerver_dictionary()` writing a table's files |
 | `dev/harness/fake_quarto/quarto` | A stand-in for Quarto in cloud sessions (see `dev/harness/README.md`) |
 
@@ -52,7 +52,8 @@ The linkage dictionary and variable list stay in the maintainer's local process,
 - **A whole database** (the maintainer asked for it on 26 Oct 2026). `episerver_dictionary(db = "Analysis")`, or with `schema`, writes the dictionary of every table and view that a label table holds labels for, and leaves out the rest, with a message counting them.
   - `.dict_tables()` lists the schemas (`.browse_sql_schemas()`) and their tables and views (`.browse_sql_tables()`, which leaves out label tables), and asks `.lbl_sql_pick()` of each, against the database's label tables or the one the `lbl_*` arguments name: one small query a table, and no new SQL.
   - Without `schema`, each schema's files go in a folder of its name, as tables of one name can be in several schemas (`dbo.APC` and `stage.APC`). With `schema`, or with tables named, the files go in `dir` itself.
-  - Scripts only, for now: a browser download of many dictionaries is waiting on the maintainer (see Open items).
+  - `.dict_write_all()` builds and writes each table's files in turn. For a database it keeps going when a table fails, and `episerver_dictionary()` then warns, naming each table with its error; for tables named, the first error stops it.
+  - The browser does the same with Dictionaries of all tables (see Browser).
 - **Value labels.** The PDF shows the first `max_values` value labels of a column, 50 by default (the maintainer's choice), then "and 1,234 more value labels; see the HTML dictionary". The HTML file shows them all, folded.
 - **Outputs.**
   - PDF and standalone HTML, from the one dictionary. Word is not made: in the old process it was only a step towards the PDF, and it was slow with large tables.
@@ -78,17 +79,22 @@ The linkage dictionary and variable list stay in the maintainer's local process,
   - `dictionary_logo(path)` keeps a PNG in actepir's folder in R's user settings directory (`tools::R_user_dir("actepir", "config")`), so it stays set in later sessions; `dictionary_logo()` says which logo is set, and `dictionary_logo(remove = TRUE)` goes back to the lockup. One function with a stored setting, rather than a `logo` argument, so that the browser's Download uses it too.
   - `.png_info()` reads the PNG's size and colour type from its header, and a tRNS chunk before its image data, with no package. `dictionary_logo()` warns when the logo is under 600 pixels wide, has no transparency, or is over 500 KB, as every HTML file carries it.
   - Tests set `R_USER_CONFIG_DIR` to a temporary folder.
-- **Browser.** A Download menu in the sidebar's foot, between the code button and the bug button, opening upwards: Dictionary as PDF and Dictionary as HTML. Without Quarto, the PDF's item is a disabled entry, "Dictionary as PDF (needs Quarto)", not a link: Shiny enables a download link once it has its address, which would undo a disabled class. A failure shows a notification.
+- **Browser.** A Download menu in the sidebar's foot, between the code button and the bug button, opening upwards: Dictionary as PDF, Dictionary as HTML, then Dictionaries of all tables. Without Quarto, the PDF's item is a disabled entry, "Dictionary as PDF (needs Quarto)", not a link: Shiny enables a download link once it has its address, which would undo a disabled class. A failure shows a notification.
+- **Dictionaries of all tables** (the maintainer asked for it on 26 Oct 2026, with PDFs required). The browser writes the files to a folder on the analyst's computer, where the app runs, rather than giving a download.
+  - A dialog asks for the tables and views (of the schema chosen, or of the whole database, each schema in a folder of its name), the files (HTML, PDF or both; PDF disabled without Quarto) and the folder. The folder starts as `dictionaries` in R's working directory and is remembered for the session. Write makes the folder if it does not exist.
+  - On Windows, Choose… opens Windows' folder dialog (`utils::choose.dir()`), and the closing dialog has Open the folder (`shell.exec()`). Both functions exist only in R for Windows, so they are looked up with `get0()` and the buttons are left out elsewhere, so that R CMD check passes on Linux.
+  - Writing reads the label table chosen in the sidebar, or the automatic choice, and shows a progress bar counting the tables. It keeps going when a table fails. The closing dialog says how many dictionaries were written, as which files and where, how many tables and views were left out without labels (`.dict_summary()`, as `episerver_dictionary()` says it), and lists any that failed with their errors.
+  - Rejected:
+    - a ZIP download: PDFs for a schema take minutes, too long for a download, so it could give HTML only, and `utils::zip()` needs a zip program, which Windows has only with Rtools, so it would add the zip package to Imports;
+    - scripts only: the maintainer wanted it in the browser.
 
 ## Open items
 
-- **A browser download of many dictionaries (waiting on the maintainer).** The ways seen:
-  - a ZIP of the HTML dictionaries of every table with labels in the schema chosen. `utils::zip()` needs a zip program, which Windows has only with Rtools, so it would need the zip package in Imports;
-  - writing the files to a folder from the browser, with no new package, as the app runs on the analyst's computer;
-  - scripts only, as now.
-
-  PDFs for many tables take a second or two each, too long for a download, so a browser download would be HTML only.
-
+- **Dictionaries of all tables on the SOE (waiting on the maintainer's test).** Not seen outside Windows:
+  - whether Windows' folder dialog opens in front of the browser when the app runs in its background process;
+  - Open the folder;
+  - a folder on a UNC path, as Documents is redirected;
+  - how long the PDFs of `Analysis.dbo` take.
 - Two improvements of pull request 4 can use the dictionary as data (`.dict_flat()`): label coverage, and copying the dictionary as a table for Excel.
 - The look of the PDF on the SOE, with Calibri and Arial, has not been seen: the cloud session has none of the brand fonts, Calibri or Arial, so its pages were checked in Typst's own fonts.
 
@@ -97,9 +103,10 @@ The linkage dictionary and variable list stay in the maintainer's local process,
 **Offline:**
 - The three commands in CLAUDE.md. The test that compiles PDFs skips in a cloud session unless `dev/harness/fake_quarto` is first on the PATH (see `dev/harness/README.md`).
 - The Typst template compiled with Typst 0.13 (pip's `typst` package), and its pages rendered as PNG and looked at.
-- The HTML file opened in the harness's headless Chromium: `episerver_browser.js` downloads it from the browser and searches it.
+- The HTML file opened in the harness's headless Chromium: `episerver_browser.js` downloads it from the browser and searches it. It also writes Dictionaries of all tables for the fake's `Analysis` and lists the files.
 
 **Against EpiServer:**
 - The maintainer runs `testthat::test_local()`, in which `test-episerver_dictionary_live.R` must run rather than skip, and the test that compiles PDFs runs with RStudio's Quarto.
 - They write the dictionaries of a few tables with `episerver_dictionary()` (one labelled in `ref.DataProperties`, one in a DataLabels table, one with many value labels, a view) and compare them with the browser's Columns tab, then download the same from the browser.
+- In the browser, from Download > Dictionaries of all tables, they write the dictionaries of `Analysis.dbo` as HTML and PDF to a folder chosen with Choose…, under their redirected Documents, note how long it takes, open the folder with Open the folder, and write those of the whole database as HTML.
 - They set their own logo with `dictionary_logo()` and remove it again.

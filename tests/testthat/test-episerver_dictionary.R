@@ -272,10 +272,10 @@ test_that("episerver_dictionary() writes each table's files and returns the dict
   withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
   dir <- withr::local_tempdir()
 
-  expect_message(
-    out <- episerver_dictionary(c("APC", "Analysis.dbo.Plain"), dir = dir),
-    "Wrote"
+  messages <- capture_messages(
+    out <- episerver_dictionary(c("APC", "Analysis.dbo.Plain"), dir = dir)
   )
+  expect_length(grep("^Wrote ", messages), 4)
   expect_setequal(list.files(dir),
                   c("APC_dictionary.pdf", "APC_dictionary.html",
                     "Plain_dictionary.pdf", "Plain_dictionary.html"))
@@ -288,7 +288,10 @@ test_that("episerver_dictionary() writes each table's files and returns the dict
                                lbl_table = "DataLabels")
   expect_equal(unique(data$description[data$column == "Sex"]), "Old sex label")
   # A lazy table brings its connection
-  lazy <- episerver_dictionary(lazy_table("ED"), formats = "html", dir = dir)
+  expect_message(
+    lazy <- episerver_dictionary(lazy_table("ED"), formats = "html", dir = dir),
+    "ED_dictionary.html", fixed = TRUE
+  )
   expect_true(file.exists(file.path(dir, "ED_dictionary.html")))
   expect_equal(unique(lazy$table), "Analysis.dbo.ED")
   expect_equal(connected, 2)
@@ -359,9 +362,10 @@ test_that("episerver_dictionary() writes the dictionaries of a database's tables
 
   # One schema, in dir itself
   dir <- withr::local_tempdir()
-  expect_message(episerver_dictionary(db = "Analysis", schema = "stage",
-                                      formats = "html", dir = dir),
-                 "Every table and view of Analysis.stage has labels.", fixed = TRUE)
+  messages <- capture_messages(episerver_dictionary(db = "Analysis", schema = "stage",
+                                                    formats = "html", dir = dir))
+  expect_match(messages, "Every table and view of Analysis.stage has labels.",
+               fixed = TRUE, all = FALSE)
   expect_equal(list.files(dir), "APC_dictionary.html")
 
   # No labels: nothing written
@@ -472,6 +476,149 @@ test_that("the browser's Download menu gives the dictionary of the table chosen"
     expect_equal(basename(file), "APC_dictionary.pdf")
     data <- jsonlite::fromJSON(file)
     expect_equal(data$source, "Labels from ref.DataLabels.")
+  })
+
+})
+
+test_that("the dictionaries of many tables are written one by one, and failures kept", {
+
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+  fake <- fake_browse_episerver()
+  listed <- .dict_tables(fake$query, "Analysis")
+  expect_equal(.dict_summary(listed, "Analysis"),
+               "7 of the 9 tables and views of Analysis have labels; the others were left out.")
+  expect_equal(.dict_summary(listed[listed$schema == "stage", ], "Analysis.stage"),
+               "Every table and view of Analysis.stage has labels.")
+  expect_equal(.dict_summary(listed[listed$table == "Plain", ], "Analysis.dbo"),
+               "No table or view of Analysis.dbo has labels.")
+  expect_equal(.dict_summary(listed[0, ], "Analysis.x"),
+               "There are no tables or views in Analysis.x that you can read.")
+  targets <- .dict_targets(listed, "Analysis")
+  expect_length(targets, 7)
+  expect_equal(targets[[7]][c("schema", "table")], list(schema = "stage", table = "APC"))
+
+  # A table that fails is kept apart, and the others are written
+  dir <- withr::local_tempdir()
+  targets <- c(targets[1:2], list(list(db = "Analysis", schema = "dbo",
+                                       table = "Nowhere", label = NULL)))
+  steps <- integer()
+  done <- .dict_write_all(fake$query, targets, "html", dir, by_schema = TRUE,
+                          keep_going = TRUE, step = function(i, n) steps <<- c(steps, i))
+  expect_length(done$dictionaries, 2)
+  expect_equal(names(done$failed), "Analysis.dbo.Nowhere")
+  expect_match(done$failed[[1]], "is not a table or view")
+  expect_equal(steps, 1:3)
+  expect_setequal(list.files(dir, recursive = TRUE),
+                  c("dbo/ACTGHSMYX_dictionary.html", "dbo/APC_dictionary.html"))
+  expect_error(.dict_write_all(fake$query, targets, "html", dir),
+               "is not a table or view")
+
+})
+
+test_that("the dialog for the dictionaries of all tables offers the tables, files and folder", {
+
+  html <- function(x) as.character(x)
+  dialog <- html(.browse_bulk_dialog("Analysis", "dbo", TRUE, "C:/work/dictionaries",
+                                     can_choose = TRUE))
+  expect_match(dialog, "modal-dialog-scrollable", fixed = TRUE)
+  expect_match(dialog, "Of the schema Analysis.dbo", fixed = TRUE)
+  expect_match(dialog, "Of the whole database Analysis, each schema in a folder of its name",
+               fixed = TRUE)
+  expect_match(dialog, "<input type=\"checkbox\" name=\"bulk_formats\" value=\"pdf\" checked=\"checked\"/>",
+               fixed = TRUE)
+  expect_match(dialog, "value=\"C:/work/dictionaries\"", fixed = TRUE)
+  expect_match(dialog, "id=\"bulk_choose\"", fixed = TRUE)
+  expect_match(dialog, "Choose\u2026", fixed = TRUE)
+  expect_match(dialog, "id=\"bulk_write\"", fixed = TRUE)
+
+  # Without Quarto the PDF is disabled; off Windows there is no Choose
+  plain <- html(.browse_bulk_dialog("Analysis", "dbo", FALSE, "x", can_choose = FALSE))
+  expect_match(plain, "value=\"pdf\" disabled", fixed = TRUE)
+  expect_match(plain, "PDF (needs Quarto, which comes with RStudio)", fixed = TRUE)
+  expect_match(plain, "value=\"html\" checked=\"checked\"", fixed = TRUE)
+  expect_no_match(plain, "bulk_choose", fixed = TRUE)
+
+  listed <- .dict_tables(fake_browse_episerver()$query, "Analysis", "dbo")
+  done <- list(dictionaries = list(1, 2),
+               failed = c(Analysis.dbo.X = "The PDF could not be made."))
+  shown <- html(.browse_bulk_done(listed, done, c("html", "pdf"), "C:/w", "Analysis.dbo",
+                                  can_open = TRUE))
+  expect_match(shown, "Wrote 2 dictionaries, as HTML and PDF, to C:/w.", fixed = TRUE)
+  expect_match(shown, "6 of the 7 tables and views of Analysis.dbo have labels", fixed = TRUE)
+  expect_match(shown, "<li>Analysis.dbo.X: The PDF could not be made.</li>", fixed = TRUE)
+  expect_match(shown, "id=\"bulk_open\"", fixed = TRUE)
+  none <- html(.browse_bulk_done(listed[0, ], list(dictionaries = list(), failed = character()),
+                                 "html", "C:/w", "Analysis.x", can_open = TRUE))
+  expect_match(none, "No dictionary was written.", fixed = TRUE)
+  expect_no_match(none, "bulk_open", fixed = TRUE)
+
+  # The folder dialog and Explorer are used where R has them
+  local_mocked_bindings(.browse_choose_fn = function() NULL)
+  expect_true(is.na(.browse_choose_dir("x")))
+  local_mocked_bindings(.browse_choose_fn = function() {
+    function(default, caption) paste0(default, "|chosen")
+  })
+  here <- withr::local_tempdir()
+  expect_equal(.browse_choose_dir(here), paste0(normalizePath(here), "|chosen"))
+  opened <- NULL
+  local_mocked_bindings(.browse_open_fn = function() function(x) opened <<- x)
+  .browse_open_dir(here)
+  expect_equal(opened, normalizePath(here))
+
+})
+
+test_that("the browser writes the dictionaries of all tables with labels to the folder given", {
+
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
+  local_mocked_bindings(.dict_quarto = function() "quarto",
+                        .dict_run_quarto = function(quarto, typ, pdf) {
+                          writeLines("%PDF-1.7", pdf)
+                        })
+  chose <- NULL
+  local_mocked_bindings(.browse_choose_dir = function(default) {
+    chose <<- default
+    "C:/chosen"
+  })
+  opened <- NULL
+  local_mocked_bindings(.browse_open_dir = function(folder) opened <<- folder)
+  whole <- file.path(withr::local_tempdir(), "new folder")
+  one <- withr::local_tempdir()
+
+  app <- episerver_browse_app(query = fake_browse_episerver()$query)
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = TRUE, table = "APC")
+    expect_equal(bulk_dir(), file.path(getwd(), "dictionaries"))
+    session$setInputs(dict_bulk = 1, bulk_dir = whole)
+    session$setInputs(bulk_choose = 1)
+    expect_equal(chose, whole)
+
+    # The whole database, as HTML and PDF, into a folder made for it
+    session$setInputs(bulk_scope = "db", bulk_formats = c("html", "pdf"),
+                      bulk_write = 1)
+    expect_setequal(list.files(whole, recursive = TRUE), c(
+      paste0("dbo/", rep(c("ACTGHSMYX", "APC", "Births", "Deaths", "ED", "vw_ED"),
+                         each = 2), "_dictionary.", c("html", "pdf")),
+      "stage/APC_dictionary.html", "stage/APC_dictionary.pdf"
+    ))
+    expect_equal(bulk_dir(), whole)
+    session$setInputs(bulk_open = 1)
+    expect_equal(opened, whole)
+
+    # The schema alone, as HTML, from the label table chosen
+    session$setInputs(labels_source = "ref.DataLabels", bulk_scope = "schema",
+                      bulk_formats = "html", bulk_dir = one, bulk_write = 2)
+    expect_setequal(list.files(one), paste0(c("ACTGHSMYX", "APC", "Births", "ED",
+                                              "vw_ED"), "_dictionary.html"))
+    html <- paste(readLines(file.path(one, "APC_dictionary.html")), collapse = "\n")
+    expect_match(html, "Labels from ref.DataLabels.", fixed = TRUE)
+
+    # No files chosen: nothing is written
+    empty <- file.path(one, "empty")
+    session$setInputs(bulk_formats = character(), bulk_dir = empty, bulk_write = 3)
+    expect_false(dir.exists(empty))
   })
 
 })
