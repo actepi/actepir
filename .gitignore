@@ -10,3 +10,4 @@ dev/*
 !dev/reference/
 !dev/notes/
 !dev/harness/
+!dev/dictionaries/

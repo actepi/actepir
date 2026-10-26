@@ -10,7 +10,7 @@ There is one file of notes per tool or feature of actepir, so that the next sess
 | [shared-apps.md](shared-apps.md) | What the Shiny apps share, their add-ins, and how to add a tool |
 | [dsr-calculator.md](dsr-calculator.md) | The DSR Calculator (`episerver_dsr()`), `dsr_calculate()` and `dsr_age_specific()` |
 | [dataset-browser.md](dataset-browser.md) | The Dataset Browser (`episerver_browse()`), the labels lookup that it shares with `episerver_getlabels()` and `collect_withlabels()`, and the plan for pull requests 1 to 6 |
-| [dictionaries.md](dictionaries.md) | Data dictionaries: the linkage dictionary and variable list, PDF and HTML exports (planned) |
+| [dictionaries.md](dictionaries.md) | Data dictionaries: the dictionary tables in `Analysis.ref` and the conversion of the old workbook into them; the linkage dictionary and variable list, PDF and HTML exports (planned) |
 
 The rest of the package has no notes yet: EpiServer access, the ggplot2 and gt themes, and the Quarto and R Markdown templates. Start notes for a part the next time it changes.
 

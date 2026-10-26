@@ -6,21 +6,41 @@ Planned work: pull requests 3, 4 and 5 of the plan in `dataset-browser.md`. The 
 - the linkage dictionary, a subset of a table's columns with aliases, offered for data linkage;
 - the linkage variable list workbook that applicants fill in.
 
-Both linkage products are made by the same code from the same rules, so they always agree. Nothing here has been written yet.
+Both linkage products are made by the same code from the same rules, so they always agree. Pull request 3 added the tables that hold the rules and the conversion of the old workbook into them; the builder and its outputs are pull requests 4 and 5.
 
 ## Status
 
-Design agreed with the maintainer on 25 Oct 2026. No code yet.
+| Pull request | Content |
+|---|---|
+| Plan pull request 3 (open, waiting on the maintainer's run in SSMS) | The seven dictionary tables in `Analysis.ref`, a worked example of adding rows, and a script that converts `definitions.xlsx` into an INSERT script for the Linkage profile. |
+
+The design was agreed with the maintainer on 25 Oct 2026, and the tables' details on 26 Oct 2026, when the maintainer uploaded the files below.
+
+## Where the code is
+
+| File | Holds |
+|---|---|
+| `inst/sql/dictionary_tables.sql` | The SQL that creates the seven tables, run in SSMS. It creates only the tables that do not exist. Installed with the package, as the builder will read these tables. |
+| `inst/sql/dictionary_example.sql` | A worked example of adding, changing and removing rows, for a profile named Example. It ends with `ROLLBACK`, so it changes nothing as it stands. |
+| `dev/dictionaries/convert_definitions.R` | The conversion: `convert_definitions()` reads the workbook (`read_definitions()`), builds and checks the rows (`definition_rows()`, `alias_problems()`), and writes the INSERT script (`sql_script()`, `sql_insert()`, `sql_value()`). The Linkage profile's title lines and closing sections, and the proposed order of themes, are at its top. It is a script in `dev/`, not package code (the maintainer's choice), as it is run once. |
+| `dev/dictionaries/test-convert_definitions.R` | Its tests, on a made-up workbook. `testthat::test_local()` does not run them; run `Rscript -e 'testthat::test_file("dev/dictionaries/test-convert_definitions.R")'`. |
+| `dev/dictionaries/check_insert_script.py` | Checks a generated script without SQL Server: T-SQL syntax with sqlglot, a run in SQLite against the tables' constraints, and every value read back against R's rows. |
 
 ## The process it replaces
 
-The maintainer's local process is not in the repository. Three of its files must be uploaded to the session again when this work starts:
+The maintainer's local process is not in the repository. Its files were uploaded to the session for pull request 3 and are not committed. Upload them again for later work: `template_varlist.xlsx` is needed for pull request 5.
 
 - `definitions.xlsx`, the rules;
 - `dictionary_direct.Rmd` and `dictionary_call.Rmd`, the R Markdown that builds a Word dictionary with flextable and officer, and the variable list with openxlsx from `templates/template_varlist.xlsx`;
 - the blank `template_varlist.xlsx`.
 
-`dictionary_direct.Rmd` holds the password used to protect the workbook. It must never be committed, and the new workbook is protected without a password (decided below).
+`dictionary_direct.Rmd` held the password used to protect the workbook; the copy uploaded for pull request 3 had it removed. None of these files may be committed: they hold internal comments, the server's name and database names. The new workbook is protected without a password (decided below).
+
+What pull request 3 found in them:
+
+- The workbook's `Dataset` is the table's name, as `dat.tb` in the run script (`RBDMBirths`), not the dataset's abbreviation (`RBDM-B`). The old code filtered the rules by `Dataset == dat.tb`.
+- The run script's `tables` has, for each dataset, `active`, `fullname`, `abbrname`, `doi`, `version`, `db`, `dat.sc`, `dat.tb`, `lbl.sc` and `lbl.tb`. Every DOI is the placeholder `10.9999/exam/ple999`.
+- The Word template (`template_dictionary_blank.docx`, US Letter landscape) holds the title lines in its header and, after the columns, a page headed Further Information with three sections: General Enquiries (the section's names, the data custodian's email and the linkage request portal), Acknowledgment of Country and Accessibility.
 
 The rules, by sheet of `definitions.xlsx`:
 
@@ -41,18 +61,24 @@ Further rules in the old code:
 
 ## Decisions
 
-- **Storage.** The tables are in `Analysis.ref`, keyed by profile. "Linkage" is the first profile. They are edited in SSMS; the Excel workbook is retired once converted. Proposed tables:
+- **Storage.** The tables are in `Analysis.ref`, keyed by profile. "Linkage" is the first profile. They are edited in SSMS; the Excel workbook is retired once converted. The tables, as built in pull request 3 (`inst/sql/dictionary_tables.sql` gives their columns and constraints):
 
   | Table | Replaces | Holds |
   |---|---|---|
-  | `DictionaryProfiles` | The Word template | Profile, title lines (for Linkage, "Data Linkage Dataset Metadata" and "Data Analytics Branch: Epidemiology Section"), and the closing sections (general enquiries with the contact email and the request portal, Acknowledgement of Country, accessibility), each a heading and text in order. If this proves awkward, the maintainer will accept the text in the package for now. |
-  | `DictionaryDatasets` | The table in `dictionary_call.Rmd` | Profile, dataset code (APC), full name, database, schema, table, DOI, version, active. No label table: the labels lookup finds it. |
-  | `DictionaryColumns` | `vars` | Profile, dataset code, column, theme, alias, alias description, include or exclude, suppress, caveat code, internal comment. |
-  | `DictionaryNotes` | `notes` | Profile, dataset code, order, aspect, issue, comment. |
-  | `DictionaryCaveats` | `limits` | Profile, code, symbol, colour, text. |
-  | `DictionaryThemes` | (new) | Profile, theme, order. The old order followed the first column name alphabetically. Themes not listed follow alphabetically, then Uncategorised. |
+  | `DictionaryProfiles` | The Word template's header | Profile, Title and Subtitle (for Linkage, "Data Linkage Dataset Metadata" and "Data Analytics Branch: Epidemiology Section"). |
+  | `DictionarySections` | The Word template's closing page | Profile, SectionOrder, Heading and SectionText: General Enquiries, Acknowledgment of Country and Accessibility. The page's heading, Further Information, is for the builder to write. |
+  | `DictionaryDatasets` | The table in `dictionary_call.Rmd` | Profile, DatasetCode (the abbreviation, APC), FullName, DatabaseName, SchemaName, TableName, DOI, Version, Active. No label table: the labels lookup finds it. |
+  | `DictionaryColumns` | `vars` | Profile, DatasetCode, ColumnName, Theme, ColumnAlias, DescriptionAlias, ColumnAction, ValueAction, CaveatCode, and the internal Comments and Other. |
+  | `DictionaryNotes` | `notes` | Profile, DatasetCode, NoteOrder, Aspect, Issue, Comment. |
+  | `DictionaryCaveats` | `limits` | Profile, CaveatCode, Symbol, Colour, CaveatText. |
+  | `DictionaryThemes` | (new) | Profile, Theme, ThemeOrder. The old order followed the first column name alphabetically. Themes not listed follow alphabetically, then Uncategorised. |
 
-  - Columns with a fixed set of values get CHECK constraints, and the conversion standardises their spelling (INCLUDE, EXCLUDE, Suppress and suppress appear in the workbook).
+  - The profile's text was first planned as part of `DictionaryProfiles`. It is two tables, because the number of closing sections varies (the maintainer's choice, 26 Oct 2026). Putting the text in the package was the fallback, not needed.
+  - Columns keep the workbook's names where they are clear. `Dataset` became `DatasetCode`, as the workbook's `Dataset` is a table name; `Limits` became `CaveatCode`, after the table.
+  - Both of the workbook's internal columns are kept: `Comments` (23 values, such as questions between reviewers) and `Other` (412 values, mostly other wordings of a column's label). The plan named one internal comment; keeping both loses nothing. Neither is shown.
+  - Columns with a fixed set of values get CHECK constraints, and the conversion standardises their spelling. `ColumnAction` is INCLUDE or EXCLUDE, and NOT NULL with INCLUDE as its default, as a row without one counts as included. `ValueAction` is SUPPRESS or NULL (the workbook has Suppress in 43 rows and suppress in 29). Caveat codes are written in lower case and colours in upper case.
+  - Primary keys on the profile and natural key of each table, and foreign keys from each table to its profile, from columns and notes to their dataset, and from columns to their caveat. The foreign keys do not cascade: cascading updates from both datasets and caveats to columns would be two cascade paths, which SQL Server refuses, and codes are rarely renamed. A dataset is removed after its columns and notes.
+  - Text columns are `nvarchar`, as the caveat symbols and some notes are not in the database's code page.
   - The definitions do not go in `ref.DataProperties`, for four reasons:
     - sqldta reads that table;
     - the definitions cover tables in several databases;
@@ -61,9 +87,15 @@ Further rules in the old code:
   - Column labels and value labels still come from the labels lookup (DataProperties first), unless a column has an alias description.
   - Each array member keeps its own row. A column added to a table later (for example `Diagnosis101`) is left out of a profile until it has a row. The label coverage improvement in pull request 6 lists such columns.
   - Pull request 3 delivers the SQL that creates the tables, a worked example of adding rows, and a script that converts `definitions.xlsx` into an INSERT script the maintainer runs in SSMS. Neither the workbook nor the generated script is committed.
-  - Two data problems to fix before converting:
-    - the five `ESWLClusterArray` columns have aliases `ESWL Cluster 1-5` to `1-9`, which looks like Excel auto-fill;
-    - `COD1-10` covers `COD1` to `COD9` only.
+  - Two data problems were fixed by the maintainer in the workbook before converting (26 Oct 2026): the `ESWLClusterArray` columns' aliases, `ESWL Cluster 1-5` to `1-9` (Excel auto-fill), are now `ESWLCluster1-5`; `COD1-10`, over `COD1` to `COD9`, is now `COD1-9`. The conversion checks every alias that ends in a range against the numbers of its columns.
+- **The conversion** (`dev/dictionaries/convert_definitions.R`).
+  - The datasets come from the run script's `tables`, which the maintainer builds by running that chunk of `dictionary_call.Rmd`; the workbook's rows are matched to them by `dat.tb`. Committing the datasets' details would have put database names in the public repository.
+  - It stops, writing nothing, on a problem that would give wrong rows or make an INSERT fail: an action or caveat code it does not know, a column twice (in any case), an alias whose columns differ in what is shown or do not match its range, a value too long for its column, or a dataset or caveat without what it needs. Each problem names its sheet and rows.
+  - It reports, and leaves out, the rows of a `Dataset` that is not a `dat.tb` of `tables`, and reports a dataset without rows, the spellings it standardised, and themes not in the order.
+  - The placeholder DOI is written as NULL.
+  - Themes are ordered by `linkage_theme_order` at the top of the script, a proposal (see Open items), with steps of 10.
+  - The script it writes is plain ASCII: line breaks and other characters are written as `NCHAR()` joined to `N'...'` pieces. Depending on its settings, SSMS can read a file without a byte order mark in the Windows code page, which would garble the caveat symbols and the en dashes in notes, and a file saved again with Windows line endings would change the line breaks in the text.
+  - It adds every row in one transaction with `XACT_ABORT`, so a failed row changes nothing. It stops if the profile is loaded already, and lists the DELETE statements for loading it again. It ends by counting the rows loaded against those expected.
 - **Outputs.**
   - PDF and standalone HTML, from one builder that also feeds the browser's Columns tab, so a file matches the screen.
   - Word is no longer made: it was only a step towards the PDF, and it was slow with large tables.
@@ -105,12 +137,24 @@ Further rules in the old code:
 
 ## Open items
 
+- **Waiting on the maintainer, before converting:**
+  - `vars` and `notes` file the Kindergarten Health Check's rows under `KHCMY`, but the run script's table is `KHCDLMY`. The old process found no rules for it, as it matched `Dataset` to `dat.tb`. The conversion leaves the 286 `vars` and 5 `notes` rows out until one of the two is changed.
+  - `BCTG` has 204 rows in `vars`, without themes or ColumnAction, and no dataset in the run script. They are left out until it has one.
+  - The order of themes in `linkage_theme_order` is a proposal: the themes most datasets share, then each dataset's own, and Data management last. The maintainer can change it before converting, or in SSMS after.
+  - The template spells "Acknowledgment of Country"; the plan wrote "Acknowledgement". The conversion keeps the template's spelling.
 - Confirm the name of `episerver_dictionary()` and the arguments of `dictionary_logo()` with the maintainer.
+- `.gitignore` has `.xlsx`, `.xls` and `.csv`, which match only files of those names, not `*.xlsx`; a workbook inside the checkout is not ignored. The conversion's usage keeps the workbook and its script outside the repository. If the patterns are changed to `*.xlsx`, pull request 5 needs an exception for the template in `inst/`.
 - Whether full dictionaries in the browser should group by theme when a profile is not chosen (the themes belong to a profile).
 - The DOI is a placeholder in the run script; show it on the PDF's first page if it is set.
 
 ## How to check a change
 
-**Offline:** the three commands in CLAUDE.md; the generated Typst compiled with Typst 0.13 and its pages looked at; the HTML file opened in the harness's headless Chromium; the workbook opened with openxlsx and its named ranges checked.
+**Offline:**
+- The three commands in CLAUDE.md.
+- The conversion: `Rscript -e 'testthat::test_file("dev/dictionaries/test-convert_definitions.R")'`. With the maintainer's workbook uploaded, convert it and run `dev/dictionaries/check_insert_script.py` on the script (its header shows how). Keep the workbook and the script in the scratchpad, never in the repository.
+- The SQL files parse as T-SQL (sqlglot) and are plain ASCII.
+- From pull request 4: the generated Typst compiled with Typst 0.13 and its pages looked at; the HTML file opened in the harness's headless Chromium; the workbook opened with openxlsx and its named ranges checked.
 
-**Against EpiServer:** the maintainer creates and loads the tables, then builds the linkage dictionary and variable list of a dataset, such as APC, and compares them with the last ones made by the old process.
+**Against EpiServer:**
+- The maintainer runs `inst/sql/dictionary_tables.sql`, then `inst/sql/dictionary_example.sql`, which must end with no Example rows left, then the generated script, whose last queries count the rows against those expected and show the caveat symbols. Running the generated script a second time must stop with its message and change nothing.
+- From pull request 4: the maintainer builds the linkage dictionary and variable list of a dataset, such as APC, and compares them with the last ones made by the old process.
