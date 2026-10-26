@@ -113,10 +113,10 @@
 #' app rather than starting a second process, after first verifying it is
 #' still serving; a process that is alive but no longer responding is killed
 #' and replaced automatically. The app is stopped by
-#' [episerver_browse_stop()] and when the R session exits. Process
-#' supervision is attempted but falls back gracefully where blocked by system
-#' policy (a message is shown once per launch). After an abnormal R crash an
-#' orphaned background process can be ended from Task Manager (Rscript.exe).
+#' [episerver_browse_stop()] and when the R session exits. It runs in one
+#' process, without processx's supervisor, which AppLocker blocks. After an
+#' abnormal R crash the process keeps running, and can be ended from Task
+#' Manager (Rterm.exe).
 #' If the background process cannot be spawned in a restricted environment,
 #' use `background = FALSE`.
 #'

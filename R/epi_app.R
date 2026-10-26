@@ -81,10 +81,10 @@
   # race that can produce 'address already in use' failures.
   portfile <- tempfile(paste0("actepir_", key, "_port_"))
 
-  # Spawn the app in a background process. Supervision requires processx's
-  # bundled supervisor.exe, which restricted environments (e.g. AppLocker
-  # policies blocking executables under AppData) may refuse to run, raising
-  # system error 1260. Attempt supervision first and fall back without it.
+  # Spawn the app in one background process, without processx's supervisor.
+  # AppLocker blocks the supervisor (system error 1260), and processx starts
+  # the process before the supervisor, so a failed supervised start leaves a
+  # second app with no handle, which garbage collection then kills.
   bg_func <- function(port, portfile, factory, factory_args) {
     app <- do.call(utils::getFromNamespace(factory, "actepir"), factory_args)
     candidates <- if (!is.null(port)) {
@@ -118,14 +118,7 @@
   bg_args <- list(port = port, portfile = portfile,
                   factory = factory, factory_args = factory_args)
 
-  proc <- tryCatch(
-    callr::r_bg(func = bg_func, args = bg_args, supervise = TRUE),
-    error = function(e) {
-      message("Process supervision is unavailable on this system ",
-              "(spawn blocked by policy); launching without it.")
-      callr::r_bg(func = bg_func, args = bg_args, supervise = FALSE)
-    }
-  )
+  proc <- callr::r_bg(func = bg_func, args = bg_args, supervise = FALSE)
 
   # Wait for the app to start serving (port_open is defined above, before
   # the reuse check)
@@ -164,8 +157,8 @@
   .actepir_env[[url_name]]  <- url
   .actepir_env[[port_name]] <- port
 
-  # Safety net for unsupervised processes: kill every background app when
-  # this R session exits. Registered once per session.
+  # The processes are unsupervised: kill every background app when this R
+  # session exits. Registered once per session.
   if (!isTRUE(.actepir_env$finalizer_set)) {
     reg.finalizer(
       .actepir_env,
