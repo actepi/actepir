@@ -18,7 +18,7 @@ This function will allow the user to apply value and variable labels in bulk to 
 It assumes that the labelset is formatted according to those stored on EpiServer.  Columns should be:
 
 "VarName" : the variable name
-"VarType" : indicating whether the row specifies a variable or response option (value) label. an  Valid values in this column are "var" (for variable label) and "opt" (for value label)
+"LabelType" : indicating whether the row specifies a variable or response option (value) label. Valid values in this column are "var" (for variable label) and "opt" (for value label), in any case
 "DataCode" : containing the underlying code (level)
 "LabelName" : the variable or value label
 

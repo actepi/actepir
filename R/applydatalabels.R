@@ -5,7 +5,7 @@
 #' It assumes that the labelset is formatted according to those stored on EpiServer.  Columns should be:
 #' 
 #' "VarName" : the variable name
-#' "VarType" : indicating whether the row specifies a variable or response option (value) label. an  Valid values in this column are "var" (for variable label) and "opt" (for value label)
+#' "LabelType" : indicating whether the row specifies a variable or response option (value) label. Valid values in this column are "var" (for variable label) and "opt" (for value label), in any case
 #' "DataCode" : containing the underlying code (level)
 #' "LabelName" : the variable or value label
 #' 
@@ -62,10 +62,11 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
     dplyr::mutate(labeltype = tolower(labeltype)) %>% 
     dplyr::filter(labeltype %in% c("opt","var")) %>% 
     
-    # roll up into lists
+    # roll up into lists, one row per variable, with NA for a variable
+    # that has value labels but no variable label
     dplyr::group_by(varname) %>%
     dplyr::reframe(
-      variable_label = labelname[labeltype == "var"],
+      variable_label = labelname[labeltype == "var"][1],
       labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.character(datacode[labeltype == "opt"])))
     )
   
@@ -109,8 +110,10 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
       
     }
     
-    # apply variable label
-    base::attr(data[[var]], "label") <- var_label
+    # apply variable label, if there is one
+    if (!is.na(var_label)) {
+      base::attr(data[[var]], "label") <- var_label
+    }
     
   }
   return(data)
