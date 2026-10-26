@@ -236,6 +236,10 @@ const fs = require('fs');
   await select('labels_source', 'ref.DataLabels');
   console.log('LABELS ref.DataLabels:', await info(), '|',
     JSON.stringify(await page.evaluate(() => $('#table')[0].selectize.options.APC.label)));
+  // The code names the label table chosen
+  await page.click('#insert_code');
+  await page.waitForTimeout(600);
+  console.log('CODE ref.DataLabels:', JSON.stringify(await clipboard()));
   await select('labels_source', 'dbo.DataLabels');
   console.log('LABELS dbo.DataLabels:', await info());
   await select('labels_source', 'auto');

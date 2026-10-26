@@ -239,3 +239,87 @@ test_that("a table's labels are gathered by column, with notes in sqldta's order
   expect_equal(nrow(empty$dataset$links), 0)
 
 })
+
+# ── Labels for scripts ──────────────────────────────────────────────────────
+
+test_that("a label table's layout is known from its columns, in any case", {
+
+  expect_equal(.lbl_layout(c("tableschema", "TableName", "ColumnName",
+                             "PropertyType", "PropertyCode", "PropertyText")),
+               "properties")
+  # DataType is not needed to read a DataLabels table
+  expect_equal(.lbl_layout(c("Dataset", "VarName", "LabelType", "DataCode",
+                             "LabelName")), "labels")
+  expect_true(is.na(.lbl_layout(c("Dataset", "VarName", "LabelType"))))
+  expect_true(is.na(.lbl_layout(character())))
+
+})
+
+test_that("scripts take each table's labels from the first label table holding rows", {
+
+  fake <- fake_browse_episerver()
+
+  # ref.DataProperties, in the DataLabels layout: variable labels, then
+  # value labels in code order; no notes, formats, dataset labels or links
+  apc <- .lbl_get(fake$query, "Analysis", "dbo", "APC")
+  expect_s3_class(apc, "tbl_df")
+  expect_named(apc, c("Dataset", "VarName", "LabelType", "DataCode",
+                      "LabelName"))
+  expect_equal(apc$Dataset, rep("APC", 6))
+  expect_equal(apc$VarName, c("Sex", "AgeYrs", "Sex", "Sex", "Sex", "Sex"))
+  expect_equal(apc$LabelType, c("Var", "Var", "Opt", "Opt", "Opt", "Opt"))
+  expect_equal(apc$DataCode, c(NA, NA, "1", "2", "9", "10"))
+  expect_equal(apc$LabelName[1:3], c("Sex of the patient",
+                                     "Age in years (<1 is 0)", "Male"))
+
+  # Falling back to ref.DataLabels and dbo.DataLabels
+  ed <- .lbl_get(fake$query, "Analysis", "dbo", "ED")
+  expect_equal(ed$LabelName, c("Triage category", "Resuscitation",
+                               "Emergency"))
+  expect_equal(.lbl_get(fake$query, "Analysis", "dbo", "Deaths")$LabelName,
+               "Underlying cause of death")
+  # Tables of the same name in other schemas have labels of their own
+  expect_equal(.lbl_get(fake$query, "Analysis", "stage", "APC")$LabelName,
+               "Sex as staged")
+
+  # Before ref.DataProperties exists, APC falls back to ref.DataLabels
+  old <- .lbl_get(fake_browse_episerver(properties = FALSE)$query,
+                  "Analysis", "dbo", "APC")
+  expect_equal(old$LabelName, c("Old sex label", "M"))
+
+  # No labels: an empty table, and a message saying why
+  expect_message(plain <- .lbl_get(fake$query, "Analysis", "dbo", "Plain"),
+                 "No label table of Analysis holds labels for dbo.Plain.",
+                 fixed = TRUE)
+  expect_equal(nrow(plain), 0)
+  expect_named(plain, names(apc))
+  expect_message(.lbl_get(fake$query, "HospitalAPC", "dbo", "APC"),
+                 "HospitalAPC has no label table, so dbo.APC has no labels.",
+                 fixed = TRUE)
+
+})
+
+test_that("scripts can name one label table, in either layout", {
+
+  fake <- fake_browse_episerver()
+  apc <- function(label) .lbl_get(fake$query, "Analysis", "dbo", "APC", label)
+
+  # ref.DataLabels for APC, although ref.DataProperties holds rows for it
+  labels <- apc(c(db = "Analysis", schema = "ref", table = "DataLabels"))
+  expect_equal(labels$LabelName, c("Old sex label", "M"))
+  expect_equal(labels$DataCode, c(NA, "1"))
+  expect_equal(apc(c("Analysis", "ref", "DataProperties"))$LabelName[1],
+               "Sex of the patient")
+  expect_message(none <- apc(c("Analysis", "dbo", "DataLabels")),
+                 "Analysis.dbo.DataLabels holds no labels for dbo.APC.",
+                 fixed = TRUE)
+  expect_equal(nrow(none), 0)
+
+  # A table without the columns of either layout is refused, and no rows
+  # are read from it
+  n <- length(fake$calls())
+  expect_error(apc(c("Analysis", "dbo", "Plain")),
+               "Analysis.dbo.Plain is not a label table", fixed = TRUE)
+  expect_length(fake$calls(), n + 1)
+
+})

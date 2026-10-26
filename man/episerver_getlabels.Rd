@@ -15,17 +15,16 @@ episerver_getlabels(
 )
 }
 \arguments{
-\item{dataset}{The name of the dataset that labels are associated with. Argument
-should be supplied as character or object.  Mandatory.}
+\item{dataset}{The table whose labels are wanted: a lazy table from EpiServer, such as one from \code{\link{episerver_quickconnect}} or \code{\link{episerver_lazytable}}, or the name of a table in \code{Analysis.dbo}, as character.  Mandatory.}
 
-\item{lbl_table}{The name of the table where the labels exist. Argument should be
-supplied as character. If not supplied, will default to \code{DataLabels}.}
+\item{lbl_table}{The name of one label table to read the labels from, in place of the label table chosen automatically. Argument should be
+supplied as character. If not supplied while \code{lbl_schema} or \code{lbl_db} is, will default to \code{DataLabels}.}
 
-\item{lbl_schema}{The name of the schema to be connected to. Argument should be
-supplied as character. If not supplied, will default to \code{ref}.}
+\item{lbl_schema}{The schema of one label table to read the labels from. Argument should be
+supplied as character. If not supplied while \code{lbl_table} or \code{lbl_db} is, will default to \code{ref}.}
 
-\item{lbl_db}{The name of the database to be connected to. Argument should be
-supplied as character. If not supplied, will default to \code{Analysis}.}
+\item{lbl_db}{The database of one label table to read the labels from. Argument should be
+supplied as character. If not supplied while \code{lbl_table} or \code{lbl_schema} is, will default to the table's database.}
 
 \item{driver}{Character string or \code{NULL}. ODBC driver to use for the connection.
 If \code{NULL} (default), the function will automatically select the appropriate
@@ -54,25 +53,37 @@ then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
 \code{"Yes"} whenever \code{encrypt = "Yes"} on Driver 18.}
   }}
 }
+\value{
+A tibble of the labels in the layout of \code{DataLabels}: \code{Dataset} (the table's name), \code{VarName} (the column), \code{LabelType} (\code{Var} for a variable label, \code{Opt} for a value label), \code{DataCode} (the code of a value label) and \code{LabelName} (the label). Variable labels come first, then value labels in code order.
+}
 \description{
-This function will allow the user to download the labels file for a given dataset.  The function will always search EpiServer and cannot be used for other servers of file locations.
+This function will allow the user to download the variable and value labels of a table on EpiServer, from the label tables of its database, as the Dataset Browser finds them.  The function will always search EpiServer and cannot be used for other servers of file locations.
 }
 \details{
-Almost all non-administrative users will not need to use the lbl_* arguments.
+By default the labels come from the first label table of the table's database that holds rows for it: \code{ref.DataProperties}, then tables named \code{DataLabels}, then \code{DataLabelsNew}, then others whose name holds DataLabels, each in the \code{ref} schema before others (see \code{\link[=episerver_browse]{episerver_browse()}}). A table therefore keeps its labels while they move from \code{ref.DataLabels} to \code{ref.DataProperties}.
+
+Giving any of \code{lbl_table}, \code{lbl_schema} and \code{lbl_db} reads the labels from that one label table instead, in either layout. Almost all non-administrative users will not need to use the lbl_* arguments.
+
+Rows from \code{ref.DataProperties} are returned in the layout of \code{DataLabels}. Only variable labels and value labels are returned; notes, display formats, dataset labels and linked tables are not. Codes and labels are trimmed of spaces, label types are read in any case, and only the first label of a column, or of a column's code, is kept. A message says when no label table holds labels for the table.
 }
 \examples{
 \dontrun{
-# Import APC labels from default `Analysis` database
+# Import the labels of APC in Analysis.dbo, from the label table that
+# holds them
 labels = episerver_getlabels("APC")
 
-# Import APC labels from non-default location
+# Import the labels of a lazy table
+labels = episerver_quickconnect("ED") \%>\%
+  episerver_getlabels()
+
+# Import APC labels from one label table, in a non-default location
 labels = episerver_getlabels(
-  dataset = "APC", 
-  lbl_table = "DataLabelsNew", 
-  lbl_schema = "dbo", 
+  dataset = "APC",
+  lbl_table = "DataLabelsNew",
+  lbl_schema = "dbo",
   lbl_db = "HospitalAPC"
   )
 }
- 
+
 }
 \keyword{episerver}

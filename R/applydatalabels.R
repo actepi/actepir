@@ -5,11 +5,11 @@
 #' It assumes that the labelset is formatted according to those stored on EpiServer.  Columns should be:
 #' 
 #' "VarName" : the variable name
-#' "VarType" : indicating whether the row specifies a variable or response option (value) label. an  Valid values in this column are "var" (for variable label) and "opt" (for value label)
+#' "LabelType" : indicating whether the row specifies a variable or response option (value) label. Valid values in this column are "var" (for variable label) and "opt" (for value label), in any case
 #' "DataCode" : containing the underlying code (level)
 #' "LabelName" : the variable or value label
 #' 
-#' All columns should be character.  VarNames must be in the same case as the column names in the data they are to be applied to.
+#' All columns should be character.  VarName is matched to the column names of the data in any case, as SQL Server matches them.
 #' 
 #' @param data The dataframe of data which the labels will be applied to. Argument should be supplied as an object.
 #' @param labels The dataframe containing the labels to be applied. Argument should be supplied as an object.
@@ -52,20 +52,22 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
   # clean and prepare labels file
   label_info = labels %>% 
     
+    # standardise names and types, which match in any case
+    dplyr::mutate(varname = tolower(varname), labeltype = tolower(labeltype)) %>% 
+    
     # remove duplicate entries
     dplyr::group_by(varname,labeltype,datacode) %>% 
     dplyr::mutate(rank=dplyr::row_number()) %>% 
     dplyr::filter(rank == 1) %>% 
     dplyr::ungroup() %>% 
     
-    # standardise types
-    dplyr::mutate(labeltype = tolower(labeltype)) %>% 
     dplyr::filter(labeltype %in% c("opt","var")) %>% 
     
-    # roll up into lists
+    # roll up into lists, one row per variable, with NA for a variable
+    # that has value labels but no variable label
     dplyr::group_by(varname) %>%
     dplyr::reframe(
-      variable_label = labelname[labeltype == "var"],
+      variable_label = labelname[labeltype == "var"][1],
       labels = list(setNames(as.character(labelname[labeltype == "opt"]), as.character(datacode[labeltype == "opt"])))
     )
   
@@ -79,11 +81,11 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
   # apply labels to data
   for (i in base::seq_along(label_info$varname)) {
     
-    # isolate variable name for iteration
-    var <- label_info$varname[i]
+    # isolate the column of the data that the variable name matches
+    var <- names(data)[match(label_info$varname[i], tolower(names(data)))]
     
     # ensure variable name exists in dataset
-    if (!var %in% names(data)) {
+    if (is.na(var)) {
       next  # Skip variable if not exist in dataset
     }
     
@@ -109,8 +111,10 @@ applydatalabels <- function(data = parent.frame(), labels = NULL) {
       
     }
     
-    # apply variable label
-    base::attr(data[[var]], "label") <- var_label
+    # apply variable label, if there is one
+    if (!is.na(var_label)) {
+      base::attr(data[[var]], "label") <- var_label
+    }
     
   }
   return(data)

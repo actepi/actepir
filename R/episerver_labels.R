@@ -9,7 +9,8 @@
 # A table takes its labels from the first label table, in the order of
 # .lbl_sql_sources(), that holds rows for it, so that a table keeps its labels
 # while the labels move from DataLabels to DataProperties. Rows are read in
-# the shape of DataProperties and normalised by .lbl_normalise().
+# the shape of DataProperties and normalised by .lbl_normalise(). The Dataset
+# Browser and episerver_getlabels() (through .lbl_get()) both use it.
 
 # Columns each layout must have for its label table to be offered. DataType
 # is required of DataLabels tables, as before DataProperties, but not read.
@@ -286,5 +287,87 @@
       links = data.frame(Key = links$Column, Table = links$Text,
                          stringsAsFactors = FALSE)
     )
+  )
+}
+
+
+# ── Labels for scripts ──────────────────────────────────────────────────────
+
+# The layout of a table from its columns, in any case: "properties" or
+# "labels", or NA when it has every column of neither. DataType, which
+# .lbl_sql_sources() asks of a DataLabels table, is not needed to read one,
+# and was never asked of a label table named to episerver_getlabels().
+#' @noRd
+.lbl_layout <- function(columns) {
+  has <- function(layout) all(tolower(layout) %in% tolower(columns))
+  if (has(.lbl_layouts$properties)) return("properties")
+  if (has(setdiff(.lbl_layouts$labels, "DataType"))) return("labels")
+  NA_character_
+}
+
+# The variable and value labels of table schema.table of database db, as
+# episerver_getlabels() returns them: a tibble in the DataLabels layout,
+# with Dataset (the table), VarName, LabelType (Var or Opt), DataCode (NA
+# for Var) and LabelName, variable labels first and value labels in code
+# order. `label` names one label table to read, as c(db, schema, table) in
+# either layout; without it the labels come from the first label table of
+# db that holds rows for the table, as in the Dataset Browser. query(sql)
+# runs a query. A message says when there are no labels.
+#' @noRd
+.lbl_get <- function(query, db, schema, table, label = NULL) {
+  name <- function(...) paste(c(...), collapse = ".")
+  none <- function(...) {
+    message(...)
+    tibble::tibble(Dataset = character(), VarName = character(),
+                   LabelType = character(), DataCode = character(),
+                   LabelName = character())
+  }
+
+  if (is.null(label)) {
+    sources <- query(.lbl_sql_sources(db))
+    if (!nrow(sources)) {
+      return(none(db, " has no label table, so ", name(schema, table),
+                  " has no labels."))
+    }
+    i <- query(.lbl_sql_pick(db, sources, schema, table))$Source[1]
+    if (is.na(i) || i == 0) {
+      return(none("No label table of ", db, " holds labels for ",
+                  name(schema, table), "."))
+    }
+    lbl_db <- db
+    source <- sources[i, , drop = FALSE]
+  } else {
+    lbl_db <- label[[1]]
+    columns <- query(.browse_sql_columns(label[[1]], label[[2]], label[[3]]))
+    layout <- .lbl_layout(columns$col)
+    if (is.na(layout)) {
+      stop(name(label), " is not a label table: it does not have the ",
+           "columns of ref.DataProperties (",
+           paste(.lbl_layouts$properties, collapse = ", "),
+           ") or of DataLabels (",
+           paste(setdiff(.lbl_layouts$labels, "DataType"), collapse = ", "),
+           ").", call. = FALSE)
+    }
+    source <- data.frame(TABLE_SCHEMA = label[[2]], TABLE_NAME = label[[3]],
+                         Layout = layout, stringsAsFactors = FALSE)
+  }
+
+  rows <- .lbl_normalise(rbind(
+    query(.lbl_sql_rows(lbl_db, source, schema, table)),
+    query(.lbl_sql_rows(lbl_db, source, schema, table, values = TRUE))
+  ))
+  vars <- rows[rows$Type == "VariableLabel", , drop = FALSE]
+  vals <- rows[rows$Type == "ValueLabel", , drop = FALSE]
+  vals <- vals[.lbl_code_order(vals$Code), , drop = FALSE]
+  if (!nrow(vars) && !nrow(vals)) {
+    return(none(name(lbl_db, source$TABLE_SCHEMA, source$TABLE_NAME),
+                " holds no labels for ", name(schema, table), "."))
+  }
+  tibble::tibble(
+    Dataset   = rep(table, nrow(vars) + nrow(vals)),
+    VarName   = c(vars$Column, vals$Column),
+    LabelType = rep(c("Var", "Opt"), c(nrow(vars), nrow(vals))),
+    DataCode  = c(rep(NA_character_, nrow(vars)), vals$Code),
+    LabelName = c(vars$Text, vals$Text)
   )
 }

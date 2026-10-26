@@ -18,11 +18,11 @@ This function will allow the user to apply value and variable labels in bulk to 
 It assumes that the labelset is formatted according to those stored on EpiServer.  Columns should be:
 
 "VarName" : the variable name
-"VarType" : indicating whether the row specifies a variable or response option (value) label. an  Valid values in this column are "var" (for variable label) and "opt" (for value label)
+"LabelType" : indicating whether the row specifies a variable or response option (value) label. Valid values in this column are "var" (for variable label) and "opt" (for value label), in any case
 "DataCode" : containing the underlying code (level)
 "LabelName" : the variable or value label
 
-All columns should be character.  VarNames must be in the same case as the column names in the data they are to be applied to.
+All columns should be character.  VarName is matched to the column names of the data in any case, as SQL Server matches them.
 }
 \examples{
 \dontrun{
