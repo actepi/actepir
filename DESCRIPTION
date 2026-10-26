@@ -33,7 +33,6 @@ Imports:
     stats,
     DT,
     htmltools,
-    miniUI,
     bslib (>= 0.11.0),
     shiny,
     rstudioapi,

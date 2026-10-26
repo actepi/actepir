@@ -6,11 +6,12 @@
 # maintainer runs the tests against EpiServer.
 #
 # Usage, from the repository root:
-#   Rscript dev/harness/dryrun_live.R
+#   Rscript dev/harness/dryrun_live.R [--without-dataproperties]
 #
 # The tests are copied to a temporary directory with the package's helpers
 # and a last helper that sources fake_live.R; nothing in the repository
-# changes.
+# changes. With --without-dataproperties, the fake Analysis database has no
+# ref.DataProperties, as before the label table is created.
 
 script <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
 harness <- dirname(normalizePath(script))
@@ -22,8 +23,10 @@ from <- file.path(repo, "tests", "testthat")
 invisible(file.copy(list.files(from, "^helper-.*[.]R$", full.names = TRUE),
                     tests))
 invisible(file.copy(list.files(from, "_live[.]R$", full.names = TRUE), tests))
+properties <- !"--without-dataproperties" %in% commandArgs(trailingOnly = TRUE)
 writeLines(c(
   sprintf('harness_dir <- "%s"', harness),
+  sprintf('browse_properties <- %s', properties),
   'source(file.path(harness_dir, "fake_live.R"), local = TRUE)'
 ), file.path(tests, "helper-zz-fake.R"))
 

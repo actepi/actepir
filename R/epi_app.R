@@ -1,4 +1,4 @@
-# Infrastructure shared by the package's Shiny apps: the EpiServer Browser
+# Infrastructure shared by the package's Shiny apps: the Dataset Browser
 # (episerver_browse()) and the DSR Calculator (episerver_dsr()).
 
 # Package-level environment holding the background process handles
@@ -409,6 +409,150 @@
 }
 
 
+# A problem report from the app named `app`, as text: what the analyst says
+# happened (left out when `what` is NULL), the app's state (named lines,
+# under the heading `about`), the settings by input ID, written as R
+# arguments, R code for the settings when they can be used, and the session
+# (.epi_session_report()). It holds settings but no data.
+#' @noRd
+.epi_problem_report <- function(app, about, what, state, inputs, code,
+                                session) {
+  section <- function(title, lines) {
+    c(title, strrep("-", nchar(title)), lines, "")
+  }
+  settings <- vapply(names(inputs), function(id) {
+    paste(id, "=", paste(deparse(inputs[[id]]), collapse = " "))
+  }, character(1), USE.NAMES = FALSE)
+  what <- if (!is.null(what)) trimws(paste(what, collapse = "\n"))
+  paste(c(
+    paste(app, "problem report,", format(Sys.time(), "%Y-%m-%d %H:%M %Z")),
+    "",
+    if (!is.null(what)) {
+      section("What happened", if (nzchar(what)) what else "(Not described.)")
+    },
+    section(about, paste0(names(state), ": ", state)),
+    section("Settings", settings),
+    if (!is.null(code)) section("R code for these settings", code),
+    section("R session", session)
+  ), collapse = "\n")
+}
+
+
+# The bug button, at the right of a sidebar's foot (.epi-actions). A click
+# sends what the browser knows (.epi_report_script()), and the server then
+# opens the problem report (.epi_report_server()).
+#' @noRd
+.epi_bug_button <- function() {
+  shiny::tags$button(
+    id = "bug_report", type = "button", class = "epi-icon-btn",
+    title = "Report a problem", `aria-label` = "Report a problem",
+    shiny::icon("bug")
+  )
+}
+
+
+# The bug button sends what the browser knows to the problem report as
+# input$bug_client: its user agent and window, the errors shown in outputs
+# (not the messages of validate() or req()) and the last script errors
+#' @noRd
+.epi_report_script <- function() {
+  shiny::tags$script(shiny::HTML("
+    (function() {
+      var scriptErrors = [];
+      window.addEventListener('error', function(e) {
+        scriptErrors.push(e.message);
+        if (scriptErrors.length > 5) scriptErrors.shift();
+      });
+      $(document).on('click', '#bug_report', function() {
+        var shown = $('.shiny-output-error')
+          .not('.shiny-output-error-validation')
+          .map(function() {
+            var text = $(this).text().trim();
+            return text ? (this.id || 'output') + ': ' + text : null;
+          }).get();
+        Shiny.setInputValue('bug_client', {
+          agent: navigator.userAgent,
+          width: window.innerWidth, height: window.innerHeight,
+          ratio: window.devicePixelRatio,
+          errors: shown, script_errors: scriptErrors.slice(),
+          at: Date.now()
+        }, {priority: 'event'});
+      });
+    })();
+  "))
+}
+
+
+# The server's part of the problem report of the app named `app`: the
+# dialog that opens when the bug button sends bug_client, the details shown
+# in it and Copy report. report(what) gives the report's text (from
+# .epi_problem_report()); `holds` says what the report holds. The dialog
+# fits the window and only the details scroll (.epi-report).
+#' @noRd
+.epi_report_server <- function(input, output, session, app, report, holds) {
+  shiny::observeEvent(input$bug_client, {
+    dialog <- shiny::modalDialog(
+      title = "Report a problem", size = "l", easyClose = TRUE,
+      shiny::p(
+        "Say what happened, then copy the report and paste it into an ",
+        "email to ",
+        shiny::tags$a(
+          href = paste0("mailto:", .epi_contact, "?subject=",
+                        utils::URLencode(paste(app, "problem report"),
+                                         reserved = TRUE)),
+          .epi_contact, .noWS = "after"
+        ),
+        "."
+      ),
+      shiny::textAreaInput("bug_what",
+                           "What happened, and what did you expect?",
+                           width = "100%", rows = 4, resize = "vertical"),
+      shiny::p(class = "epi-note",
+               "The report adds the details below, which help to reproduce ",
+               "the problem. It holds ", holds, "."),
+      shiny::verbatimTextOutput("bug_details"),
+      footer = shiny::tagList(
+        shiny::actionButton("bug_copy", "Copy report",
+                            icon = shiny::icon("copy"),
+                            class = "btn-sm btn-primary"),
+        shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                           `data-bs-dismiss` = "modal", "Close")
+      )
+    )
+    shiny::showModal(
+      htmltools::tagQuery(dialog)$find(".modal-dialog")$
+        addClass("modal-dialog-scrollable epi-report")$allTags()
+    )
+  })
+  output$bug_details <- shiny::renderText({
+    shiny::req(input$bug_client)
+    report(NULL)
+  })
+  shiny::observeEvent(input$bug_copy, {
+    .epi_copy_text(session, report(input$bug_what),
+                   "Report copied to the clipboard")
+  })
+}
+
+
+# When an app stops (its _stop() function, or the end of the R session), its
+# browser tab says so and how to open it again, instead of greying out. Only
+# a stopped app disconnects a local tab. `app` is its name, `addin` the
+# add-in that opens it and `fn` its function.
+#' @noRd
+.epi_stopped_script <- function(app, addin, fn) {
+  shiny::tags$script(shiny::HTML(sprintf("
+    $(document).on('shiny:disconnected', function() {
+      $('<div class=\"epi-stopped\">')
+        .append('<h4>The %s is no longer running.</h4>')
+        .append('<p>Open it again from Addins &gt; %s, ' +
+                'or with actepir::%s().</p>')
+        .appendTo('body');
+    });
+  ", app, addin, fn)))
+}
+
+
 # The actepir lockup, the hex sticker's pyramid with the package's name in
 # white (inst/www/logo-lockup.svg, see dev/reference/hex-sticker.md), as an
 # <img>, or NULL if the file is not installed. The image is embedded as a
@@ -460,8 +604,9 @@
 
 
 # Theme shared by the apps: colours, the spacing and type of controls and
-# sections, the title bar, buttons, notes, information buttons,
-# notifications, DataTables and sliders. The rules use the classes of Shiny,
+# sections, the top bar, sidebars, buttons, notes, information buttons, Help
+# tabs, the problem report, the page shown once an app stops, notifications,
+# DataTables and sliders. The rules use the classes of Shiny,
 # Bootstrap 3 and 5, bslib and shinydashboard, so that controls in any app
 # take them without CSS of their own. dev/reference/app-style.md sets them
 # out.
@@ -473,7 +618,7 @@
       --epi-primary-brdr: #24043f;  /* button borders */
       --epi-accent:       #562C8C;  /* Iris: accents, controls, selection focus */
       --epi-info-bg:      #eae6f1;  /* info bar */
-      --epi-select-bg:    #eae6f1;  /* selected row */
+      --epi-select-bg:    #DCC8FA;  /* Lavender: selected row */
       /* Spacing and type */
       --epi-font:      15px;   /* labels, choices and section headings */
       --epi-font-box:  14px;   /* text in boxes and their lists */
@@ -563,8 +708,9 @@
     @media (min-width: 992px) {
       .navbar .navbar-nav { align-items: center; }
     }
-    /* Sidebars: settings are spaced by their own margins (--epi-gap), so
-       bslib's gaps between them are removed */
+    /* Sidebars: a Lavender tint. Settings are spaced by their own margins
+       (--epi-gap), so bslib's gaps between them are removed. */
+    :root { --bslib-sidebar-bg: #f7f4fd; }
     .bslib-sidebar-layout > .sidebar > .sidebar-content { gap: 0; }
     .bslib-sidebar-layout > .sidebar > .sidebar-content > .accordion:not(:last-child) {
       margin-bottom: var(--epi-gap);
@@ -583,6 +729,20 @@
     }
     .accordion + .epi-actions { margin-top: calc(-1 * var(--epi-gap)); }
     .sidebar-content:has(> .epi-actions:last-child) { padding-bottom: 0; }
+    .epi-actions #bug_report { margin-left: auto; font-size: 1.1rem; }
+    /* The problem report fits the window, and only its details scroll, so
+       the dialog does not move under the wheel */
+    .epi-report .modal-body { display: flex; flex-direction: column;
+                              min-height: 0; }
+    #bug_details { flex: 0 1 auto; min-height: 6em; max-height: 50vh;
+                   overflow: auto;
+                   overscroll-behavior: contain; margin-bottom: 0;
+                   font-size: 11px; white-space: pre-wrap; }
+    /* Shown in place of Shiny's grey overlay once the app has stopped */
+    .epi-stopped { position: fixed; inset: 0; z-index: 100000;
+                   display: flex; flex-direction: column;
+                   align-items: center; justify-content: center;
+                   background: #fff; color: var(--epi-primary); }
     /* A tab's own settings (.epi_tab_settings()): a panel at the left of
        the tab's results, without the app sidebar's dividing border, as
        tall as its settings and held in view while the results scroll */
@@ -615,6 +775,11 @@
       color: var(--epi-primary);
     }
     .epi-help .epi-note { margin: 0 0 4px 0; }
+    /* A Help tab (div.help): 13px text, Nightshade headings */
+    .help { max-width: 900px; font-size: 13px; color: #333740; }
+    .help h5 { color: var(--epi-primary); font-weight: 600;
+               margin: 18px 0 6px 0; }
+    .help h5:first-child { margin-top: 4px; }
     /* In shinydashboard's sidebar, inside its padding and in its colours */
     section.sidebar .epi-help > summary {
       top: var(--epi-gap); right: var(--epi-pad); color: inherit;
@@ -643,22 +808,6 @@
     }
     .bslib-sidebar-layout:not(.sidebar-right) > .bslib-sidebar-resize-handle .resize-indicator {
       right: auto; left: 3px; transform: translateY(-50%);
-    }
-    .gadget-content { padding: 10px; }
-    /* Title bar: Nightshade background, white title */
-    .gadget-title { background-color: var(--epi-primary); }
-    .gadget-title h1 { color: #fff; }
-    /* Done button only (scoped by id): contrast against the dark bar */
-    #done.btn-primary {
-      background-color: var(--epi-primary) !important;
-      border-color: #fff !important;
-      color: #fff !important;
-    }
-    #done.btn-primary:hover, #done.btn-primary:focus-visible,
-    #done.btn-primary:active {
-      background-color: var(--epi-accent) !important;
-      border-color: #fff !important;
-      color: #fff !important;
     }
     .selector-row { display: flex; gap: var(--epi-gap);
                     margin-bottom: var(--epi-gap); align-items: flex-end; }
@@ -797,11 +946,14 @@
        inset box-shadow keyed on the --dt-row-selected RGB variable.
        Redefine the variable and override the .extra rule (covering the
        stripe/hover permutations); keep text dark. This build tags rows
-       'active' rather than 'selected'. */
-    :root {
-      --dt-row-selected: 234, 230, 241;      /* #eae6f1 */
-      --dt-row-selected-text: 51, 51, 51;    /* #333 */
-      --dt-row-selected-link: 51, 51, 51;
+       'active' rather than 'selected'. bslib's Bootstrap 5 theme sets the
+       variable on .table.dataTable, from the primary colour. Selected rows
+       are Lavender with Nightshade text, which passes AA, and an Iris bar
+       at their left. */
+    :root, .table.dataTable.dataTable {
+      --dt-row-selected: 220, 200, 250;      /* Lavender #DCC8FA */
+      --dt-row-selected-text: 50, 5, 87;     /* Nightshade */
+      --dt-row-selected-link: 50, 5, 87;
     }
     .table.dataTable tbody td.active,
     .table.dataTable tbody tr.active td,
@@ -814,7 +966,12 @@
     table.dataTable.hover tbody tr.active:hover td,
     table.dataTable.display tbody tr.active:hover td {
       background-color: var(--epi-select-bg) !important;
-      color: #333 !important;
+      color: var(--epi-primary) !important;
+    }
+    table.dataTable tbody tr.selected > td:first-child,
+    table.dataTable tbody tr.active > td:first-child {
+      box-shadow: inset 4px 0 0 var(--epi-accent),
+                  inset 0 0 0 9999px rgb(var(--dt-row-selected)) !important;
     }
     /* DataTables pagination (Bootstrap 3 markup: ul.pagination with
        li.paginate_button): replace Bootstrap blue links and active page */

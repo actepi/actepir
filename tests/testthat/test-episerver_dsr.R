@@ -1233,45 +1233,11 @@ test_that("the app copies the code for the current settings", {
 
 })
 
-test_that("a problem report sets out what happened, the settings and the session", {
-
-  report <- .dsr_problem_report(
-    "The map was blank.\nIt had been fine.",
-    state = c(Calculated = "yes", "EpiServer error" = "none"),
-    inputs = list(dataset = "APC", codes = c("I21", "J45"),
-                  years = c(2022, 2024), by_sex = TRUE, ex_ages = NULL),
-    code = "rates <- dsr_calculate(events, population, standard)\n",
-    session = c("actepir 0.0.18", "R version 4.4.1")
-  )
-  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
-  expect_match(lines[1], "^DSR Calculator problem report, \\d{4}-\\d{2}-\\d{2}")
-  for (heading in c("What happened", "Calculator", "Settings",
-                    "R code for these settings", "R session")) {
-    at <- match(heading, lines)
-    expect_false(is.na(at), label = heading)
-    expect_equal(lines[at + 1], strrep("-", nchar(heading)))
-  }
-  expect_match(report, "The map was blank.\nIt had been fine.", fixed = TRUE)
-  expect_match(report, "EpiServer error: none", fixed = TRUE)
-  # Settings are written as R arguments, ready for session$setInputs()
-  expect_true(all(c("dataset = \"APC\"", "codes = c(\"I21\", \"J45\")",
-                    "years = c(2022, 2024)", "by_sex = TRUE",
-                    "ex_ages = NULL") %in% lines))
-  expect_match(report, "rates <- dsr_calculate(", fixed = TRUE)
-
-  # The preview leaves out what happened, and the code without valid settings
-  preview <- .dsr_problem_report(NULL, c(Calculated = "no"), list(),
-                                 NULL, "actepir 0.0.18")
-  expect_no_match(preview, "What happened", fixed = TRUE)
-  expect_no_match(preview, "R code for these settings", fixed = TRUE)
-  expect_match(.dsr_problem_report(" ", c(Calculated = "no"), list(), NULL,
-                                   "actepir 0.0.18"),
-               "What happened\n-------------\n(Not described.)", fixed = TRUE)
-
-})
-
 test_that("the bug button opens a report that holds the settings but no data", {
 
+  # As in a background process, whether or not the tests run in RStudio
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
   copied <- NULL

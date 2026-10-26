@@ -1710,35 +1710,6 @@ WHERE Latest = 1"
 }
 
 
-# A problem report, as text: what the analyst says happened (left out when
-# `what` is NULL), the calculator's state (named lines), the settings by
-# input ID, written as R arguments, R code for the settings when they can be
-# used, and the session (.epi_session_report()). It holds settings but no
-# counts or rates.
-#' @noRd
-.dsr_problem_report <- function(what, state, inputs, code, session) {
-  section <- function(title, lines) {
-    c(title, strrep("-", nchar(title)), lines, "")
-  }
-  settings <- vapply(names(inputs), function(id) {
-    paste(id, "=", paste(deparse(inputs[[id]]), collapse = " "))
-  }, character(1), USE.NAMES = FALSE)
-  what <- if (!is.null(what)) trimws(paste(what, collapse = "\n"))
-  paste(c(
-    paste("DSR Calculator problem report,",
-          format(Sys.time(), "%Y-%m-%d %H:%M %Z")),
-    "",
-    if (!is.null(what)) {
-      section("What happened", if (nzchar(what)) what else "(Not described.)")
-    },
-    section("Calculator", paste0(names(state), ": ", state)),
-    section("Settings", settings),
-    if (!is.null(code)) section("R code for these settings", code),
-    section("R session", session)
-  ), collapse = "\n")
-}
-
-
 # Settings of the Explore tab's map and funnel plot: what to show, the year
 # or period, sex and the ages of age-specific rates, with input IDs that
 # start with id
@@ -1910,21 +1881,9 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       .epi_app_style(),
 
-      # Calculator-only rules: the top bar, the sidebar, the problem report,
-      # table headings, the diagnosis code tags and the Explore tab
+      # Calculator-only rules: table headings, the diagnosis code tags and
+      # the Explore tab
       shiny::tags$style(shiny::HTML("
-        /* Sidebars: Lavender tint, with Calculate, Copy Code and the bug
-           button in view at the foot of the settings (.epi-actions) */
-        :root { --bslib-sidebar-bg: #f7f4fd; }
-        .epi-actions #bug_report { margin-left: auto; font-size: 1.1rem; }
-        /* The problem report fits the window, and only its details scroll,
-           so the dialog does not move under the wheel */
-        .epi-report .modal-body { display: flex; flex-direction: column;
-                                  min-height: 0; }
-        #bug_details { flex: 0 1 auto; min-height: 6em; max-height: 50vh;
-                       overflow: auto;
-                       overscroll-behavior: contain; margin-bottom: 0;
-                       font-size: 11px; white-space: pre-wrap; }
         .epi-table-head { display: flex; align-items: center;
                           justify-content: space-between; margin: 4px 0 6px 0; }
         .epi-table-head h5 { color: var(--epi-primary); font-weight: 600;
@@ -1967,10 +1926,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .ex-table th { color: var(--epi-primary); font-weight: 600;
                        text-align: left; }
         .ex-table td.num { text-align: right; }
-        .help { max-width: 900px; font-size: 13px; color: #333740; }
-        .help h5 { color: var(--epi-primary); font-weight: 600;
-                   margin: 18px 0 6px 0; }
-        .help h5:first-child { margin-top: 4px; }
         .help-scroll { overflow-x: auto; }
         .help-table td, .help-table th { vertical-align: top; }
         .help-table code { white-space: normal; overflow-wrap: break-word; }
@@ -1984,11 +1939,6 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
         .dsr-short { padding: 1px 4px; border-radius: 2px; }
         .dsr-short-pop { background: #F1ECC2; }
         .dsr-short-events { background: #BFE3F1; }
-        /* Shown in place of Shiny's grey overlay once the app has stopped */
-        .epi-stopped { position: fixed; inset: 0; z-index: 100000;
-                       display: flex; flex-direction: column;
-                       align-items: center; justify-content: center;
-                       background: #fff; color: var(--epi-primary); }
       ")),
 
       # Clipboard handler for the code and table copy buttons
@@ -2116,46 +2066,10 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       ", jsonlite::toJSON(names(Filter(function(d) !length(d$procedures),
                                        .dsr_datasets)))))),
 
-      # The bug button sends what the browser knows to the problem report:
-      # its user agent and window, the errors shown in outputs (not the
-      # messages of validate() or req()) and the last script errors
-      shiny::tags$script(shiny::HTML("
-        (function() {
-          var scriptErrors = [];
-          window.addEventListener('error', function(e) {
-            scriptErrors.push(e.message);
-            if (scriptErrors.length > 5) scriptErrors.shift();
-          });
-          $(document).on('click', '#bug_report', function() {
-            var shown = $('.shiny-output-error')
-              .not('.shiny-output-error-validation')
-              .map(function() {
-                var text = $(this).text().trim();
-                return text ? (this.id || 'output') + ': ' + text : null;
-              }).get();
-            Shiny.setInputValue('bug_client', {
-              agent: navigator.userAgent,
-              width: window.innerWidth, height: window.innerHeight,
-              ratio: window.devicePixelRatio,
-              errors: shown, script_errors: scriptErrors.slice(),
-              at: Date.now()
-            }, {priority: 'event'});
-          });
-        })();
-      ")),
-
-      # When the app stops (episerver_dsr_stop(), or the end of the R
-      # session), its browser tab says so and how to open it again, instead
-      # of greying out
-      shiny::tags$script(shiny::HTML("
-        $(document).on('shiny:disconnected', function() {
-          $('<div class=\"epi-stopped\">')
-            .append('<h4>The DSR Calculator is no longer running.</h4>')
-            .append('<p>Open it again from Addins &gt; Open DSR Calculator, ' +
-                    'or with actepir::episerver_dsr().</p>')
-            .appendTo('body');
-        });
-      ")),
+      # The problem report, and the page shown once the app stops
+      .epi_report_script(),
+      .epi_stopped_script("DSR Calculator", "Open DSR Calculator",
+                          "episerver_dsr"),
 
       # Info bar: what is shown, what was left out, and any warnings
       shiny::conditionalPanel("input.view !== 'help'",
@@ -2333,13 +2247,7 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
           icon  = shiny::icon("terminal"),
           class = "btn-sm btn-primary"
         ),
-        # Opens the problem report; the script above sends what the browser
-        # knows with the click
-        shiny::tags$button(
-          id = "bug_report", type = "button", class = "epi-icon-btn",
-          title = "Report a problem", `aria-label` = "Report a problem",
-          shiny::icon("bug")
-        )
+        .epi_bug_button()
       )
     ),
 
@@ -3546,8 +3454,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
                "years", "pool", "standard", "multiplier", "suppress",
                "min_events", "min_population", "ex_value", "ex_year",
                "ex_sex", "ex_ages", "ex_colour", "ex_overdispersion")
-      .dsr_problem_report(
-        what,
+      .epi_problem_report(
+        "DSR Calculator", "Calculator", what,
         state = c(
           "Calculated" = calculated,
           "EpiServer error" = if (is.null(rv$error)) "none" else rv$error,
@@ -3567,50 +3475,8 @@ episerver_dsr_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     }
 
-    # The dialog fits the window and only the details scroll (.epi-report)
-    shiny::observeEvent(input$bug_client, {
-      dialog <- shiny::modalDialog(
-        title = "Report a problem", size = "l", easyClose = TRUE,
-        shiny::p(
-          "Say what happened, then copy the report and paste it into an ",
-          "email to ",
-          shiny::tags$a(
-            href = paste0("mailto:", .epi_contact, "?subject=",
-                          utils::URLencode("DSR Calculator problem report",
-                                           reserved = TRUE)),
-            .epi_contact, .noWS = "after"
-          ),
-          "."
-        ),
-        shiny::textAreaInput("bug_what",
-                             "What happened, and what did you expect?",
-                             width = "100%", rows = 4, resize = "vertical"),
-        shiny::p(class = "epi-note",
-                 "The report adds the details below, which help to reproduce ",
-                 "the problem. It holds the settings, but no counts, rates ",
-                 "or other data."),
-        shiny::verbatimTextOutput("bug_details"),
-        footer = shiny::tagList(
-          shiny::actionButton("bug_copy", "Copy report",
-                              icon = shiny::icon("copy"),
-                              class = "btn-sm btn-primary"),
-          shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
-                             `data-bs-dismiss` = "modal", "Close")
-        )
-      )
-      shiny::showModal(
-        htmltools::tagQuery(dialog)$find(".modal-dialog")$
-          addClass("modal-dialog-scrollable epi-report")$allTags()
-      )
-    })
-    output$bug_details <- shiny::renderText({
-      shiny::req(input$bug_client)
-      report(NULL)
-    })
-    shiny::observeEvent(input$bug_copy, {
-      .epi_copy_text(session, report(input$bug_what),
-                     "Report copied to the clipboard")
-    })
+    .epi_report_server(input, output, session, "DSR Calculator", report,
+                       "the settings, but no counts, rates or other data")
 
     # In this R session the app holds the console, so closing its browser
     # tab stops it; a background app keeps running for the next opening

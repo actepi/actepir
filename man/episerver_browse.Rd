@@ -2,19 +2,20 @@
 % Please edit documentation in R/episerver_browse.R
 \name{episerver_browse}
 \alias{episerver_browse}
-\title{Interactively Browse EpiServer Database Structure}
+\title{Browse EpiServer's Databases, Tables and Columns}
 \usage{
 episerver_browse(
   background = TRUE,
   port = NULL,
   driver = NULL,
-  max_attempts = NULL
+  max_attempts = NULL,
+  ...
 )
 }
 \arguments{
 \item{background}{Logical. If \code{TRUE} (default), the app runs in a
 background R process and the console remains free. If \code{FALSE}, the
-app runs as a blocking gadget in the current session.}
+app runs in the current session, which it holds until its tab is closed.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port
@@ -26,105 +27,154 @@ the appropriate driver using \code{episerver_serverdetails("driver")}.}
 
 \item{max_attempts}{Integer to specify the number of connection attempts.
 Defaults to \code{episerver_connect} default.}
+
+\item{...}{
+  Arguments passed on to \code{\link{episerver_connect}}
+  \describe{
+    \item{\code{encrypt}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}. Sets the
+ODBC \code{Encrypt} keyword, and takes effect only for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved, in order, from
+\code{getOption("actepir.encrypt")}, then the \code{ACTEPIR_ENCRYPT} environment
+variable, then \code{"Yes"}. Set the option or the environment variable to change
+the default for every EpiServer connection on a machine or in a session without
+passing this argument to each function (see Details).}
+    \item{\code{trust_certificate}}{Character string (\code{"Yes"} / \code{"No"}) or \code{NULL}.
+Sets the ODBC \code{TrustServerCertificate} keyword, for ODBC Driver 18 or later.
+When \code{NULL} (default) the value is resolved from
+\code{getOption("actepir.trust_certificate")}, then \code{ACTEPIR_TRUST_CERTIFICATE},
+then \code{"Yes"}. EpiServer presents a self-signed certificate, so this must be
+\code{"Yes"} whenever \code{encrypt = "Yes"} on Driver 18.}
+  }}
 }
 \value{
 In background mode, invisibly returns the \code{callr} process
 handle. In foreground mode, returns nothing.
 }
 \description{
-Launches an interactive browser that allows users to explore databases,
-schemas, tables, and column metadata on the EpiServer. The browser provides
-cascading dropdown selectors, a searchable metadata table with selectable
-columns, label integration, and generation of ready-made connection code.
+Opens the Dataset Browser, which finds a database, schema, table or view
+on EpiServer, lists its columns with their labels, and gives R code that
+reads the table. The labels come from the label tables of the table's
+database: \code{ref.DataProperties}, which the Stata command sqldta also reads,
+and the \code{DataLabels} tables (see \strong{Labels}).
 
 By default the app runs in a background R process using
 \code{callr::r_bg()}, following the technique described by Will Landau
-(\url{https://wlandau.github.io/posts/2020-12-18-non-blocking-app/}). The
-main R console therefore remains free while the browser is open. Set
-\code{background = FALSE} for the original blocking gadget behaviour.
+(\url{https://wlandau.github.io/posts/2020-12-18-non-blocking-app/}), so the
+console stays free while the browser is open. It opens in the system web
+browser and can be opened from the RStudio Addins menu (\emph{Open Dataset
+Browser}). The settings are in a sidebar on the left, in sections that
+open and close, and the columns, the dataset notes and the help in tabs
+on the top bar. The
+information button beside a setting shows notes on it, and the bug button
+at the foot of the sidebar prepares a report of a problem to send to
+\email{healthinfo@act.gov.au}.
 
-The app opens in the system web browser. It is registered as an RStudio
-Addin and can be launched from the Addins menu (\emph{Open EpiServer
-Browser}), or called directly from the console.
+Close the browser tab when finished. A background browser keeps running,
+so it opens again at once, until \code{\link[=episerver_browse_stop]{episerver_browse_stop()}} or the end of
+the R session; with \code{background = FALSE}, closing the tab stops it.
 }
 \details{
-The browser provides three cascading selectors (Database, Schema, Table) and
-displays column metadata for the selected table. Users can:
+\strong{Finding a table}
 
+The \emph{Dataset} section holds the \emph{Database} (Analysis by default), the
+\emph{Schema} (dbo by default) and the \emph{Table}. The table list holds the tables
+and views of the schema, grouped, each with its dataset label. To find a
+table by its name or its label, click the list, delete the table shown
+with Backspace and type. SQL Server's system databases,
+databases whose name begins with an underscore, and the label tables are
+not listed.
+
+\strong{Labels}
+
+A table's labels are the variable labels, value labels and notes of its
+columns, and its dataset label, dataset notes and linked tables. They are
+read from the label tables of the table's database, which may be tables
+or views:
 \itemize{
-\item Browse available databases, schemas, and tables
-\item View column names, data types, descriptions (from labels), and other
-metadata in a searchable table
-\item Select individual columns via checkboxes to generate a
-\code{dplyr::select()} statement in the output code
-\item Toggle \strong{Import with labels} to switch between
-\code{collect()} and \code{collect_withlabels()} in the output code
-\item Choose a labels table source (auto-detected from the database) to
-enrich the column display with variable descriptions
-\item Toggle \strong{Show value labels} to append a collapsible list of
-value labels (DataCode = LabelName) for each column that has them
-\item Toggle between \strong{quickconnect} mode (an inline
-\code{episerver_quickconnect()} pipe), \strong{connect} mode
-(separate \code{episerver_connect()} + \code{episerver_lazytable()}
-calls with optional \code{library()} declarations), and \strong{none}
-(emit only the collection pipe, assuming a \code{tb} lazy table
-already exists)
-\item Toggle \strong{Declare packages} to control namespacing: when on,
-inline modes use \code{pkg::} prefixes and connect mode adds
-\code{library()} calls; when off, calls are bare
-\item Adjust the table height and expanded-levels height with the
-sliders under Table sizing
-\item Generate the connection and collection code via the code button
-\item Click \strong{Done} to close the browser
+\item \code{ref.DataProperties}, in the layout that sqldta reads (\code{TableSchema},
+\code{TableName}, \code{ColumnName}, \code{PropertyType}, \code{PropertyCode},
+\code{PropertyText}), with rows filed by the table's schema and name;
+\item tables named \code{DataLabels}, then \code{DataLabelsNew}, then others whose name
+holds DataLabels, each in the \code{ref} schema before others, in the layout
+\code{Dataset}, \code{VarName}, \code{LabelType}, \code{DataCode}, \code{LabelName} and
+\code{DataType}, with rows filed by the table's name alone.
 }
 
-The code button adapts to the mode. In foreground mode it is labelled
-\strong{Insert Code} and inserts at the cursor position via
-\code{rstudioapi::insertText()}. A background process has no connection to
-the RStudio editor, so in background mode the button is labelled
-\strong{Copy Code} and places the generated code on the clipboard instead.
+A label table is offered only if it has every column of its layout. With
+\emph{Labels table} set to Automatic (the default), each table takes its labels
+from the first label table in this order that holds rows for it, so that a
+table keeps its labels while they move from \code{DataLabels} to
+\code{ref.DataProperties}. The info bar says which label table they came from.
+Choosing a label table reads the labels from it alone.
+
+\emph{Show value labels}, on by default, adds each column's value labels,
+which are read only while shown, as a table can have thousands. Notes
+with a code come first, in code order, then the others.
+
+\strong{Columns and dataset notes}
+
+The \emph{Columns} tab lists the table's columns with their position, name,
+variable label (\emph{Description}), type and, when present, value labels and
+notes. The table fits the window and can be searched and sorted. Click
+rows to choose columns for the code; the line above the table counts
+them. The buttons above the table expand and collapse every list of value
+labels, while value labels are shown, and clear the rows chosen.
+
+The \emph{Collection} tab holds the table's description (its dataset label),
+its notes and its linked tables, apart from the columns, as some tables
+have many notes.
+
+\strong{Code}
+
+The code button gives R code that reads the table, with a \code{select()} of
+the columns chosen. In foreground mode it is labelled \emph{Insert Code} and
+inserts the code at the cursor with \code{rstudioapi::insertText()}. A
+background process has no connection to the RStudio editor, so in
+background mode it is labelled \emph{Copy Code} and copies the code to the
+clipboard. The \emph{Code} section sets the form of the code:
+\itemize{
+\item \emph{Connection}: quickconnect (an \code{\link[=episerver_quickconnect]{episerver_quickconnect()}} pipe), connect
+(\code{\link[=episerver_connect]{episerver_connect()}} and \code{\link[=episerver_lazytable]{episerver_lazytable()}} calls) or none (only
+the pipe, from an existing lazy table \code{tb});
+\item \emph{Declare packages}: \verb{pkg::} prefixes in the quickconnect and none forms,
+and \code{library()} calls in the connect form;
+\item \emph{Import with labels}: \code{\link[=collect_withlabels]{collect_withlabels()}} in place of \code{collect()}.
+It applies the labels of \code{ref.DataLabels} in the table's database, which
+may differ from those shown when they come from another label table.
+}
+
+\strong{Background process}
 
 In background mode the app keeps running when its browser tab is closed.
 Calling the function again while the app is running reopens the existing
 app rather than starting a second process, after first verifying it is
-still serving; a process that is alive but no longer
-responding is killed and replaced automatically. Stop the background app
-with the Done button or \code{\link{episerver_browse_stop}};
-it is also stopped automatically when the R session exits. Process
+still serving; a process that is alive but no longer responding is killed
+and replaced automatically. The app is stopped by
+\code{\link[=episerver_browse_stop]{episerver_browse_stop()}} and when the R session exits. Process
 supervision is attempted but falls back gracefully where blocked by system
 policy (a message is shown once per launch). After an abnormal R crash an
 orphaned background process can be ended from Task Manager (Rscript.exe).
-
-The function requires \code{shiny}, \code{miniUI}, and \code{DT}, plus
-\code{callr} for background mode. These are listed as \code{Suggests}
-dependencies. If the background process cannot be spawned in a restricted
-environment, use \code{background = FALSE}.
+If the background process cannot be spawned in a restricted environment,
+use \code{background = FALSE}.
 }
 \note{
 \itemize{
-\item Requires an active network connection to the EpiServer
-\item The initial connection may take a few seconds to establish
-\item Database/schema/table visibility is limited by the user's permissions
-\item System databases (tempdb, master, msdb) and any database whose
-name begins with an underscore are hidden from the Database dropdown
+\item Requires an active network connection to EpiServer.
+\item The initial connection may take a few seconds to establish.
+\item Database, schema, table and column visibility is limited by the user's
+permissions.
 \item The database connection is validated before each query and
-re-established automatically if it has been dropped
-\item The labels dropdown only offers tables containing the required
-label columns (Dataset, VarName, LabelType, LabelName, DataCode,
-DataType); older formats are hidden, and column listings fall back to
-an unlabelled view if a labels join fails
-\item Tables with DataLabels in the name are excluded from the Table
-dropdown
-\item Label descriptions are only shown when a labels table is detected
-in the selected database
+re-established automatically if it has been dropped. A query that still
+fails is reported in the info bar.
 }
 }
 \examples{
 \dontrun{
-# Launch in a background process; console stays free
+# Launch in a background process and open it in the web browser; the
+# console stays free
 episerver_browse()
 
-# Original blocking gadget behaviour
+# Run in this R session, which it holds until its tab is closed
 episerver_browse(background = FALSE)
 
 # Stop the background app
@@ -133,9 +183,9 @@ episerver_browse_stop()
 
 }
 \seealso{
-\code{\link{episerver_browse_stop}} for stopping the background app,
-\code{\link{episerver_info}} for non-interactive metadata queries,
-\code{\link{collect_withlabels}} for collecting data with labels applied
+\code{\link[=episerver_browse_stop]{episerver_browse_stop()}} for stopping the background app,
+\code{\link[=episerver_info]{episerver_info()}} for non-interactive metadata queries,
+\code{\link[=collect_withlabels]{collect_withlabels()}} for collecting data with labels applied
 }
 \author{
 Warren Holroyd

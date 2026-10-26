@@ -15,7 +15,7 @@ episerver_dsr(
 \arguments{
 \item{background}{Logical. If \code{TRUE} (default), the app runs in a
 background R process and the console remains free. If \code{FALSE}, the
-app runs as a blocking gadget in the current session.}
+app runs in the current session, which it holds until its tab is closed.}
 
 \item{port}{Integer or \code{NULL}. The local port for the background app.
 If \code{NULL} (default), the background process chooses a free port

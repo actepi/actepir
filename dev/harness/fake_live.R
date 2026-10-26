@@ -3,6 +3,10 @@
 # Synthetic EpiServer and ABS boundary service for dry runs of the live tests
 # (dryrun_live.R). It answers every query in
 # tests/testthat/test-episerver_dsr_live.R. Most answers are fixed counts.
+# The queries of tests/testthat/test-episerver_browse_live.R go to
+# fake_browse_episerver() in tests/testthat/helper-browse.R, which the dry
+# run loads with the package's helpers; browse_properties, set by
+# dryrun_live.R, says whether its Analysis has ref.DataProperties.
 # Queries with a diagnosis or procedure condition are answered by applying
 # the generated SQL condition to synthetic coded records, with SQL Server's
 # semantics written here independently (outer spaces, dots and, for
@@ -16,6 +20,7 @@
 # own helpers, with harness_dir set.
 
 source(file.path(harness_dir, "fake_abs.R"), local = TRUE)
+browse <- fake_browse_episerver(properties = browse_properties)
 
 std_values <- c(1282357, 1351664, 1353177, 1352745, 1302412, 1407081, 1466615,
                 1492204, 1479257, 1358594, 1300777, 1008799, 822024, 682513,
@@ -220,6 +225,7 @@ surrounds_areas <- function(sql) {
 # ── The fake connection ─────────────────────────────────────────────────────
 
 fake <- function(sql) {
+  if (browse$handles(sql)) return(browse$query(sql))
   ds <- if (grepl("FROM Analysis.dbo.ED", sql, fixed = TRUE)) "ED" else "APC"
   d <- recs[[ds]]
   keep_icd <- function(d) {

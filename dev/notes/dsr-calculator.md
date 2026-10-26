@@ -22,11 +22,11 @@ The pull request descriptions give the detail of each change and what to check a
 | File | Holds |
 |---|---|
 | `R/dsr_calculate.R` | `dsr_calculate()` and `dsr_age_specific()`; strata (`.dsr_strata()`), exact Poisson limits (`.pois_lower()`, `.pois_upper()`), suppression and argument checks |
-| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`) and map controls; the problem report (`.dsr_problem_report()`); the app factory `episerver_dsr_app()` |
+| `R/episerver_dsr.R` | `episerver_dsr()` and `episerver_dsr_stop()`; the definitions (`.dsr_asgs`, `.dsr_datasets`, `.dsr_scopes`, `.dsr_surrounds`, `.dsr_levels`, `.dsr_age_labels`); validated settings (`.dsr_spec()`, `.dsr_parse_codes()`, `.dsr_parse_procedures()`); diagnosis and procedure titles and their search (`.dsr_icd_*()`); SQL builders (`.dsr_sql_*()`); the code generator (`.dsr_code()`); tables (`.dsr_datatable()`, `.dsr_counts*()`, `.dsr_tsv()`); the codes boxes (`.dsr_codes_box()`) and map controls; the app factory `episerver_dsr_app()`, whose `report()` gives the problem report's state and settings |
 | `R/dsr_map.R` | ABS boundaries of SA3s and SA2s (`.dsr_boundaries()`, `.dsr_fetch_json()`, the cache) and the Explore tab's map (`.dsr_map_plot()`, with `.dsr_map_size()` for the size of a saved map) |
 | `R/dsr_funnel.R` | Funnel statistics (`.dsr_funnel()`, limits, overdispersion) and the funnel plot |
 | `R/dsr_help.R` | The Help tab, built from the definitions so that it follows the code |
-| `R/epi_app.R` | Infrastructure shared with the other apps (see `shared-apps.md`) |
+| `R/epi_app.R` | Infrastructure shared with the other apps, including the problem report's dialog and text (`.epi_report_server()`, `.epi_problem_report()`), the page shown once the app stops and the Help tab's style (see `shared-apps.md`) |
 
 | Test file | Covers |
 |---|---|

@@ -1,9 +1,12 @@
 # dev/harness/fake_episerver.R
 #
 # Synthetic EpiServer for running the Shiny apps offline (run_app.R).
-# fake_query(sql) answers every query the DSR Calculator and the EpiServer
-# Browser send, by matching fragments of the SQL, and stops on any other.
-# When a SQL builder changes, update the matching branch here.
+# fake_query(sql) answers every query the DSR Calculator sends, by matching
+# fragments of the SQL. It passes the Dataset Browser's queries to
+# fake_browse_episerver() in tests/testthat/helper-browse.R, which the
+# offline tests also use and which run_app.R sources first, and stops on any
+# other. When a SQL builder changes, update the matching branch here or in
+# the helper.
 #
 # Every number is invented. There are 14 SA3s (the ten ACT SA3s and four NSW
 # SA3s around the ACT) with SA2s in proportion to their size, 2001 to 2024.
@@ -136,6 +139,8 @@ local({
     c(y[1], y[2] - 1L)
   }
 
+  browse <- fake_browse_episerver()
+
   sum_by <- function(df, cols, value) {
     out <- stats::aggregate(df[value], by = df[cols], FUN = sum)
     out[order(do.call(order, out[cols])), ]
@@ -216,35 +221,8 @@ local({
       return(out)
     }
 
-    # ── EpiServer Browser ──
-    if (grepl("FROM sys.databases", sql, fixed = TRUE)) {
-      return(data.frame(name = c("Analysis", "HospitalAPC", "master")))
-    }
-    if (grepl("SELECT DISTINCT TABLE_SCHEMA", sql, fixed = TRUE)) {
-      return(data.frame(TABLE_SCHEMA = c("dbo", "ref")))
-    }
-    if (grepl("LIKE '%DataLabels%'", sql, fixed = TRUE) && grepl("COUNT(DISTINCT", sql, fixed = TRUE)) {
-      return(data.frame(TABLE_SCHEMA = "ref", TABLE_NAME = "DataLabels"))
-    }
-    if (grepl("SELECT TABLE_NAME", sql, fixed = TRUE)) {
-      return(data.frame(TABLE_NAME = c("APC", "ED", "ERP5_SA3_ACT", "StandardPops")))
-    }
-    if (grepl("INFORMATION_SCHEMA.COLUMNS", sql, fixed = TRUE)) {
-      return(data.frame(
-        ord = 1:5,
-        col = c("PresentationDateTime", "Sex", "AgeYrs", "geo_STATE", "geo_SA3_2021"),
-        descr = c("Presentation date and time", "Sex", "Age at admission in years",
-                  "Intech geocoded State", "Intech geocoded SA3 2021"),
-        dtype = c("datetime", "int", "int", "varchar", "varchar"),
-        charlen = c(NA, NA, NA, 3L, 5L),
-        numprec = c(NA, 10L, 10L, NA, NA),
-        numscale = c(NA, 0L, 0L, NA, NA)
-      ))
-    }
-    if (grepl("LOWER(LabelType) = 'opt'", sql, fixed = TRUE)) {
-      return(data.frame(VarName = "Sex", DataCode = c("1", "2", "3", "9"),
-                        LabelName = c("Male", "Female", "Other", "Not stated/inadequately described")))
-    }
+    # ── Dataset Browser ──
+    if (browse$handles(sql)) return(browse$query(sql))
     stop("fake_query: unexpected SQL\n", sql)
   }
 

@@ -1,4 +1,4 @@
-test_that("primary buttons and Done go to Iris on hover", {
+test_that("primary buttons go to Iris on hover", {
 
   css <- as.character(.epi_app_style())
   rule <- function(selector) {
@@ -8,8 +8,9 @@ test_that("primary buttons and Done go to Iris on hover", {
   expect_match(css, "--epi-accent:\\s*#562C8C")
   expect_match(rule("\\.btn-primary:hover"),
                "background-color: var\\(--epi-accent\\)")
-  expect_match(rule("#done\\.btn-primary:hover"),
-               "background-color: var\\(--epi-accent\\)")
+  # No app uses miniUI, so its title bar and Done rules have gone
+  expect_no_match(css, "#done", fixed = TRUE)
+  expect_no_match(css, ".gadget", fixed = TRUE)
 
 })
 
@@ -23,7 +24,6 @@ test_that("a click leaves no highlight, but the keyboard's focus shows", {
   # Buttons are Iris for the keyboard's focus only, not after a click
   expect_match(rule("\\.btn-primary:hover"), ":focus-visible")
   expect_no_match(rule("\\.btn-primary:hover"), ":focus[,\\s{]")
-  expect_no_match(rule("#done\\.btn-primary:hover"), ":focus[,\\s{]")
   # Focus rings go after a click on buttons, section headings, ticks and
   # radio buttons, and a closed dropdown is plain
   ring <- rule("\\.btn:focus:not\\(:focus-visible\\)")
@@ -86,6 +86,45 @@ test_that("problem reports go to healthinfo and describe the session", {
   expect_true("Browser: Mozilla/5.0 Edg/130.0" %in% lines)
   expect_true("Errors shown in the page: none" %in% lines)
   expect_true("Script errors: x is null" %in% lines)
+
+})
+
+test_that("a problem report sets out what happened, the settings and the session", {
+
+  report <- .epi_problem_report(
+    "DSR Calculator", "Calculator", "The map was blank.\nIt had been fine.",
+    state = c(Calculated = "yes", "EpiServer error" = "none"),
+    inputs = list(dataset = "APC", codes = c("I21", "J45"),
+                  years = c(2022, 2024), by_sex = TRUE, ex_ages = NULL),
+    code = "rates <- dsr_calculate(events, population, standard)\n",
+    session = c("actepir 0.0.18", "R version 4.4.1")
+  )
+  lines <- strsplit(report, "\n", fixed = TRUE)[[1]]
+  expect_match(lines[1], "^DSR Calculator problem report, \\d{4}-\\d{2}-\\d{2}")
+  for (heading in c("What happened", "Calculator", "Settings",
+                    "R code for these settings", "R session")) {
+    at <- match(heading, lines)
+    expect_false(is.na(at), label = heading)
+    expect_equal(lines[at + 1], strrep("-", nchar(heading)))
+  }
+  expect_match(report, "The map was blank.\nIt had been fine.", fixed = TRUE)
+  expect_match(report, "EpiServer error: none", fixed = TRUE)
+  # Settings are written as R arguments, ready for session$setInputs()
+  expect_true(all(c("dataset = \"APC\"", "codes = c(\"I21\", \"J45\")",
+                    "years = c(2022, 2024)", "by_sex = TRUE",
+                    "ex_ages = NULL") %in% lines))
+  expect_match(report, "rates <- dsr_calculate(", fixed = TRUE)
+
+  # The preview leaves out what happened, and the code without valid settings
+  preview <- .epi_problem_report("DSR Calculator", "Calculator", NULL,
+                                 c(Calculated = "no"), list(), NULL,
+                                 "actepir 0.0.18")
+  expect_no_match(preview, "What happened", fixed = TRUE)
+  expect_no_match(preview, "R code for these settings", fixed = TRUE)
+  expect_match(.epi_problem_report("DSR Calculator", "Calculator", " ",
+                                   c(Calculated = "no"), list(), NULL,
+                                   "actepir 0.0.18"),
+               "What happened\n-------------\n(Not described.)", fixed = TRUE)
 
 })
 
@@ -290,7 +329,7 @@ test_that("each app has its own add-in and opens in the web browser", {
   apps <- dcf[dcf[, "Binding"] %in% c("episerver_dsr", "episerver_browse"), ,
               drop = FALSE]
   expect_equal(unname(apps[, "Name"]),
-               c("Open DSR Calculator", "Open EpiServer Browser"))
+               c("Open DSR Calculator", "Open Dataset Browser"))
   expect_true(all(dcf[, "Binding"] %in% getNamespaceExports("actepir")))
   expect_false("addin_browse" %in% getNamespaceExports("actepir"))
 
@@ -298,5 +337,22 @@ test_that("each app has its own add-in and opens in the web browser", {
   for (fn in list(episerver_dsr, episerver_browse, .run_app)) {
     expect_false("display" %in% names(formals(fn)))
   }
+
+})
+
+test_that("selected table rows are Lavender with Nightshade text and an Iris bar", {
+
+  css <- as.character(.epi_app_style())
+  rule <- function(selector) {
+    regmatches(css, regexpr(paste0(selector, "[^{]*\\{[^}]*\\}"), css))
+  }
+
+  # In Bootstrap 5, bslib sets DataTables' variables on .table.dataTable
+  vars <- rule(":root, \\.table\\.dataTable\\.dataTable \\{")
+  expect_match(vars, "--dt-row-selected: 220, 200, 250;")
+  expect_match(vars, "--dt-row-selected-text: 50, 5, 87;")
+  expect_match(css, "--epi-select-bg:\\s*#DCC8FA")
+  expect_match(rule("table\\.dataTable tbody tr\\.selected > td:first-child"),
+               "inset 4px 0 0 var\\(--epi-accent\\)")
 
 })
