@@ -451,13 +451,7 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
 # are not listed (.browse_sql_tables()).
 #' @noRd
 .dict_tables <- function(query, db, schema = NULL, label = NULL) {
-  schemas <- if (is.null(schema)) query(.browse_sql_schemas(db))$TABLE_SCHEMA else schema
-  tables <- do.call(rbind, c(lapply(schemas, function(s) {
-    t <- query(.browse_sql_tables(db, s))
-    data.frame(schema = rep(s, nrow(t)), table = as.character(t$TABLE_NAME),
-               stringsAsFactors = FALSE)
-  }), list(data.frame(schema = character(), table = character(),
-                      stringsAsFactors = FALSE))))
+  tables <- .browse_all_tables(query, db, schema)[c("schema", "table")]
   sources <- if (is.null(label)) query(.lbl_sql_sources(db)) else .lbl_named(query, label)
   lbl_db <- if (is.null(label)) db else label[[1]]
   tables$labelled <- vapply(seq_len(nrow(tables)), function(i) {

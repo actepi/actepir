@@ -173,6 +173,82 @@ test_that("the Table list's dataset labels follow the label table of each table"
 
 })
 
+test_that("the Tables tab's rows, dates, columns and labels match the browser's", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+
+  s <- db$query(.lbl_sql_sources("Analysis"))
+  tables <- db$query(.browse_sql_tables("Analysis", "dbo"))
+  details <- db$query(.browse_sql_details("Analysis", "dbo"))
+  expect_named(details, c("TableName", "Created", "Altered", "ApproxRows"))
+  expect_true(all(tolower(tables$TABLE_NAME) %in% tolower(details$TableName)))
+  expect_true(is.numeric(details$ApproxRows))
+  expect_true(all(details$Created <= details$Altered))
+  base <- details$TableName %in% tables$TABLE_NAME[tables$TABLE_TYPE == "BASE TABLE"]
+  expect_true(all(details$ApproxRows[base] >= 0))
+
+  columns <- db$query(.browse_sql_schema_columns("Analysis", "dbo"))
+  expect_named(columns, c("TABLE_NAME", "COLUMN_NAME"))
+  coverage <- db$query(.browse_sql_coverage("Analysis", s, "dbo"))
+  expect_named(coverage, c("Source", "TableName", "ColumnKey"))
+  labels <- .lbl_dataset_labels(db$query(.lbl_sql_dataset_labels("Analysis", s, "dbo")))
+  overview <- .browse_tables_overview(tables, labels, details, columns,
+                                      coverage, s)
+  expect_equal(overview$Table, tables$TABLE_NAME)
+  expect_false(any(overview$Created == ""))
+
+  # For a sample, the columns, the label table and the columns without a
+  # variable label, as the browser reads them for one table
+  for (t in live_sample(tables)) {
+    row <- overview[overview$Table == t, ]
+    cols <- db$query(.browse_sql_columns("Analysis", "dbo", t))
+    expect_equal(row$Columns, nrow(cols), label = t)
+    r <- .lbl_read(db$query, "Analysis", "dbo", t)
+    from <- if (is.null(r$source)) "" else {
+      paste0(r$source$TABLE_SCHEMA, ".", r$source$TABLE_NAME)
+    }
+    expect_equal(row$`Labels from`, from, label = t)
+    labelled <- r$rows$Key[r$rows$Type == "VariableLabel"]
+    expect_equal(row$`Without labels`, sum(!tolower(trimws(cols$col)) %in% labelled),
+                 label = t)
+  }
+
+})
+
+test_that("the search finds columns by name, variable label and value label", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+  s <- db$query(.lbl_sql_sources("Analysis"))
+  is_sex <- function(r) {
+    r$Schema == "dbo" & r$Table == "ACTGHSMYX" & tolower(r$Column) == "rsex_y20"
+  }
+
+  # By name
+  r <- .browse_search(db$query, "Analysis", "rsex_y2", "names", s)
+  expect_equal(sum(is_sex(r$results)), 1)
+
+  # By the variable label the browser shows for the column
+  l <- .lbl_read(db$query, "Analysis", "dbo", "ACTGHSMYX")
+  label <- l$rows$Text[l$rows$Type == "VariableLabel" & l$rows$Key == "rsex_y20"][1]
+  r <- .browse_search(db$query, "Analysis", label, "labels", s)
+  expect_equal(r$results$`Variable label`[is_sex(r$results)], label)
+
+  # By a value label; each column found has it among the value labels the
+  # browser shows for its table
+  r <- .browse_search(db$query, "Analysis", "female", "values", s)
+  expect_equal(sum(is_sex(r$results)), 1)
+  for (i in seq_len(min(10, nrow(r$results)))) {
+    x <- r$results[i, ]
+    shown <- .lbl_read(db$query, "Analysis", x$Schema, x$Table)$rows
+    shown <- shown$Text[shown$Type == "ValueLabel" & shown$Key == tolower(x$Column)]
+    expect_true(any(grepl("female", tolower(shown), fixed = TRUE)),
+                label = paste(x$Schema, x$Table, x$Column, sep = "."))
+  }
+
+})
+
 test_that("the code the browser copies reads the table in every form", {
 
   skip_if_no_episerver()
@@ -237,6 +313,15 @@ test_that("the app lists and describes a table against EpiServer", {
     expect_match(d$`Value labels`[d$Column == "RSEX_Y20"], "Male", fixed = TRUE)
     expect_match(output$info_bar$html, "Labels from ref.", fixed = TRUE)
     expect_no_match(output$info_bar$html, "epi-warn", fixed = TRUE)
+
+    # The Tables tab and the Search tab
+    session$setInputs(view = "tables")
+    expect_null(overview()$errors)
+    expect_match(output$tables_note, "Click one to choose it.", fixed = TRUE)
+    session$setInputs(search_in = c("names", "labels", "values"),
+                      search_run = "RSEX_Y20")
+    expect_null(found()$error)
+    expect_true("ACTGHSMYX" %in% found()$results$Table)
 
     # A view, when dbo has one
     views <- tables()$data$TABLE_NAME[tables()$data$TABLE_TYPE == "VIEW"]

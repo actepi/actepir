@@ -344,6 +344,68 @@ const fs = require('fs');
   await select('db', 'Analysis');
   await page.waitForTimeout(800);
 
+  // The Tables tab: every table and view of the schema with its rows, dates
+  // and labels, each heading's notes in its title; the table chosen is
+  // marked, and a click chooses another
+  const cells = sel => page.$$eval(`${sel} tbody tr`, trs => trs.map(tr =>
+    [...tr.querySelectorAll('td')].map(td => td.textContent.trim())));
+  const marked = sel => page.$$eval(`${sel} tbody tr.selected td:first-child`,
+    tds => tds.map(td => td.textContent.trim()));
+  await page.click('a[data-value=tables]');
+  await settle();
+  console.log('TABLES note:', await text('#tables_note'), '| info bar shown',
+    await page.$eval('#info_bar .info-bar', e => e.checkVisibility()));
+  console.log('TABLES headings:', JSON.stringify(await page.$$eval(
+    '#tables_table .dataTables_scrollHead th', ths => ths.map(th => [th.textContent.trim(), th.title]))));
+  console.log('TABLES rows:', JSON.stringify(await cells('#tables_table')));
+  console.log('TABLES marked:', JSON.stringify(await marked('#tables_table')));
+  console.log('TABLES fit:', JSON.stringify(await page.evaluate(() => ({
+    pageScrolls: document.documentElement.scrollHeight > window.innerHeight,
+    tableBottom: Math.round(document.querySelector('#tables_table .dataTables_scrollBody').getBoundingClientRect().bottom),
+    window: window.innerHeight }))));
+  await shot('09_tables');
+  // At 1536 by 730 the columns still fit across, with no sideways scrolling
+  await page.setViewportSize({ width: 1536, height: 730 });
+  await settle(400);
+  console.log('TABLES at 1536 x 730:', JSON.stringify(await page.evaluate(() => {
+    const body = document.querySelector('#tables_table .dataTables_scrollBody');
+    return { sideways: body.scrollWidth > body.clientWidth,
+             pageScrolls: document.documentElement.scrollHeight > window.innerHeight };
+  })));
+  await shot('09b_tables_1536x730');
+  await page.setViewportSize({ width: 1920, height: 950 });
+  await settle(400);
+  await page.click('#tables_table tbody tr:nth-child(5) td:first-child');
+  await settle();
+  console.log('TABLES click row 5:', await info(), '| marked', JSON.stringify(await marked('#tables_table')));
+  await select('table', 'ACTGHSMYX');
+  console.log('TABLES sidebar ACTGHSMYX: marked', JSON.stringify(await marked('#tables_table')));
+
+  // The Search tab: its settings in a panel at its left; Enter, or the
+  // button straight after typing, searches the text typed; a click on a
+  // column opens its table on the Columns tab
+  await page.click('a[data-value=search]');
+  await settle();
+  console.log('SEARCH panel:', JSON.stringify(await page.evaluate(() => ({
+    width: Math.round(document.querySelector('#search_settings').getBoundingClientRect().width),
+    look: [...document.querySelectorAll('#search_in input')].map(i => [i.value, i.checked]) }))),
+    '| note', await text('#search_note'));
+  await page.fill('#search_text', 'female');
+  await page.press('#search_text', 'Enter');
+  await settle();
+  console.log('SEARCH female (Enter):', await text('#search_note'), '|', JSON.stringify(await cells('#search_table')),
+    '| filter box', !!(await page.$('#search_table .dataTables_filter')));
+  await shot('10_search');
+  await page.fill('#search_text', 'staged');
+  await page.click('#search_go');
+  await settle();
+  console.log('SEARCH staged (button at once):', await text('#search_note'), '|', JSON.stringify(await cells('#search_table')));
+  await page.click('#search_table tbody tr:first-child td:first-child');
+  await settle();
+  console.log('SEARCH open:', await text('.navbar-nav a.nav-link.active'), '|', await page.evaluate(() => $('#schema').val()),
+    await page.evaluate(() => $('#table').val()), '|', await info());
+  await select('schema', 'dbo');
+
   // Help: the shared Help style, without the info bar
   await page.click('a[data-value=help]');
   await page.waitForTimeout(600);
