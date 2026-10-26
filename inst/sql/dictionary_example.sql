@@ -56,14 +56,13 @@ INSERT INTO ref.DictionaryColumns (Profile, DatasetCode, ColumnName, Theme, Cave
 VALUES (N'Example', N'APC', N'APCEpisodeNumber', N'Record identifiers', NULL),
        (N'Example', N'APC', N'AgeDays', N'Demography', N'detail');
 
--- A column whose value labels are hidden, and one kept but left out, with an
--- internal comment, which is never shown
+-- A column whose value labels are hidden, and one kept but left out
 INSERT INTO ref.DictionaryColumns
-    (Profile, DatasetCode, ColumnName, Theme, ValueAction, ColumnAction, Comments)
+    (Profile, DatasetCode, ColumnName, Theme, ValueAction, ColumnAction)
 VALUES (N'Example', N'APC', N'AdmittingWard', N'Presentation details',
-        N'SUPPRESS', N'INCLUDE', NULL),
+        N'SUPPRESS', N'INCLUDE'),
        (N'Example', N'APC', N'ATSIStatus', N'Demography',
-        NULL, N'EXCLUDE', N'Offered on request');
+        NULL, N'EXCLUDE');
 
 -- An alias renames a column, and DescriptionAlias replaces its label
 INSERT INTO ref.DictionaryColumns
@@ -103,7 +102,7 @@ VALUES (N'Example', N'APC', 1, N'Dataset Description', NULL,
 -- 8. Changing and removing rows. A dataset can be removed only after its
 --    columns and notes, and a caveat only while no column uses it.
 UPDATE ref.DictionaryColumns
-SET ColumnAction = N'INCLUDE', Comments = NULL
+SET ColumnAction = N'INCLUDE'
 WHERE Profile = N'Example' AND DatasetCode = N'APC' AND ColumnName = N'ATSIStatus';
 
 DELETE FROM ref.DictionaryNotes

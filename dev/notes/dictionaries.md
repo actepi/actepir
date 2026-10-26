@@ -66,16 +66,16 @@ Further rules in the old code:
   | Table | Replaces | Holds |
   |---|---|---|
   | `DictionaryProfiles` | The Word template's header | Profile, Title and Subtitle (for Linkage, "Data Linkage Dataset Metadata" and "Data Analytics Branch: Epidemiology Section"). |
-  | `DictionarySections` | The Word template's closing page | Profile, SectionOrder, Heading and SectionText: General Enquiries, Acknowledgment of Country and Accessibility. The page's heading, Further Information, is for the builder to write. |
+  | `DictionarySections` | The Word template's closing page | Profile, SectionOrder, Heading and SectionText: General Enquiries, Acknowledgement of Country and Accessibility. The page's heading, Further Information, is for the builder to write. |
   | `DictionaryDatasets` | The table in `dictionary_call.Rmd` | Profile, DatasetCode (the abbreviation, APC), FullName, DatabaseName, SchemaName, TableName, DOI, Version, Active. No label table: the labels lookup finds it. |
-  | `DictionaryColumns` | `vars` | Profile, DatasetCode, ColumnName, Theme, ColumnAlias, DescriptionAlias, ColumnAction, ValueAction, CaveatCode, and the internal Comments and Other. |
+  | `DictionaryColumns` | `vars` | Profile, DatasetCode, ColumnName, Theme, ColumnAlias, DescriptionAlias, ColumnAction, ValueAction, CaveatCode. |
   | `DictionaryNotes` | `notes` | Profile, DatasetCode, NoteOrder, Aspect, Issue, Comment. |
   | `DictionaryCaveats` | `limits` | Profile, CaveatCode, Symbol, Colour, CaveatText. |
   | `DictionaryThemes` | (new) | Profile, Theme, ThemeOrder. The old order followed the first column name alphabetically. Themes not listed follow alphabetically, then Uncategorised. |
 
   - The profile's text was first planned as part of `DictionaryProfiles`. It is two tables, because the number of closing sections varies (the maintainer's choice, 26 Oct 2026). Putting the text in the package was the fallback, not needed.
   - Columns keep the workbook's names where they are clear. `Dataset` became `DatasetCode`, as the workbook's `Dataset` is a table name; `Limits` became `CaveatCode`, after the table.
-  - Both of the workbook's internal columns are kept: `Comments` (23 values, such as questions between reviewers) and `Other` (412 values, mostly other wordings of a column's label). The plan named one internal comment; keeping both loses nothing. Neither is shown.
+  - The workbook's internal columns, `Comments` (23 values, such as questions between reviewers) and `Other` (412 values, mostly other wordings of a column's label), are not carried over: the maintainer judged them not needed (26 Oct 2026). The plan had one internal comment column; the table has none.
   - Columns with a fixed set of values get CHECK constraints, and the conversion standardises their spelling. `ColumnAction` is INCLUDE or EXCLUDE, and NOT NULL with INCLUDE as its default, as a row without one counts as included. `ValueAction` is SUPPRESS or NULL (the workbook has Suppress in 43 rows and suppress in 29). Caveat codes are written in lower case and colours in upper case.
   - Primary keys on the profile and natural key of each table, and foreign keys from each table to its profile, from columns and notes to their dataset, and from columns to their caveat. The foreign keys do not cascade: cascading updates from both datasets and caveats to columns would be two cascade paths, which SQL Server refuses, and codes are rarely renamed. A dataset is removed after its columns and notes.
   - Text columns are `nvarchar`, as the caveat symbols and some notes are not in the database's code page.
@@ -93,7 +93,11 @@ Further rules in the old code:
   - It stops, writing nothing, on a problem that would give wrong rows or make an INSERT fail: an action or caveat code it does not know, a column twice (in any case), an alias whose columns differ in what is shown or do not match its range, a value too long for its column, or a dataset or caveat without what it needs. Each problem names its sheet and rows.
   - It reports, and leaves out, the rows of a `Dataset` that is not a `dat.tb` of `tables`, and reports a dataset without rows, the spellings it standardised, and themes not in the order.
   - The placeholder DOI is written as NULL.
-  - Themes are ordered by `linkage_theme_order` at the top of the script, a proposal (see Open items), with steps of 10.
+  - Themes are ordered by `linkage_theme_order` at the top of the script, with steps of 10: the themes most datasets share, then each dataset's own, and Data management last. The maintainer agreed the order (26 Oct 2026).
+  - Decided with the maintainer on 26 Oct 2026, after the first conversion:
+    - the Kindergarten Health Check's table is `KHCDLMY`; the maintainer changes the workbook's `KHCMY` to it in `vars` and `notes` before converting;
+    - `BCTG` (204 rows in `vars`) is left out, as its definitions are not final; the maintainer will add its rows in SSMS later, following `dictionary_example.sql`;
+    - the template's heading "Acknowledgment of Country" is spelt "Acknowledgement of Country".
   - The script it writes is plain ASCII: line breaks and other characters are written as `NCHAR()` joined to `N'...'` pieces. Depending on its settings, SSMS can read a file without a byte order mark in the Windows code page, which would garble the caveat symbols and the en dashes in notes, and a file saved again with Windows line endings would change the line breaks in the text.
   - It adds every row in one transaction with `XACT_ABORT`, so a failed row changes nothing. It stops if the profile is loaded already, and lists the DELETE statements for loading it again. It ends by counting the rows loaded against those expected.
 - **Outputs.**
@@ -137,11 +141,6 @@ Further rules in the old code:
 
 ## Open items
 
-- **Waiting on the maintainer, before converting:**
-  - `vars` and `notes` file the Kindergarten Health Check's rows under `KHCMY`, but the run script's table is `KHCDLMY`. The old process found no rules for it, as it matched `Dataset` to `dat.tb`. The conversion leaves the 286 `vars` and 5 `notes` rows out until one of the two is changed.
-  - `BCTG` has 204 rows in `vars`, without themes or ColumnAction, and no dataset in the run script. They are left out until it has one.
-  - The order of themes in `linkage_theme_order` is a proposal: the themes most datasets share, then each dataset's own, and Data management last. The maintainer can change it before converting, or in SSMS after.
-  - The template spells "Acknowledgment of Country"; the plan wrote "Acknowledgement". The conversion keeps the template's spelling.
 - Confirm the name of `episerver_dictionary()` and the arguments of `dictionary_logo()` with the maintainer.
 - `.gitignore` has `.xlsx`, `.xls` and `.csv`, which match only files of those names, not `*.xlsx`; a workbook inside the checkout is not ignored. The conversion's usage keeps the workbook and its script outside the repository. If the patterns are changed to `*.xlsx`, pull request 5 needs an exception for the template in `inst/`.
 - Whether full dictionaries in the browser should group by theme when a profile is not chosen (the themes belong to a profile).
@@ -152,6 +151,7 @@ Further rules in the old code:
 **Offline:**
 - The three commands in CLAUDE.md.
 - The conversion: `Rscript -e 'testthat::test_file("dev/dictionaries/test-convert_definitions.R")'`. With the maintainer's workbook uploaded, convert it and run `dev/dictionaries/check_insert_script.py` on the script (its header shows how). Keep the workbook and the script in the scratchpad, never in the repository.
+- To change a copy of the workbook for a check, edit the string in `xl/sharedStrings.xml` inside it. openxlsx misreads a copy saved by openpyxl: its text comes back with `&amp;` and `xml:space="preserve">` in it, and the caveat symbols too long. The conversion's checks stop on the symbols.
 - The SQL files parse as T-SQL (sqlglot) and are plain ASCII.
 - From pull request 4: the generated Typst compiled with Typst 0.13 and its pages looked at; the HTML file opened in the harness's headless Chromium; the workbook opened with openxlsx and its named ranges checked.
 

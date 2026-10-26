@@ -36,7 +36,7 @@ make_workbook <- function(dir, vars = NULL, notes = NULL, limits = NULL) {
     notes <- data.frame(
       Dataset = c("APC", "APC", "Retired"),
       Aspect = c("Dataset Description", "Links & Resources", "Dataset Description"),
-      Issue = c(NA, "METeOR", NA),
+      Issue = c(NA, "METeOR \u2013 AIHW", NA),
       Comment = c("Line one\nLine two ", "https://meteor.aihw.gov.au/", "Old"),
       stringsAsFactors = FALSE
     )
@@ -66,7 +66,9 @@ test_that("the workbook's rows become the tables' rows, spellings standardised",
   r <- x$rows
 
   expect_equal(r$DictionaryProfiles$Title, "Data Linkage Dataset Metadata")
-  expect_equal(r$DictionarySections$SectionOrder, 1:3)
+  expect_equal(r$DictionarySections$Heading,
+               c("General Enquiries", "Acknowledgement of Country",
+                 "Accessibility"))
   expect_equal(r$DictionaryCaveats$Colour, "#F36C23")
   expect_equal(r$DictionaryCaveats$Symbol, "\u25c6")
   expect_equal(r$DictionaryThemes$ThemeOrder, c(10L, 20L, 30L))
@@ -85,6 +87,10 @@ test_that("the workbook's rows become the tables' rows, spellings standardised",
   expect_equal(sex$ValueAction, "SUPPRESS")
   expect_equal(sex$CaveatCode, "atsi")
   expect_equal(unique(cols$ColumnAction), "INCLUDE")
+  # The workbook's internal columns are not carried over
+  expect_named(cols, c("Profile", "DatasetCode", "ColumnName", "Theme",
+                       "ColumnAlias", "DescriptionAlias", "ColumnAction",
+                       "ValueAction", "CaveatCode"))
 
   notes <- r$DictionaryNotes
   expect_equal(notes$NoteOrder, 1:2)
@@ -199,6 +205,7 @@ test_that("the script loads the profile in one transaction, and only once", {
                             "N'Linkage';\n--   DELETE FROM ref.DictionaryColumns"),
                fixed = TRUE)
   expect_match(text, "(N'DictionaryColumns', 6)", fixed = TRUE)
-  expect_match(text, "N'Sex ' + NCHAR(8211) + N' as recorded'", fixed = TRUE)
+  expect_match(text, "N'METeOR ' + NCHAR(8211) + N' AIHW'", fixed = TRUE)
+  expect_no_match(text, "It''s internal", fixed = TRUE)
 
 })

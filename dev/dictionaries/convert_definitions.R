@@ -5,8 +5,9 @@
 # script that loads the Linkage profile into the dictionary tables of
 # Analysis.ref, which inst/sql/dictionary_tables.sql creates. It is run once,
 # by the maintainer; the rows are then edited in SSMS and the workbook is
-# retired. Neither the workbook nor the script it writes is committed: they
-# hold internal comments and the names of the databases.
+# retired. The workbook's internal columns, Comments and Other, are not
+# carried over. Neither the workbook, which holds internal comments, nor the
+# script it writes, which holds database names, is committed.
 #
 # Usage, in R, from the root of the repository, with the workbook and the
 # script written kept outside it:
@@ -24,13 +25,13 @@
 # dev/dictionaries/test-convert_definitions.R.
 
 # The Linkage profile: the title lines and closing sections of the old Word
-# template, template_dictionary_blank.docx
+# template, template_dictionary_blank.docx, with Acknowledgement spelt in full
 linkage_profile <- list(
   profile  = "Linkage",
   title    = "Data Linkage Dataset Metadata",
   subtitle = "Data Analytics Branch: Epidemiology Section",
   sections = data.frame(
-    heading = c("General Enquiries", "Acknowledgment of Country",
+    heading = c("General Enquiries", "Acknowledgement of Country",
                 "Accessibility"),
     text = c(
       paste("Population Health Informatics",
@@ -62,10 +63,9 @@ linkage_profile <- list(
   )
 )
 
-# The order of themes, proposed for the maintainer to confirm: the themes
-# shared by most datasets first, then each dataset's own, in the order of its
-# collection, and Data management last. Themes not listed follow
-# alphabetically.
+# The order of themes, agreed with the maintainer: the themes shared by most
+# datasets first, then each dataset's own, in the order of its collection,
+# and Data management last. Themes not listed follow alphabetically.
 linkage_theme_order <- c(
   "Record identifiers", "Personally identifying information", "Demography",
   "Geography", "Dates & times (events)", "Presentation details",
@@ -81,10 +81,10 @@ linkage_theme_order <- c(
   "Lifestyle", "Mental Health", "Data management"
 )
 
-# The columns each sheet must have
+# The columns read from each sheet, which each sheet must have
 definition_sheets <- list(
   vars   = c("Dataset", "Theme", "Column", "ColumnAlias", "DescriptionAlias",
-             "ColumnAction", "ValueAction", "Limits", "Comments", "Other"),
+             "ColumnAction", "ValueAction", "Limits"),
   notes  = c("Dataset", "Aspect", "Issue", "Comment"),
   limits = c("code", "hex", "symbol", "text")
 )
@@ -94,8 +94,7 @@ column_widths <- list(
   datasets = c(DatasetCode = 20, FullName = 200, DatabaseName = 128,
                SchemaName = 128, TableName = 128, DOI = 100),
   columns  = c(ColumnName = 128, Theme = 100, ColumnAlias = 128,
-               DescriptionAlias = 500, CaveatCode = 20, Comments = 500,
-               Other = 500),
+               DescriptionAlias = 500, CaveatCode = 20),
   notes    = c(Aspect = 100, Issue = 200),
   caveats  = c(CaveatCode = 20, Symbol = 4, CaveatText = 500),
   themes   = c(Theme = 100)
@@ -325,8 +324,8 @@ definition_rows <- function(defs, tables, profile = linkage_profile,
     Profile = p, DatasetCode = code_of(v$Dataset), ColumnName = v$Column,
     Theme = v$Theme, ColumnAlias = v$ColumnAlias,
     DescriptionAlias = v$DescriptionAlias, ColumnAction = action,
-    ValueAction = value, CaveatCode = caveat, Comments = v$Comments,
-    Other = v$Other, row = v$row, stringsAsFactors = FALSE
+    ValueAction = value, CaveatCode = caveat, row = v$row,
+    stringsAsFactors = FALSE
   )
   add(width_problems(columns, column_widths$columns, "vars"))
   for (code in setdiff(datasets$DatasetCode, columns$DatasetCode)) {
@@ -448,7 +447,7 @@ sql_script <- function(rows, source = "definitions.xlsx") {
     "-- which inst/sql/dictionary_tables.sql creates. Run it once in SQL Server",
     "-- Management Studio. It adds every row in one transaction, and stops,",
     "-- changing nothing, if the profile is loaded already or any row fails.",
-    "-- Do not commit it: it holds internal comments and database names.",
+    "-- Do not commit it: it holds database names.",
     "--",
     "-- To load the profile again, losing any changes made in SSMS, first run:",
     sprintf("--   DELETE FROM ref.%s WHERE Profile = %s;", order_out, q),

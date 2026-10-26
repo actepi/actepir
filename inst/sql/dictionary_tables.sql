@@ -99,8 +99,7 @@ GO
 
 -- Columns sharing a ColumnAlias are shown as one row under the alias, with
 -- the DescriptionAlias in place of the variable label; each member keeps its
--- own row here. ValueAction SUPPRESS hides a column's value labels. Comments
--- and Other are internal notes, never shown.
+-- own row here. ValueAction SUPPRESS hides a column's value labels.
 IF OBJECT_ID(N'ref.DictionaryColumns', N'U') IS NULL
 CREATE TABLE ref.DictionaryColumns (
     Profile          nvarchar(50)  NOT NULL,
@@ -113,8 +112,6 @@ CREATE TABLE ref.DictionaryColumns (
         CONSTRAINT DF_DictionaryColumns_ColumnAction DEFAULT (N'INCLUDE'),
     ValueAction      nvarchar(8)   NULL,
     CaveatCode       nvarchar(20)  NULL,
-    Comments         nvarchar(500) NULL,
-    Other            nvarchar(500) NULL,
     CONSTRAINT PK_DictionaryColumns PRIMARY KEY (Profile, DatasetCode, ColumnName),
     CONSTRAINT FK_DictionaryColumns_Datasets FOREIGN KEY (Profile, DatasetCode)
         REFERENCES ref.DictionaryDatasets (Profile, DatasetCode),
