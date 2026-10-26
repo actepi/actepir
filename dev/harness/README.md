@@ -111,7 +111,7 @@ Plan pull request 3, the full dictionaries (`dev/notes/dictionaries.md`), added 
 | `episerver_browser.js`, foot and Help | The foot holds `insert_code`, `dict_download` and `bug_report`; Help has 6 sections, Dictionary before Problems. Otherwise unchanged. |
 | `episerver_browser.js`, Download | The menu opens upwards, with "Dictionary as PDF (needs Quarto)", disabled, and "Dictionary as HTML". `APC_dictionary.html` downloads; opened alone it is headed "Admitted patient care", with "Labels from ref.DataProperties.", 43 rows, "1 of 43 columns" when searched for "female", and no requests for other files. |
 | The same, with `dev/harness/fake_quarto` first on the PATH | The PDF item is enabled, and `APC_dictionary.pdf` downloads, starting `%PDF-`. |
-| `dryrun_live.R` | 24 tests, 307 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 24 tests, 303 expectations, 0 failed, 4 skipped. |
+| `dryrun_live.R` | 25 tests, 316 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 25 tests, 312 expectations, 0 failed, 4 skipped. |
 
 ## How it works
 

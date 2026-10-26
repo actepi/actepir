@@ -1,6 +1,6 @@
 # Data dictionaries
 
-The full data dictionary of any table or view on EpiServer, built from its label tables. `episerver_dictionary()` writes it as a PDF and a standalone HTML file and returns it as a data frame; the Dataset Browser's Download menu gives the same files for the table chosen. It is pull request 3 of the plan in `dataset-browser.md`; the browser's improvements follow as pull request 4.
+The full data dictionary of any table or view on EpiServer, built from its label tables. `episerver_dictionary()` writes it as a PDF and a standalone HTML file and returns it as a data frame, for tables named or for every table with labels in a database or schema; the Dataset Browser's Download menu gives the same files for the table chosen. It is pull request 3 of the plan in `dataset-browser.md`; the browser's improvements follow as pull request 4.
 
 ## Status
 
@@ -14,13 +14,13 @@ The design was agreed with the maintainer on 25 Oct 2026, narrowed on 26 Oct 202
 
 | File | Holds |
 |---|---|
-| `R/episerver_dictionary.R` | `episerver_dictionary()` and `dictionary_logo()`; the dictionary (`.dict_build()`, `.dict_assemble()`, `.dict_flat()`, `.dict_text()`, `.dict_data()`, `.dict_write()`); the PDF (`.dict_quarto()`, `.dict_run_quarto()`, `.dict_pdf()`); the HTML (`.dict_html()`); the logo (`.dict_logo()`, `.dict_logo_file()`, `.dict_lockup()`, `.png_info()`) |
-| `R/episerver_labels.R` | `.lbl_read()`, which reads a table's labels for the dictionary and for `.lbl_get()` (`episerver_getlabels()`) |
+| `R/episerver_dictionary.R` | `episerver_dictionary()` and `dictionary_logo()`; a database's tables and whether they have labels (`.dict_tables()`); the dictionary (`.dict_build()`, `.dict_assemble()`, `.dict_flat()`, `.dict_flat_empty()`, `.dict_text()`, `.dict_data()`, `.dict_write()`); the PDF (`.dict_quarto()`, `.dict_run_quarto()`, `.dict_pdf()`); the HTML (`.dict_html()`); the logo (`.dict_logo()`, `.dict_logo_file()`, `.dict_lockup()`, `.png_info()`) |
+| `R/episerver_labels.R` | `.lbl_read()`, which reads a table's labels for the dictionary and for `.lbl_get()` (`episerver_getlabels()`), and `.lbl_named()`, the label table that the `lbl_*` arguments name, with its layout |
 | `R/episerver_browse.R` | The Download menu in the sidebar's foot and its handlers (`dictionary()`, `dict_download()` in the server) |
 | `inst/dictionary/dictionary.typ` | The PDF's Typst template |
 | `inst/dictionary/dictionary.css`, `dictionary.js` | The HTML file's style and script, written into each file |
-| `tests/testthat/test-episerver_dictionary.R` | The dictionary from the fake, as data, its text, the HTML file, the PDF with Quarto mocked, finding Quarto, `episerver_dictionary()` with the connection mocked, `dictionary_logo()`, and the Download menu through `testServer()`. One test compiles PDFs where Quarto is found. |
-| `tests/testthat/test-episerver_dictionary_live.R` | The labels of 11 tables of `Analysis.dbo` against `episerver_getlabels()`'s, and `episerver_dictionary()` writing a table's files |
+| `tests/testthat/test-episerver_dictionary.R` | The dictionary from the fake, as data, its text, the HTML file, the PDF with Quarto mocked, finding Quarto, `episerver_dictionary()` with the connection mocked, for tables and for a database, `dictionary_logo()`, and the Download menu through `testServer()`. One test compiles PDFs where Quarto is found. |
+| `tests/testthat/test-episerver_dictionary_live.R` | The labels of 11 tables of `Analysis.dbo` against `episerver_getlabels()`'s, the tables of `Analysis.dbo` with whether they have labels against `.lbl_read()`, and `episerver_dictionary()` writing a table's files |
 | `dev/harness/fake_quarto/quarto` | A stand-in for Quarto in cloud sessions (see `dev/harness/README.md`) |
 
 ## The linkage dictionary, set aside (26 Oct 2026)
@@ -49,6 +49,10 @@ The linkage dictionary and variable list stay in the maintainer's local process,
   - The heading is the table's dataset label, or the table's name when it has none, as `ref.DataProperties` is not yet filled for every table (the maintainer's choice). Beneath it: "Analysis.dbo.APC: a table of 43 columns", then where the labels came from, as the info bar says it.
   - The footer gives the table's full name, the label table and the date; the PDF's also gives the page, as "page 1 of 2".
   - A table without notes or linked tables says so under Dataset information.
+- **A whole database** (the maintainer asked for it on 26 Oct 2026). `episerver_dictionary(db = "Analysis")`, or with `schema`, writes the dictionary of every table and view that a label table holds labels for, and leaves out the rest, with a message counting them.
+  - `.dict_tables()` lists the schemas (`.browse_sql_schemas()`) and their tables and views (`.browse_sql_tables()`, which leaves out label tables), and asks `.lbl_sql_pick()` of each, against the database's label tables or the one the `lbl_*` arguments name: one small query a table, and no new SQL.
+  - Without `schema`, each schema's files go in a folder of its name, as tables of one name can be in several schemas (`dbo.APC` and `stage.APC`). With `schema`, or with tables named, the files go in `dir` itself.
+  - Scripts only, for now: a browser download of many dictionaries is waiting on the maintainer (see Open items).
 - **Value labels.** The PDF shows the first `max_values` value labels of a column, 50 by default (the maintainer's choice), then "and 1,234 more value labels; see the HTML dictionary". The HTML file shows them all, folded.
 - **Outputs.**
   - PDF and standalone HTML, from the one dictionary. Word is not made: in the old process it was only a step towards the PDF, and it was slow with large tables.
@@ -67,6 +71,8 @@ The linkage dictionary and variable list stay in the maintainer's local process,
   - The page is written by htmltools, which escapes the text. htmltools moves the content of `tags$head()` out for Shiny to place, so `.dict_html()` writes the head itself.
   - The CSS and script in `inst/dictionary/` are written into it, the logo as a data URI, and the dictionary as JSON, with every `<` written as `\u003c` so that no label can end the script element. No font is downloaded.
   - The search reads the JSON. It shows the columns whose name, label, type, notes or value labels hold the text, and opens the value labels that do. Expand and Collapse open and close every list; printing opens them all and hides the search.
+  - The columns' widths are fixed, in percent, by a `colgroup` and `table-layout: fixed`: #, Column, Description, Type, Value labels and Notes take 4, 15, 24, 9, 28 and 20, or 4, 17, 33, 10 and 36 without notes. Long text wraps within its column. At first the browser sized the columns to their text, and long notes took over half the width and squeezed the value labels (the maintainer, 26 Oct 2026).
+  - The CSS names the table's own cells with child selectors (`table.columns > tbody > tr > td`), so the rules under its rows are not drawn in the table of value labels inside a cell.
 - **Logo.**
   - The band shows the actepir lockup (`inst/www/logo-lockup.svg`) by default, so that dictionaries sent on carry the package's mark (the maintainer's choice). The repository and package hold no government logo.
   - `dictionary_logo(path)` keeps a PNG in actepir's folder in R's user settings directory (`tools::R_user_dir("actepir", "config")`), so it stays set in later sessions; `dictionary_logo()` says which logo is set, and `dictionary_logo(remove = TRUE)` goes back to the lockup. One function with a stored setting, rather than a `logo` argument, so that the browser's Download uses it too.
@@ -75,6 +81,13 @@ The linkage dictionary and variable list stay in the maintainer's local process,
 - **Browser.** A Download menu in the sidebar's foot, between the code button and the bug button, opening upwards: Dictionary as PDF and Dictionary as HTML. Without Quarto, the PDF's item is a disabled entry, "Dictionary as PDF (needs Quarto)", not a link: Shiny enables a download link once it has its address, which would undo a disabled class. A failure shows a notification.
 
 ## Open items
+
+- **A browser download of many dictionaries (waiting on the maintainer).** The ways seen:
+  - a ZIP of the HTML dictionaries of every table with labels in the schema chosen. `utils::zip()` needs a zip program, which Windows has only with Rtools, so it would need the zip package in Imports;
+  - writing the files to a folder from the browser, with no new package, as the app runs on the analyst's computer;
+  - scripts only, as now.
+
+  PDFs for many tables take a second or two each, too long for a download, so a browser download would be HTML only.
 
 - Two improvements of pull request 4 can use the dictionary as data (`.dict_flat()`): label coverage, and copying the dictionary as a table for Excel.
 - The look of the PDF on the SOE, with Calibri and Arial, has not been seen: the cloud session has none of the brand fonts, Calibri or Arial, so its pages were checked in Typst's own fonts.

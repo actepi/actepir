@@ -5,7 +5,9 @@
 \title{Write the Data Dictionaries of Tables on EpiServer}
 \usage{
 episerver_dictionary(
-  tables,
+  tables = NULL,
+  db = NULL,
+  schema = NULL,
   formats = c("pdf", "html"),
   dir = ".",
   title = "Data dictionary",
@@ -22,7 +24,14 @@ episerver_dictionary(
 \arguments{
 \item{tables}{The tables: names of tables in \code{Analysis.dbo}, or full
 names, as \code{"database.schema.table"}, as character; or one lazy table
-from EpiServer, such as one from \code{\link[=episerver_quickconnect]{episerver_quickconnect()}}.}
+from EpiServer, such as one from \code{\link[=episerver_quickconnect]{episerver_quickconnect()}}. Leave it
+out to give \code{db}.}
+
+\item{db}{A database, as character, in place of \code{tables}: the dictionaries
+of all its tables and views that have labels are written.}
+
+\item{schema}{With \code{db}, one schema of the database, as character, whose
+tables and views are the only ones written.}
 
 \item{formats}{The files to write: \code{"pdf"}, \code{"html"} or both.
 \code{character()} writes none, for the data frame alone.}
@@ -81,7 +90,9 @@ label), \code{type}, \code{code} and \code{value_label} (the value label), and \
 Builds the data dictionary of one or more tables or views on EpiServer
 from the label tables of their databases, as the Dataset Browser shows
 them, and writes each as a PDF and a standalone HTML file. It returns the
-dictionaries as a data frame.
+dictionaries as a data frame. Given a database in \code{db} in place of tables,
+it writes the dictionary of every table and view of the database, or of
+one schema, that has labels.
 
 A dictionary holds the table's description (its dataset label), notes and
 linked tables, and its columns in the table's order, with their variable
@@ -107,6 +118,15 @@ needs nothing beyond itself, so it can be sent on. The PDF is made with
 Typst, through the copy of Quarto that comes with RStudio; without it, use
 \code{formats = "html"}.
 
+\strong{A whole database}
+
+With \code{db}, and no \code{tables}, the tables and views of the database, or of
+\code{schema} alone, are listed, and those that no label table holds labels
+for are left out; a message counts them. Without \code{schema}, the files of
+each schema go in a folder of its name in \code{dir}, as tables of the same
+name can be in more than one schema. A PDF takes a second or two, so a
+large database is quicker as HTML alone.
+
 \strong{Logo}
 
 The band shows the actepir lockup, or the logo set with
@@ -121,6 +141,9 @@ episerver_dictionary("APC")
 # Several tables, as HTML only, in another folder
 episerver_dictionary(c("APC", "ED", "HospitalAPC.dbo.APC_Extra"),
                      formats = "html", dir = "dictionaries")
+
+# Every table and view of Analysis.dbo that has labels
+episerver_dictionary(db = "Analysis", schema = "dbo", dir = "dictionaries")
 
 # The dictionary as a data frame, without files
 dictionary <- episerver_dictionary("APC", formats = character())

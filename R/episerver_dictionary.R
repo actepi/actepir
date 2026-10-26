@@ -4,7 +4,9 @@
 #' Builds the data dictionary of one or more tables or views on EpiServer
 #' from the label tables of their databases, as the Dataset Browser shows
 #' them, and writes each as a PDF and a standalone HTML file. It returns the
-#' dictionaries as a data frame.
+#' dictionaries as a data frame. Given a database in `db` in place of tables,
+#' it writes the dictionary of every table and view of the database, or of
+#' one schema, that has labels.
 #'
 #' A dictionary holds the table's description (its dataset label), notes and
 #' linked tables, and its columns in the table's order, with their variable
@@ -30,6 +32,15 @@
 #' Typst, through the copy of Quarto that comes with RStudio; without it, use
 #' `formats = "html"`.
 #'
+#' **A whole database**
+#'
+#' With `db`, and no `tables`, the tables and views of the database, or of
+#' `schema` alone, are listed, and those that no label table holds labels
+#' for are left out; a message counts them. Without `schema`, the files of
+#' each schema go in a folder of its name in `dir`, as tables of the same
+#' name can be in more than one schema. A PDF takes a second or two, so a
+#' large database is quicker as HTML alone.
+#'
 #' **Logo**
 #'
 #' The band shows the actepir lockup, or the logo set with
@@ -37,7 +48,12 @@
 #'
 #' @param tables The tables: names of tables in `Analysis.dbo`, or full
 #'   names, as `"database.schema.table"`, as character; or one lazy table
-#'   from EpiServer, such as one from [episerver_quickconnect()].
+#'   from EpiServer, such as one from [episerver_quickconnect()]. Leave it
+#'   out to give `db`.
+#' @param db A database, as character, in place of `tables`: the dictionaries
+#'   of all its tables and views that have labels are written.
+#' @param schema With `db`, one schema of the database, as character, whose
+#'   tables and views are the only ones written.
 #' @param formats The files to write: `"pdf"`, `"html"` or both.
 #'   `character()` writes none, for the data frame alone.
 #' @param dir The folder to write the files to.
@@ -69,17 +85,28 @@
 #' episerver_dictionary(c("APC", "ED", "HospitalAPC.dbo.APC_Extra"),
 #'                      formats = "html", dir = "dictionaries")
 #'
+#' # Every table and view of Analysis.dbo that has labels
+#' episerver_dictionary(db = "Analysis", schema = "dbo", dir = "dictionaries")
+#'
 #' # The dictionary as a data frame, without files
 #' dictionary <- episerver_dictionary("APC", formats = character())
 #' }
-episerver_dictionary <- function(tables, formats = c("pdf", "html"), dir = ".",
+episerver_dictionary <- function(tables = NULL, db = NULL, schema = NULL,
+                                 formats = c("pdf", "html"), dir = ".",
                                  title = "Data dictionary",
                                  subtitle = "Epidemiology Section, ACT Health and Community Services Directorate",
                                  max_values = 50, lbl_table = NULL,
                                  lbl_schema = NULL, lbl_db = NULL,
                                  driver = NULL, max_attempts = NULL, ...) {
 
-  if (is_invalid(tables)) stop("Give the tables whose dictionaries are wanted.")
+  whole <- !is_invalid(db)
+  if (whole == !is_invalid(tables)) {
+    stop("Give the tables, or a database in db, but not both.", call. = FALSE)
+  }
+  if (!whole && !is_invalid(schema)) {
+    stop("schema goes with db. Give a table of another schema as ",
+         "\"database.schema.table\".", call. = FALSE)
+  }
   formats <- unique(tolower(as.character(formats)))
   bad <- setdiff(formats, c("pdf", "html"))
   if (length(bad)) {
@@ -99,11 +126,17 @@ episerver_dictionary <- function(tables, formats = c("pdf", "html"), dir = ".",
     if (is.null(quarto)) stop(.dict_no_quarto, call. = FALSE)
   }
 
-  # A lazy table brings its connection; names need one, closed at the end
-  if (inherits(tables, "tbl_sql")) {
-    parts <- list(.lbl_table_path(tables))
-    conn  <- tables$src$con
-  } else if (is.character(tables)) {
+  # The tables named: a lazy table brings its connection
+  lazy <- inherits(tables, "tbl_sql")
+  if (lazy) {
+    targets <- list(.lbl_target(.lbl_table_path(tables), lbl_db, lbl_schema,
+                                lbl_table))
+    conn <- tables$src$con
+  } else if (!whole) {
+    if (!is.character(tables)) {
+      stop("tables must be the names of tables, or a lazy table from EpiServer.",
+           call. = FALSE)
+    }
     parts <- strsplit(tables, ".", fixed = TRUE)
     odd <- tables[!lengths(parts) %in% c(1, 3)]
     if (length(odd)) {
@@ -111,36 +144,65 @@ episerver_dictionary <- function(tables, formats = c("pdf", "html"), dir = ".",
            "\"database.schema.table\", not ", paste(odd, collapse = ", "), ".",
            call. = FALSE)
     }
-  } else {
-    stop("tables must be the names of tables, or a lazy table from EpiServer.",
-         call. = FALSE)
+    targets <- lapply(parts, .lbl_target, lbl_db, lbl_schema, lbl_table)
+    names <- vapply(targets, function(t) t$table, character(1))
+    if (length(formats) && anyDuplicated(tolower(names))) {
+      same <- names[tolower(names) %in% tolower(names[duplicated(tolower(names))])]
+      stop("The tables ", paste(same, collapse = ", "), " have the same name, ",
+           "so their files would too. Write them to different folders.",
+           call. = FALSE)
+    }
   }
-  targets <- lapply(parts, .lbl_target, lbl_db, lbl_schema, lbl_table)
-  names <- vapply(targets, function(t) t$table, character(1))
-  if (length(formats) && anyDuplicated(tolower(names))) {
-    same <- names[tolower(names) %in% tolower(names[duplicated(tolower(names))])]
-    stop("The tables ", paste(same, collapse = ", "), " have the same name, ",
-         "so their files would too. Write them to different folders.",
-         call. = FALSE)
-  }
-  if (!inherits(tables, "tbl_sql")) {
+  if (!lazy) {
     conn <- episerver_connect(driver = driver, max_attempts = max_attempts, ...)
     on.exit(tryCatch(DBI::dbDisconnect(conn), error = function(e) NULL),
             add = TRUE)
   }
-
   query <- function(sql) DBI::dbGetQuery(conn, sql)
+
+  # A whole database: its tables and views that have labels
+  if (whole) {
+    where <- paste(c(db, if (!is_invalid(schema)) schema), collapse = ".")
+    label <- .lbl_target(c(db, "", ""), lbl_db, lbl_schema, lbl_table)$label
+    listed <- .dict_tables(query, db, if (!is_invalid(schema)) schema, label)
+    found <- listed[listed$labelled, , drop = FALSE]
+    if (!nrow(listed)) {
+      message("There are no tables or views in ", where, " that you can read.")
+      return(invisible(.dict_flat_empty()))
+    }
+    if (!nrow(found)) {
+      message("No table or view of ", where, " has labels, so no dictionary ",
+              "was written.")
+      return(invisible(.dict_flat_empty()))
+    }
+    targets <- lapply(seq_len(nrow(found)), function(i) {
+      list(db = db, schema = found$schema[i], table = found$table[i],
+           label = label)
+    })
+  }
+
   dictionaries <- lapply(targets, function(t) {
     .dict_build(query, t$db, t$schema, t$table, t$label)
   })
   for (d in dictionaries) {
+    folder <- if (whole && is_invalid(schema)) file.path(dir, d$schema) else dir
+    if (length(formats)) dir.create(folder, showWarnings = FALSE)
     for (format in formats) {
-      path <- file.path(dir, paste0(d$table, "_dictionary.", format))
+      path <- file.path(folder, paste0(d$table, "_dictionary.", format))
       .dict_write(d, format, path, title, subtitle, max_values, quarto)
       message("Wrote ", path)
     }
   }
-  invisible(tibble::as_tibble(do.call(rbind, lapply(dictionaries, .dict_flat))))
+  if (whole) {
+    message(if (nrow(found) < nrow(listed)) {
+      paste0(nrow(found), " of the ", nrow(listed), " tables and views of ",
+             where, " have labels; the others were left out.")
+    } else {
+      paste0("Every table and view of ", where, " has labels.")
+    })
+  }
+  invisible(tibble::as_tibble(do.call(rbind, c(lapply(dictionaries, .dict_flat),
+                                               list(.dict_flat_empty())))))
 
 }
 
@@ -322,13 +384,42 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
       stringsAsFactors = FALSE
     )[seq_len(n), , drop = FALSE]
   })
-  out <- do.call(rbind, c(parts, list(data.frame(
-    table = character(), position = integer(), column = character(),
-    description = character(), type = character(), code = character(),
-    value_label = character(), notes = character(), stringsAsFactors = FALSE
-  ))))
+  out <- do.call(rbind, c(parts, list(.dict_flat_empty())))
   rownames(out) <- NULL
   out
+}
+
+# The dictionary as data, without rows
+#' @noRd
+.dict_flat_empty <- function() {
+  data.frame(table = character(), position = integer(), column = character(),
+             description = character(), type = character(), code = character(),
+             value_label = character(), notes = character(),
+             stringsAsFactors = FALSE)
+}
+
+# The tables and views of database db, or of one schema, with whether a label
+# table holds labels for each: the first that holds rows for it, as
+# .lbl_read() looks, or the one label table named by `label`. Label tables
+# are not listed (.browse_sql_tables()).
+#' @noRd
+.dict_tables <- function(query, db, schema = NULL, label = NULL) {
+  schemas <- if (is.null(schema)) query(.browse_sql_schemas(db))$TABLE_SCHEMA else schema
+  tables <- do.call(rbind, c(lapply(schemas, function(s) {
+    t <- query(.browse_sql_tables(db, s))
+    data.frame(schema = rep(s, nrow(t)), table = as.character(t$TABLE_NAME),
+               stringsAsFactors = FALSE)
+  }), list(data.frame(schema = character(), table = character(),
+                      stringsAsFactors = FALSE))))
+  sources <- if (is.null(label)) query(.lbl_sql_sources(db)) else .lbl_named(query, label)
+  lbl_db <- if (is.null(label)) db else label[[1]]
+  tables$labelled <- vapply(seq_len(nrow(tables)), function(i) {
+    if (!nrow(sources)) return(FALSE)
+    pick <- query(.lbl_sql_pick(lbl_db, sources, tables$schema[i],
+                                tables$table[i]))$Source[1]
+    !is.na(pick) && pick > 0
+  }, logical(1))
+  tables
 }
 
 # The text both files show: the heading (the dataset label, or the table's
@@ -518,6 +609,8 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
   })
   heads <- c("#", "Column", "Description", "Type", "Value labels",
              if (has_notes) "Notes")
+  # The columns' widths in percent, which the CSS keeps whatever their text
+  widths <- if (has_notes) c(4, 15, 24, 9, 28, 20) else c(4, 17, 33, 10, 36)
   links <- d$links
 
   # htmltools moves the content of tags$head() out for Shiny to place, so the
@@ -576,6 +669,9 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
         ),
         tags$table(
           class = "columns",
+          tags$colgroup(lapply(widths, function(w) {
+            tags$col(style = paste0("width: ", w, "%"))
+          })),
           tags$thead(tags$tr(lapply(heads, tags$th))),
           tags$tbody(rows)
         )

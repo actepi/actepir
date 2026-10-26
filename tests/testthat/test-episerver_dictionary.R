@@ -177,6 +177,13 @@ test_that("the HTML file stands alone, escapes the labels and holds every value 
   expect_match(html, "<input type=\"search\" id=\"search\"", fixed = TRUE)
   expect_match(html, "<footer>Analysis.dbo.APC  |  Labels from ref.DataProperties.  |  26 October 2026</footer>",
                fixed = TRUE)
+  # The columns' widths are set, so long notes wrap rather than widen their
+  # column, and the rules under rows are not drawn in the value labels
+  cols <- regmatches(html, gregexpr("<col style=\"width: [0-9]+%\"/>", html))[[1]]
+  expect_equal(as.numeric(gsub("\\D", "", cols)), c(4, 15, 24, 9, 28, 20))
+  expect_match(html, "table-layout: fixed", fixed = TRUE)
+  expect_match(html, "table.columns > tbody > tr > td {", fixed = TRUE)
+  expect_no_match(html, "table.columns td", fixed = TRUE)
 
   # A logo that has been set is written in instead
   dictionary_logo_quiet <- function(...) suppressMessages(dictionary_logo(...))
@@ -301,6 +308,77 @@ test_that("episerver_dictionary() writes each table's files and returns the dict
   expect_error(episerver_dictionary("APC", dir = dir), "The PDF needs Quarto",
                fixed = TRUE)
   expect_equal(connected, 2)
+
+})
+
+test_that("a database's tables and views are listed with whether they have labels", {
+
+  fake <- fake_browse_episerver()
+  listed <- .dict_tables(fake$query, "Analysis")
+  expect_equal(paste(listed$schema, listed$table, sep = "."),
+               c(paste0("dbo.", c("ACTGHSMYX", "APC", "Births", "Deaths", "ED",
+                                  "Plain", "vw_ED")),
+                 "ref.StandardPops", "stage.APC"))
+  expect_equal(listed$table[!listed$labelled], c("Plain", "StandardPops"))
+  # One schema; one label table named
+  expect_equal(unique(.dict_tables(fake$query, "Analysis", "stage")$schema), "stage")
+  named <- .dict_tables(fake$query, "Analysis", "dbo",
+                        c(db = "Analysis", schema = "ref", table = "DataLabels"))
+  expect_equal(named$table[named$labelled],
+               c("ACTGHSMYX", "APC", "Births", "ED", "vw_ED"))
+  # A database without label tables
+  expect_false(any(.dict_tables(fake$query, "HospitalAPC")$labelled))
+
+})
+
+test_that("episerver_dictionary() writes the dictionaries of a database's tables that have labels", {
+
+  fake <- fake_browse_episerver()
+  local_mocked_bindings(episerver_connect = function(...) "named connection")
+  local_mocked_bindings(
+    dbGetQuery = function(conn, statement, ...) fake$query(statement),
+    dbDisconnect = function(conn, ...) invisible(TRUE),
+    .package = "DBI"
+  )
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+
+  # Every schema, each in a folder of its name
+  dir <- withr::local_tempdir()
+  messages <- capture_messages(
+    out <- episerver_dictionary(db = "Analysis", formats = "html", dir = dir)
+  )
+  expect_setequal(list.files(dir, recursive = TRUE),
+                  c(paste0("dbo/", c("ACTGHSMYX", "APC", "Births", "Deaths", "ED",
+                                     "vw_ED"), "_dictionary.html"),
+                    "stage/APC_dictionary.html"))
+  expect_match(messages, paste("7 of the 9 tables and views of Analysis have",
+                               "labels; the others were left out."),
+               fixed = TRUE, all = FALSE)
+  expect_equal(unique(out$table)[c(1, 7)],
+               c("Analysis.dbo.ACTGHSMYX", "Analysis.stage.APC"))
+
+  # One schema, in dir itself
+  dir <- withr::local_tempdir()
+  expect_message(episerver_dictionary(db = "Analysis", schema = "stage",
+                                      formats = "html", dir = dir),
+                 "Every table and view of Analysis.stage has labels.", fixed = TRUE)
+  expect_equal(list.files(dir), "APC_dictionary.html")
+
+  # No labels: nothing written
+  dir <- withr::local_tempdir()
+  expect_message(none <- episerver_dictionary(db = "HospitalAPC", dir = dir,
+                                              formats = "html"),
+                 "No table or view of HospitalAPC has labels", fixed = TRUE)
+  expect_length(list.files(dir), 0)
+  expect_equal(nrow(none), 0)
+  expect_named(none, names(out))
+
+  expect_error(episerver_dictionary(), "Give the tables, or a database in db",
+               fixed = TRUE)
+  expect_error(episerver_dictionary("APC", db = "Analysis"), "but not both",
+               fixed = TRUE)
+  expect_error(episerver_dictionary("APC", schema = "stage"), "schema goes with db",
+               fixed = TRUE)
 
 })
 

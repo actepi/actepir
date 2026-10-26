@@ -36,6 +36,26 @@ test_that("a dictionary holds the labels that scripts read, for the table's colu
 
 })
 
+test_that("a database's tables are listed with whether a label table holds labels for them", {
+
+  skip_if_no_episerver()
+  db <- .epi_connection()
+  withr::defer(db$disconnect())
+
+  listed <- .dict_tables(db$query, "Analysis", "dbo")
+  tables <- db$query(.browse_sql_tables("Analysis", "dbo"))
+  expect_equal(listed$table, as.character(tables$TABLE_NAME))
+  expect_true(listed$labelled[listed$table == "ACTGHSMYX"])
+  # Up to 10 of each, against the lookup that reads their labels
+  check <- c(utils::head(which(listed$labelled), 10),
+             utils::head(which(!listed$labelled), 10))
+  for (i in check) {
+    r <- .lbl_read(db$query, "Analysis", "dbo", listed$table[i])
+    expect_equal(is.null(r$none), listed$labelled[i], label = listed$table[i])
+  }
+
+})
+
 test_that("episerver_dictionary() writes a table's files", {
 
   skip_if_no_episerver()

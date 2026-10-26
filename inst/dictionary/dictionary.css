@@ -53,19 +53,25 @@ input:focus-visible, button:focus-visible, summary:focus-visible {
   outline: 2px solid var(--iris); outline-offset: 2px;
 }
 #count { color: var(--muted); }
-table.columns { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.columns th {
+/* Column widths are fixed by the table's colgroup, so long notes wrap
+   rather than widen their column. The rules below name the table's own
+   cells, not those of the value labels inside them. */
+table.columns {
+  width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;
+}
+table.columns > thead > tr > th {
   position: sticky; top: 0; background: var(--nightshade); color: #fff;
   text-align: left; padding: 6px 8px;
 }
-table.columns td {
+table.columns > tbody > tr > td {
   vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--rule);
+  overflow-wrap: anywhere;
 }
 table.columns > tbody > tr:nth-child(even) { background: var(--tint); }
-table.columns td p { margin: 0 0 4px; }
+table.columns > tbody > tr > td p { margin: 0 0 4px; }
 summary { cursor: pointer; color: var(--iris); }
 table.values { border-collapse: collapse; margin-top: 4px; }
-table.values td { padding: 1px 10px 1px 0; vertical-align: top; }
+table.values td { padding: 1px 10px 1px 0; vertical-align: top; border: 0; }
 table.values td:first-child { white-space: nowrap; }
 footer {
   padding: 16px 32px 24px; color: var(--muted); font-size: 13px;
@@ -74,12 +80,13 @@ footer {
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { font-size: 10pt; }
-  .band, table.columns th, table.columns > tbody > tr:nth-child(even) {
+  .band, table.columns > thead > tr > th,
+  table.columns > tbody > tr:nth-child(even) {
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .tools, .contents { display: none; }
   table.columns { font-size: 9pt; }
-  table.columns th { position: static; }
-  table.columns tr { break-inside: avoid; }
+  table.columns > thead > tr > th { position: static; }
+  table.columns > tbody > tr { break-inside: avoid; }
   summary { color: var(--text); }
 }

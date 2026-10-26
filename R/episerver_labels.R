@@ -335,18 +335,7 @@
     source <- sources[i, , drop = FALSE]
   } else {
     lbl_db <- label[[1]]
-    columns <- query(.browse_sql_columns(label[[1]], label[[2]], label[[3]]))
-    layout <- .lbl_layout(columns$col)
-    if (is.na(layout)) {
-      stop(name(label), " is not a label table: it does not have the ",
-           "columns of ref.DataProperties (",
-           paste(.lbl_layouts$properties, collapse = ", "),
-           ") or of DataLabels (",
-           paste(setdiff(.lbl_layouts$labels, "DataType"), collapse = ", "),
-           ").", call. = FALSE)
-    }
-    source <- data.frame(TABLE_SCHEMA = label[[2]], TABLE_NAME = label[[3]],
-                         Layout = layout, stringsAsFactors = FALSE)
+    source <- .lbl_named(query, label)
   }
 
   rows <- .lbl_normalise(rbind(
@@ -354,6 +343,25 @@
     query(.lbl_sql_rows(lbl_db, source, schema, table, values = TRUE))
   ))
   list(source = source, db = lbl_db, rows = rows, none = NULL)
+}
+
+# The label table named by `label`, c(db, schema, table), as a row like those
+# of .lbl_sql_sources(), with its layout read from its columns. A table with
+# the columns of neither layout is refused.
+#' @noRd
+.lbl_named <- function(query, label) {
+  columns <- query(.browse_sql_columns(label[[1]], label[[2]], label[[3]]))
+  layout <- .lbl_layout(columns$col)
+  if (is.na(layout)) {
+    stop(paste(label, collapse = "."), " is not a label table: it does not ",
+         "have the columns of ref.DataProperties (",
+         paste(.lbl_layouts$properties, collapse = ", "),
+         ") or of DataLabels (",
+         paste(setdiff(.lbl_layouts$labels, "DataType"), collapse = ", "),
+         ").", call. = FALSE)
+  }
+  data.frame(TABLE_SCHEMA = label[[2]], TABLE_NAME = label[[3]],
+             Layout = layout, stringsAsFactors = FALSE)
 }
 
 # The variable and value labels of table schema.table of database db, as
