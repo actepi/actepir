@@ -1235,6 +1235,9 @@ test_that("the app copies the code for the current settings", {
 
 test_that("the bug button opens a report that holds the settings but no data", {
 
+  # As in a background process, whether or not the tests run in RStudio
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
   fake <- fake_episerver()
   app <- episerver_dsr_app(query = fake$query)
   copied <- NULL

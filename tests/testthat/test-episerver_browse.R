@@ -267,6 +267,9 @@ test_that("the code collects with dplyr and backquotes names that need it", {
 test_that("the page follows the app style: top bar, sidebar sections and tabs", {
 
   withr::local_options(sass.cache = FALSE)
+  # As in a background process, whether or not the tests run in RStudio
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
   app  <- episerver_browse_app(query = fake_browse_episerver()$query)
   page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
                                QUERY_STRING = ""))$content
@@ -632,8 +635,26 @@ test_that("the code button gives the code for the table and columns chosen", {
 
 })
 
+test_that("the code button inserts the code when the app runs in RStudio", {
+
+  withr::local_options(sass.cache = FALSE)
+  local_mocked_bindings(isAvailable = function(...) TRUE,
+                        .package = "rstudioapi")
+  app  <- episerver_browse_app(query = fake_browse_episerver()$query)
+  page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
+                               QUERY_STRING = ""))$content
+  foot <- regmatches(page, regexpr("(?s)<div class=\"epi-actions\">.*?</div>",
+                                   page, perl = TRUE))
+  expect_match(foot, "id=\"insert_code\"[^>]*>(?s).*Insert Code", perl = TRUE)
+  expect_no_match(foot, "Copy Code", fixed = TRUE)
+
+})
+
 test_that("the bug button opens a report that holds the settings but no labels", {
 
+  # As in a background process, whether or not the tests run in RStudio
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
   copied <- NULL
   local_mocked_bindings(
     .epi_copy_text = function(session, text, message) copied <<- text
