@@ -120,9 +120,9 @@ rows to choose columns for the code; the line above the table counts
 them. The buttons above the table expand and collapse every list of value
 labels, while value labels are shown, and clear the rows chosen.
 
-The \emph{Dataset notes} tab holds the table's description (its dataset
-label), its notes and its linked tables, apart from the columns, as some
-tables have many notes. Its title gives the number of notes.
+The \emph{Collection} tab holds the table's description (its dataset label),
+its notes and its linked tables, apart from the columns, as some tables
+have many notes.
 
 \strong{Code}
 

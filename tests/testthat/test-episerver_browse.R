@@ -283,14 +283,14 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*Dataset Browser\\s*<",
                perl = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
-  tabs <- vapply(c("columns", "notes", "help"), function(tab) {
+  tabs <- vapply(c("columns", "collection", "help"), function(tab) {
     in_bar(paste0("data-value=\"", tab, "\""))
   }, integer(1))
   expect_false(is.unsorted(c(in_bar("Dataset Browser"), tabs,
                              in_bar("class=\"epi-logo\""))))
   expect_true(all(tabs > 0))
-  # The Dataset notes tab's title gives the number of notes
-  expect_match(navbar, "(?s)Dataset notes\\s*<span id=\"notes_count\"",
+  # The Collection tab's title is its name alone
+  expect_match(navbar, "(?s)data-value=\"collection\"[^>]*>\\s*Collection\\s*</a>",
                perl = TRUE)
   expect_false(has_id(page, "done"))
   expect_no_match(page, "gadget", fixed = TRUE)
@@ -326,8 +326,8 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   }
   expect_match(columns, "<button id=\"clear_rows\" type=\"button\" disabled",
                fixed = TRUE)
-  # The dataset's description and notes are on their own tab
-  notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"notes\".*?</div>")
+  # The dataset's description and notes are on the Collection tab
+  notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"collection\".*?</div>")
   expect_true(has_id(notes, "about"))
   expect_false(has_id(columns, "about"))
   # Analysis is chosen; system databases are not offered
@@ -436,7 +436,6 @@ test_that("each table takes its labels from the first label table holding rows",
     expect_equal(about, paste("Admitted patient care Coded first. Coded",
                               "second. Not coded. Linked tables: APC_Extra",
                               "(on PatientID)."))
-    expect_equal(output$notes_count, "(3)")
 
     session$setInputs(table = "ED")
     expect_equal(info(), paste("Analysis.dbo.ED (table), 2 columns",
@@ -457,7 +456,6 @@ test_that("each table takes its labels from the first label table holding rows",
     session$setInputs(table = "Plain")
     expect_match(info(), "No label table holds labels for this table", fixed = TRUE)
     expect_match(output$about$html, "This table has no description", fixed = TRUE)
-    expect_equal(output$notes_count, "")
 
     # Births takes its labels from ref.DataProperties, without a dataset
     # label, although ref.DataLabels holds one

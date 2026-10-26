@@ -142,13 +142,13 @@ const fs = require('fs');
       document.querySelector('#info_bar .info-bar').getBoundingClientRect().bottom)), 'px');
   await shot('02_columns');
 
-  // The Dataset notes tab: the description, notes and linked tables
-  await page.click('a[data-value=notes]');
+  // The Collection tab: the description, notes and linked tables
+  await page.click('a[data-value=collection]');
   await page.waitForTimeout(600);
-  console.log('DATASET NOTES:', await text('#about'));
-  await shot('02b_dataset_notes');
+  console.log('COLLECTION:', await text('#about'));
+  await shot('02b_collection');
   await select('table', 'Plain');
-  console.log('DATASET NOTES Plain:', await text('#about'), '| tabs:', JSON.stringify(await tabs()));
+  console.log('COLLECTION Plain:', await text('#about'), '| tabs:', JSON.stringify(await tabs()));
   await select('table', 'APC');
   await page.click('a[data-value=columns]');
   await settle();

@@ -84,9 +84,9 @@
 #' them. The buttons above the table expand and collapse every list of value
 #' labels, while value labels are shown, and clear the rows chosen.
 #'
-#' The *Dataset notes* tab holds the table's description (its dataset
-#' label), its notes and its linked tables, apart from the columns, as some
-#' tables have many notes. Its title gives the number of notes.
+#' The *Collection* tab holds the table's description (its dataset label),
+#' its notes and its linked tables, apart from the columns, as some tables
+#' have many notes.
 #'
 #' **Code**
 #'
@@ -341,7 +341,7 @@ episerver_browse_stop <- function() {
   out
 }
 
-# The Dataset notes tab: the table's dataset label (its description), notes
+# The Collection tab: the table's dataset label (its description), notes
 # and linked tables (dataset, from .lbl_table()), or a line saying it has
 # none
 #' @noRd
@@ -523,9 +523,8 @@ episerver_browse_stop <- function() {
       "column has them, those with a code first, in code order."
     ),
     shiny::p(
-      "The Dataset notes tab holds the table's description (its dataset ",
-      "label), its notes and its linked tables. Its title gives the number ",
-      "of notes."
+      "The Collection tab holds the table's description (its dataset ",
+      "label), its notes and its linked tables."
     ),
 
     shiny::h5("Choosing columns"),
@@ -652,7 +651,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       .epi_app_style(),
 
       # Browser-only rules: the dataset labels in the Table list, light on
-      # the chosen table's Nightshade, the Dataset notes tab, the line on the
+      # the chosen table's Nightshade, the Collection tab, the line on the
       # columns chosen, and the value labels in the columns' table, whose
       # list scrolls once open
       shiny::tags$style(shiny::HTML("
@@ -837,13 +836,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     ),
 
     # The table's description, notes and linked tables, apart from its
-    # columns, as some tables have many notes. The title gives their number.
-    bslib::nav_panel(
-      shiny::tagList("Dataset notes",
-                     shiny::textOutput("notes_count", inline = TRUE)),
-      value = "notes",
-      shiny::uiOutput("about")
-    ),
+    # columns, as some tables have many notes
+    bslib::nav_panel("Collection", value = "collection",
+                     shiny::uiOutput("about")),
 
     bslib::nav_panel("Help", value = "help", .browse_help()),
 
@@ -1046,14 +1041,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     })
 
-    # ── The Dataset notes tab and the columns ──────────────────────────────
-    # The tab's title gives the number of notes
+    # ── The Collection tab and the columns ─────────────────────────────────
     output$about <- shiny::renderUI({
       .browse_about(lbl()$dataset)
-    })
-    output$notes_count <- shiny::renderText({
-      n <- length(lbl()$dataset$notes)
-      if (n) paste0("(", n, ")") else ""
     })
 
     output$col_table <- DT::renderDataTable({
