@@ -12,7 +12,7 @@ Both linkage products are made by the same code from the same rules, so they alw
 
 | Pull request | Content |
 |---|---|
-| Plan pull request 3 (open, waiting on the maintainer's run in SSMS) | The seven dictionary tables in `Analysis.ref`, a worked example of adding rows, and a script that converts `definitions.xlsx` into an INSERT script for the Linkage profile. |
+| #16, plan pull request 3 (open, waiting on the maintainer's run in SSMS) | The seven dictionary tables in `Analysis.ref`, a worked example of adding rows, and a script that converts `definitions.xlsx` into an INSERT script for the Linkage profile. |
 
 The design was agreed with the maintainer on 25 Oct 2026, and the tables' details on 26 Oct 2026, when the maintainer uploaded the files below.
 
