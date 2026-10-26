@@ -24,7 +24,6 @@ Imports:
     magrittr,
     haven,
     labelled,
-    sjlabelled,
     ggplot2,
     gt,
     tibble,

@@ -65,7 +65,7 @@ const fs = require('fs');
     [...i.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim())
   ]))));
   console.log('SIDEBAR width:', await page.$eval('aside#settings', s => Math.round(s.getBoundingClientRect().width)),
-    '| foot:', JSON.stringify(await page.$$eval('.epi-actions > *', es => es.map(e => e.id))),
+    '| foot:', JSON.stringify(await page.$$eval('.epi-actions > *', es => es.map(e => e.id || e.querySelector('[id]').id))),
     '| resizable:', await page.$eval('aside#settings', s => !!s.closest('.bslib-sidebar-layout').querySelector('.bslib-sidebar-resize-handle')));
   // Section headings: the info bar's tint, rgb(234, 230, 241), in bold
   // Nightshade, rgb(50, 5, 87)
@@ -243,6 +243,96 @@ const fs = require('fs');
   await select('labels_source', 'dbo.DataLabels');
   console.log('LABELS dbo.DataLabels:', await info());
   await select('labels_source', 'auto');
+
+  // Download: the table's dictionary as PDF and HTML, in a menu that opens
+  // upwards. Without Quarto, the PDF's item is disabled and not a link.
+  await page.click('#dict_download');
+  await page.waitForTimeout(400);
+  console.log('DOWNLOAD MENU:', JSON.stringify(await page.$$eval(
+    '#dict_download + .dropdown-menu .dropdown-item',
+    items => items.map(i => [i.textContent.trim(), i.classList.contains('disabled')]))),
+    '| opens', await page.evaluate(() => {
+      const menu = document.querySelector('#dict_download + .dropdown-menu').getBoundingClientRect();
+      return menu.bottom <= document.querySelector('#dict_download').getBoundingClientRect().top ? 'up' : 'down';
+    }));
+  await shot('08_download_menu');
+  for (const id of ['dict_html', 'dict_pdf']) {
+    if (!(await page.$('#' + id))) continue;
+    if (!(await page.isVisible('#' + id))) await page.click('#dict_download');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.click('#' + id)]);
+    const file = `${out}/${download.suggestedFilename()}`;
+    await download.saveAs(file);
+    console.log('DOWNLOAD', id + ':', download.suggestedFilename(), '| starts',
+      JSON.stringify(fs.readFileSync(file).subarray(0, 5).toString()));
+    if (id !== 'dict_html') continue;
+    // The HTML file on its own: its heading, columns and search
+    const html = await context.newPage();
+    await html.goto('file://' + file);
+    await html.fill('#search', 'female');
+    console.log('DICTIONARY HTML:', await html.textContent('h1'), '|',
+      (await html.textContent('.source')).trim(), '| rows',
+      await html.$$eval('table.columns > tbody > tr', r => r.length), '| search "female":',
+      (await html.textContent('#count')).trim(), '| requests',
+      JSON.stringify(await html.evaluate(() => performance.getEntriesByType('resource').length)));
+    await html.fill('#search', '');
+    await html.screenshot({ path: `${out}/08b_dictionary_html.png` });
+    await html.close();
+  }
+
+  // Dictionaries of all tables: the dialog, the folder list, then the whole
+  // database's dictionaries written to a folder in the output directory
+  if (!(await page.isVisible('#dict_bulk'))) await page.click('#dict_download');
+  await page.click('#dict_bulk');
+  await page.waitForSelector('#bulk_write', { state: 'visible' });
+  await settle(500);
+  // The buttons above the list, the folders in it and the note
+  const folders = () => page.evaluate(() => ({
+    buttons: [...document.querySelectorAll('#bulk_folders .options-row .browse-folder')]
+      .map(b => [b.textContent.trim(), b.disabled]),
+    list: [...document.querySelectorAll('#bulk_folders .list-group-item')].map(b => b.textContent.trim()),
+    note: ((document.querySelector('#bulk_folders .epi-note') || {}).textContent || '').trim()
+  }));
+  console.log('BULK DIALOG:', await text('.modal-title'), '|', JSON.stringify(await page.$$eval(
+    '#bulk_scope input, #bulk_formats input',
+    inputs => inputs.map(i => [i.value, i.checked, i.disabled]))),
+    '| folder', JSON.stringify(await page.inputValue('#bulk_dir')),
+    '| folders', JSON.stringify(await folders()));
+  // The list follows the box; a click on a folder, or Up, fills the box
+  for (const d of ['picker/Alpha/Inner', 'picker/beta', 'picker/2024', 'picker/.hidden']) {
+    fs.mkdirSync(`${out}/${d}`, { recursive: true });
+  }
+  const picker = fs.realpathSync(`${out}/picker`);
+  await page.fill('#bulk_dir', picker);
+  await settle(500);
+  console.log('BULK FOLDERS:', JSON.stringify(await folders()), '| list', JSON.stringify(
+    await page.$eval('#bulk_folders .browse-folders', e => {
+      const s = getComputedStyle(e);
+      return [s.maxHeight, s.overflowY, s.overscrollBehaviorY,
+              Math.round(e.querySelector('.list-group-item').getBoundingClientRect().height)];
+    })));
+  await shot('08c_bulk_dialog');
+  await page.click('#bulk_folders .list-group-item:has-text("Alpha")');
+  await settle(500);
+  console.log('BULK INTO:', JSON.stringify(await page.inputValue('#bulk_dir')), JSON.stringify(await folders()));
+  await page.click('#bulk_folders .browse-folder:has-text("Up")');
+  await settle(500);
+  await page.click('#bulk_folders .list-group-item:has-text("2024")');
+  await settle(500);
+  console.log('BULK UP:', JSON.stringify(await page.inputValue('#bulk_dir')));
+  await page.fill('#bulk_dir', `${picker}/new/folder`);
+  await settle(500);
+  console.log('BULK NEW:', JSON.stringify(await folders()));
+  await page.check('#bulk_scope input[value=db]');
+  await page.fill('#bulk_dir', `${out}/bulk`);
+  await page.click('#bulk_write');
+  await page.waitForFunction(() => /Dictionaries written/.test(
+    (document.querySelector('.modal-title') || {}).textContent || ''), null, { timeout: 120000 });
+  await page.waitForTimeout(500);
+  console.log('BULK DONE:', JSON.stringify(await page.$$eval('.modal-body p', ps => ps.map(p => p.textContent.trim()))),
+    '| files', JSON.stringify(fs.readdirSync(`${out}/bulk`, { recursive: true }).filter(f => f.endsWith('.html')).sort()));
+  await shot('08d_bulk_done');
+  await page.click('.modal-footer button[data-bs-dismiss=modal]');
+  await page.waitForTimeout(500);
 
   // Another schema and a database without label tables
   await select('schema', 'stage');

@@ -1,0 +1,92 @@
+/* inst/dictionary/dictionary.css
+   The HTML data dictionary (episerver_dictionary()), written into the file.
+   Colours and fonts from dev/reference/act-brand.md; no font is downloaded,
+   so the file needs nothing beyond itself. */
+
+:root {
+  --nightshade: #320557;
+  --iris: #562C8C;
+  --lavender: #DCC8FA;
+  --tint: #EAE6F1;
+  --rule: #C7C7C7;
+  --text: #1a1a1a;
+  --muted: #555;
+  --body-font: "Source Sans 3", "Source Sans Pro", Calibri, Arial, sans-serif;
+  --heading-font: Montserrat, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: var(--text); background: #fff;
+  font-family: var(--body-font); font-size: 15px; line-height: 1.45;
+}
+.band {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px; padding: 14px 32px; background: var(--nightshade); color: #fff;
+}
+.band p { margin: 0; }
+.band .title { font-family: var(--heading-font); font-size: 22px; font-weight: 700; }
+.band .subtitle { color: var(--lavender); font-size: 15px; }
+.band img { height: 56px; width: auto; }
+main { padding: 20px 32px 8px; }
+h1, h2 { font-family: var(--heading-font); color: var(--nightshade); }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 28px 0 10px; }
+.subheading { margin: 0; font-size: 16px; }
+.source { margin: 2px 0 0; color: var(--muted); }
+.contents { margin-top: 14px; }
+#information p { margin: 0 0 8px; }
+a { color: var(--iris); }
+.tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-bottom: 10px;
+}
+.tools input {
+  font: inherit; font-size: 14px; padding: 4px 8px; min-width: 18em;
+  border: 1px solid var(--rule); border-radius: 4px;
+}
+.tools button {
+  font: inherit; font-size: 14px; padding: 4px 12px; cursor: pointer;
+  border: 0; border-radius: 4px; background: var(--nightshade); color: #fff;
+}
+.tools button:hover, .tools button:focus-visible { background: var(--iris); }
+input:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--iris); outline-offset: 2px;
+}
+#count { color: var(--muted); }
+/* Column widths are fixed by the table's colgroup, so long notes wrap
+   rather than widen their column. The rules below name the table's own
+   cells, not those of the value labels inside them. */
+table.columns {
+  width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;
+}
+table.columns > thead > tr > th {
+  position: sticky; top: 0; background: var(--nightshade); color: #fff;
+  text-align: left; padding: 6px 8px;
+}
+table.columns > tbody > tr > td {
+  vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--rule);
+  overflow-wrap: anywhere;
+}
+table.columns > tbody > tr:nth-child(even) { background: var(--tint); }
+table.columns > tbody > tr > td p { margin: 0 0 4px; }
+summary { cursor: pointer; color: var(--iris); }
+table.values { border-collapse: collapse; margin-top: 4px; }
+table.values td { padding: 1px 10px 1px 0; vertical-align: top; border: 0; }
+table.values td:first-child { white-space: nowrap; }
+footer {
+  padding: 16px 32px 24px; color: var(--muted); font-size: 13px;
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body { font-size: 10pt; }
+  .band, table.columns > thead > tr > th,
+  table.columns > tbody > tr:nth-child(even) {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .tools, .contents { display: none; }
+  table.columns { font-size: 9pt; }
+  table.columns > thead > tr > th { position: static; }
+  table.columns > tbody > tr { break-inside: avoid; }
+  summary { color: var(--text); }
+}

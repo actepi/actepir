@@ -339,9 +339,13 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
                "bug_report")) {
     expect_true(has_id(sidebar, id), label = id)
   }
-  foot <- part("(?s)<div class=\"epi-actions\">.*?</div>")
+  foot <- part("(?s)<div class=\"epi-actions\">.*?id=\"bug_report\"")
   expect_match(foot, "id=\"insert_code\"[^>]*>(?s).*Copy Code", perl = TRUE)
-  expect_match(foot, "id=\"bug_report\"", fixed = TRUE)
+  # Download, between them: a menu of the dictionary as PDF and HTML
+  expect_match(foot, paste0("(?s)id=\"insert_code\".*<div class=\"dropup\">.*",
+                            "id=\"dict_download\".*Download.*",
+                            "Dictionary as PDF.*",
+                            "id=\"dict_html\".*Dictionary as HTML"), perl = TRUE)
   # Value labels are shown by default
   expect_match(sidebar, "<input id=\"show_values\"[^>]* checked")
   # Above the columns' table: buttons that expand and collapse the value

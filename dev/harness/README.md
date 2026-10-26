@@ -24,7 +24,8 @@ The harness shows that the apps and the test code work on synthetic data. It can
 | `fake_abs.R` | `fake_fetch_json(url)` answers the ABS boundary requests with boxes around Canberra, coded as in `fake_episerver.R`. |
 | `run_app.R` | Installs the working tree into a temporary library, starts an app through its real background launcher with the fakes swapped in, and runs a Playwright script against it. |
 | `dsr_calculator.js` | Baseline checks of the DSR Calculator: layout, section headings, information buttons, scrolling and resizing the sidebar, hover, Calculate, the three tables and Copy table with its notification, Copy Code, the problem report, the top bar, Explore (its settings panel, toolbars, the Download menu and its four files, and state level), Help, and the page once the app stops. |
-| `episerver_browser.js` | Baseline checks of the Dataset Browser: layout, section headings, spacing, information buttons, the Table list with its dataset labels and search, where each table's labels come from, the description and columns, fitting the window, value labels, choosing rows, hover, Copy Code with its notification, a label table chosen, another schema and database, Help, the problem report, and the page once the app stops. |
+| `episerver_browser.js` | Baseline checks of the Dataset Browser: layout, section headings, spacing, information buttons, the Table list with its dataset labels and search, where each table's labels come from, the description and columns, fitting the window, value labels, choosing rows, hover, Copy Code with its notification, a label table chosen, the Download menu and the dictionary files it gives, Dictionaries of all tables with its folder list, written to a folder, another schema and database, Help, the problem report, and the page once the app stops. |
+| `fake_quarto/quarto` | Stands in for the Quarto in RStudio, which cloud sessions lack, for `quarto typst compile`, with pip's `typst` package at a 0.13 version. Put its folder first on the PATH to make the dictionaries' PDFs (see Running). |
 | `fake_live.R` | `fake(sql)` answers every query in `test-episerver_dsr_live.R`. Diagnosis conditions are applied to synthetic coded records. It passes the queries of `test-episerver_browse_live.R` to `fake_browse_episerver()`. |
 | `dryrun_live.R` | Runs the live tests against `fake_live.R`. With `--without-dataproperties`, the fake `Analysis` has no `ref.DataProperties`, as before the label table is created. |
 
@@ -42,6 +43,7 @@ Rscript dev/harness/dryrun_live.R --without-dataproperties
 - The browser scripts print one line per check, in the form `LABEL: value`. They save screenshots to the output directory: look at them.
 - A run of `run_app.R` with `dsr_calculator.js` takes about 90 seconds, with the install.
 - In the app's error stream, lines starting `fake ABS:` are the boundary requests the fake answered.
+- Cloud sessions have no Quarto, so the dictionaries' PDF item is disabled. To make the PDFs, run `pip install "typst>=0.13,<0.14"` and put `dev/harness/fake_quarto` first on the PATH: `PATH="$PWD/dev/harness/fake_quarto:$PATH" Rscript dev/harness/run_app.R ...`. The same PATH lets the offline test that compiles a PDF run rather than skip. Render the pages with the same package (`typst.compile(..., format="png")`) to look at them.
 
 These were the results when the harness was added (pull request #6):
 
@@ -102,6 +104,16 @@ Plan pull request 2 (`dev/notes/dataset-browser.md`) added `test-episerver_getla
 
 The launcher fix (`dev/notes/shared-apps.md`, background process) starts each app in one process, without processx's supervisor. The results of both scripts and of the dry run were unchanged. The supervisor runs in cloud sessions, so the harness never showed the fault it fixed. To see it with an older launcher, block the supervisor before launching, with `utils::assignInNamespace("supervisor_watch_pid", function(pid) stop("system error 1260"), "processx")`, and start R with a large heap (`R_NSIZE=20000000 R_VSIZE=1500M`), so that garbage collection does not run during the launch; then call `gc()` and check whether the app's port is still open.
 
+Plan pull request 3, the full dictionaries (`dev/notes/dictionaries.md`), added the Download menu to the browser and `test-episerver_dictionary_live.R`. `episerver_browser.js` opens the menu and downloads the dictionary; the calculator's results were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, foot and Help | The foot holds `insert_code`, `dict_download` and `bug_report`; Help has 6 sections, Dictionary before Problems. Otherwise unchanged. |
+| `episerver_browser.js`, Download | The menu opens upwards, with "Dictionary as PDF (needs Quarto)", disabled, "Dictionary as HTML" and "Dictionaries of all tables…". `APC_dictionary.html` downloads; opened alone it is headed "Admitted patient care", with "Labels from ref.DataProperties.", 43 rows, "1 of 43 columns" when searched for "female", and no requests for other files. |
+| `episerver_browser.js`, Dictionaries of all tables | The dialog offers the schema `Analysis.dbo`, chosen, and the whole database; HTML, chosen, and PDF, disabled; the folder `dictionaries` in the app's working directory, which does not exist, so the folder list notes that it will be made and lists the working directory's folders. The folder list (`picker` in the output directory, holding `2024`, `Alpha/Inner`, `beta` and `.hidden`) shows Up, Home and Working directory, then 2024, Alpha and beta, in a list 220px high at most that scrolls (`overflow-y: auto`, `overscroll-behavior: contain`), with rows 31px tall. A click on Alpha puts `…/picker/Alpha` in the box and lists Inner; Up, then 2024, gives `…/picker/2024`; `…/picker/new/folder` lists picker's folders with the note. Writing the whole database to the output directory's `bulk` folder gives "Wrote 7 dictionaries, as HTML, to …/bulk." and "7 of the 9 tables and views of Analysis have labels; the others were left out.", with the HTML files of `dbo` (ACTGHSMYX, APC, Births, Deaths, ED, vw_ED) and `stage` (APC). |
+| The same, with `dev/harness/fake_quarto` first on the PATH | The PDF item is enabled, and `APC_dictionary.pdf` downloads, starting `%PDF-`. In Dictionaries of all tables, PDF is enabled and chosen, and the 7 dictionaries are written "as HTML and PDF", one PDF beside each HTML file. |
+| `dryrun_live.R` | 25 tests, 316 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 25 tests, 312 expectations, 0 failed, 4 skipped. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.
@@ -143,6 +155,7 @@ The launcher fix (`dev/notes/shared-apps.md`, background process) starts each ap
 - **DataTables.** With `scrollX`, the header is drawn in a separate table, so `thead` matches twice. Read rows with `#<output id> tbody tr`, and scroll with `#<output id> .dataTables_scrollBody`.
 - **Waiting for Shiny.** A choice can take two round trips, as when the Table list is updated and then the table read. Wait until the page has had no `shiny-busy` class for a while, as `settle()` in `episerver_browser.js` does, rather than for its first absence.
 - **Single selects.** selectize ignores typing in a single select while it holds an item: press Backspace first, as an analyst would. A select's label has the ID `<id>-label`; its `for` changes once selectize starts.
+- **Paths on Windows.** `dirname()` and `normalizePath(winslash = "/")` give forward slashes, while `tempdir()` and `file.path()` on it keep backslashes, so a test comparing paths normalises both sides. An offline test that passed in a cloud session failed on the maintainer's machine for this reason.
 - **Download menu.** Choosing a file closes the menu, so open it (`#ex_download`) again before the next. Shiny marks a download link `disabled` until it has its address; the script reports it.
 - **ggiraph.** Map areas and funnel points are SVG elements whose `data-id` is the area code. Tooltips are separate `div`s shown on hover; find them by their text.
   - A toolbar shows only while the pointer is over its plot; hover first. Its buttons have the class `ggiraph-toolbar-icon-<key>`, such as `ggiraph-toolbar-icon-zoom_reset`, and their tooltip as `title`.
