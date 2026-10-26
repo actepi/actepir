@@ -3,9 +3,9 @@
 .Rhistory
 .RData
 .Ruserdata
-.xlsx
-.xls
-.csv
+*.xlsx
+*.xls
+*.csv
 dev/*
 !dev/reference/
 !dev/notes/
