@@ -6,7 +6,7 @@
 
 | Pull request | Content |
 |---|---|
-| 1 (open, waiting on the maintainer's test against EpiServer) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. Offline, `testServer()` and live tests, and the harness. |
+| #13, plan pull request 1 (open, waiting on the maintainer's test against EpiServer) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. Offline, `testServer()` and live tests, and the harness. |
 
 Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. Pull requests 2 to 6 have not started. After pull request 1 is merged, restart the session branch from `main` for pull request 2.
 

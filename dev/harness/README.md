@@ -81,7 +81,7 @@ Pull request #9 added checks of the sidebar, the notification and the problem re
 | `episerver_browser.js` | Unchanged results. The labels, boxes and gaps take the shared spacing (`.epi_app_style()`): 15px regular labels, 14px boxes, 10px gaps. |
 | `dryrun_live.R` | Unchanged: no query changed. |
 
-Pull request 1 of the Dataset Browser's plan (`dev/notes/dataset-browser.md`) rebuilt the browser as a bslib app, and moved its fake to `tests/testthat/helper-browse.R`. `episerver_browser.js` was rewritten; the DSR Calculator's results above were unchanged. The new results were:
+Pull request #13, the first of the Dataset Browser's plan (`dev/notes/dataset-browser.md`), rebuilt the browser as a bslib app, and moved its fake to `tests/testthat/helper-browse.R`. `episerver_browser.js` was rewritten; the DSR Calculator's results above were unchanged. The new results were:
 
 | Run | Results |
 |---|---|
