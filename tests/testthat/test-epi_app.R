@@ -340,6 +340,44 @@ test_that("each app has its own add-in and opens in the web browser", {
 
 })
 
+test_that("a background app runs in one unsupervised process, reused while it serves", {
+
+  # A server on a free port stands in for the app's
+  port <- httpuv::randomPort()
+  server <- httpuv::startServer("127.0.0.1", port, list())
+  withr::defer(httpuv::stopServer(server))
+  withr::defer(suppressWarnings(rm(list = c("test_proc", "test_url", "test_port"),
+                                   envir = .actepir_env)))
+  withr::local_options(browser = function(url) invisible(NULL))
+
+  # Each process started, by whether it was supervised. As under AppLocker,
+  # a supervised start fails after its process has started.
+  spawned <- logical()
+  local_mocked_bindings(r_bg = function(func, args, ..., supervise = FALSE) {
+    spawned <<- c(spawned, supervise)
+    writeLines(as.character(port), args$portfile)
+    if (supervise) stop("system error 1260")
+    list(is_alive = function() TRUE, kill = function() invisible(TRUE))
+  }, .package = "callr")
+  run <- function() {
+    capture_messages(.run_app("test", "Test app", "test_app",
+                              "episerver_browse_app"))
+  }
+
+  msgs <- run()
+  expect_identical(spawned, FALSE)
+  expect_match(msgs[1], paste0("Test app running in a background process at ",
+                               "http://127.0.0.1:", port), fixed = TRUE)
+  expect_no_match(paste(msgs, collapse = ""), "supervision")
+  expect_equal(.actepir_env$test_port, port)
+
+  # Opened again while it serves, the app is reused
+  msgs <- run()
+  expect_length(spawned, 1)
+  expect_match(msgs, "Test app is already running", fixed = TRUE)
+
+})
+
 test_that("selected table rows are Lavender with Nightshade text and an Iris bar", {
 
   css <- as.character(.epi_app_style())

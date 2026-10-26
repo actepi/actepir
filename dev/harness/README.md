@@ -100,6 +100,8 @@ Plan pull request 2 (`dev/notes/dataset-browser.md`) added `test-episerver_getla
 | `episerver_browser.js`, labels | With ref.DataLabels chosen, Copy Code gives `actepir::collect_withlabels(lbl_schema = "ref", lbl_table = "DataLabels")`. |
 | `dryrun_live.R` | 22 tests, 285 expectations, 0 failed, 3 skipped (the three tests that need an ODBC driver). With `--without-dataproperties`, 22 tests, 281 expectations, 0 failed, 3 skipped. |
 
+The launcher fix (`dev/notes/shared-apps.md`, background process) starts each app in one process, without processx's supervisor. The results of both scripts and of the dry run were unchanged. The supervisor runs in cloud sessions, so the harness never showed the fault it fixed. To see it with an older launcher, block the supervisor before launching, with `utils::assignInNamespace("supervisor_watch_pid", function(pid) stop("system error 1260"), "processx")`, and start R with a large heap (`R_NSIZE=20000000 R_VSIZE=1500M`), so that garbage collection does not run during the launch; then call `gc()` and check whether the app's port is still open.
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.
