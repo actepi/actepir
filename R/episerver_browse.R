@@ -13,8 +13,9 @@
 #' console stays free while the browser is open. It opens in the system web
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
-#' open and close, and the columns, the dataset notes and the help in tabs
-#' on the top bar. The
+#' open and close, and the tables of the schema, the columns, the dataset
+#' notes, a finder of columns in the database and the help in tabs on the
+#' top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -87,6 +88,20 @@
 #' The *Collection* tab holds the table's description (its dataset label),
 #' its notes and its linked tables, apart from the columns, as some tables
 #' have many notes.
+#'
+#' **Tables and Var Finder**
+#'
+#' The *Tables* tab lists every table and view of the schema with its
+#' description, type, approximate rows (from SQL Server's statistics; views
+#' have none), number of columns, the columns without a variable label, the
+#' label table its labels come from, and when it was made and when its
+#' structure (not its data) last changed. Click a table to choose it.
+#'
+#' The *Var Finder* tab finds the columns of the database, in every schema,
+#' whose names, variable labels or value labels hold the text typed, in the
+#' labels the browser reads: with *Labels table* set to Automatic, only in
+#' the label table each table's labels come from. Click a column to open its
+#' table.
 #'
 #' **Code**
 #'
@@ -268,6 +283,125 @@ episerver_browse_stop <- function() {
   )
 }
 
+# When the tables and views of schema in db were made and last altered, and
+# their approximate rows: TableName, Created, Altered (when the object's
+# definition last changed, not its data) and ApproxRows, the rows of the
+# heap or clustered index in SQL Server's partition statistics, so NULL for
+# a view. The rows are cast to float, as odbc reads bigint as integer64.
+#' @noRd
+.browse_sql_details <- function(db, schema) {
+  sprintf(
+    "SELECT o.name AS TableName, o.create_date AS Created,
+            o.modify_date AS Altered,
+            (SELECT CAST(SUM(p.rows) AS float)
+             FROM %1$s.sys.partitions p
+             WHERE p.object_id = o.object_id
+               AND p.index_id IN (0, 1)) AS ApproxRows
+     FROM %1$s.sys.objects o
+     JOIN %1$s.sys.schemas s ON s.schema_id = o.schema_id
+     WHERE s.name = %2$s
+       AND o.type IN ('U', 'V')",
+    .sql_ident(db), .sql_quote(schema, TRUE)
+  )
+}
+
+# The columns of every table and view of schema in db, by TABLE_NAME
+#' @noRd
+.browse_sql_schema_columns <- function(db, schema) {
+  sprintf(
+    "SELECT TABLE_NAME, COLUMN_NAME
+     FROM %s.INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = %s",
+    .sql_ident(db), .sql_quote(schema, TRUE)
+  )
+}
+
+# For each label table of `sources`, the tables of schema it holds rows for
+# and the columns it gives a variable label: Source (the row number in
+# `sources`), TableName, and ColumnKey, a column with a variable label, in
+# lower case, or NULL on the row that says the table is held. DataLabels
+# tables file rows by table name alone, so theirs are for every schema.
+# Names take the database's collation, so that label tables of different
+# collations can be read together.
+#' @noRd
+.browse_sql_coverage <- function(db, sources, schema) {
+  parts <- vapply(seq_len(nrow(sources)), function(i) {
+    properties <- sources$Layout[i] == "properties"
+    f <- if (properties) {
+      c(table = "TableName", column = "ColumnName", type = "PropertyType",
+        text = "PropertyText")
+    } else {
+      c(table = "Dataset", column = "VarName", type = "LabelType",
+        text = "LabelName")
+    }
+    sprintf(
+      "SELECT DISTINCT %d AS Source,
+         %s COLLATE DATABASE_DEFAULT AS TableName,
+         CASE WHEN %s IN ('VariableLabel', 'Var')
+               AND LTRIM(RTRIM(%s)) <> ''
+              THEN LOWER(LTRIM(RTRIM(%s))) COLLATE DATABASE_DEFAULT
+         END AS ColumnKey
+       FROM %s%s",
+      i, f[["table"]], f[["type"]], f[["text"]], f[["column"]],
+      .sql_ident(db, sources$TABLE_SCHEMA[i], sources$TABLE_NAME[i]),
+      if (properties) {
+        paste0("\n       WHERE TableSchema = ", .sql_quote(schema, TRUE))
+      } else ""
+    )
+  }, character(1))
+  paste(parts, collapse = "\nUNION ALL\n")
+}
+
+# The columns of db whose names hold `term`, in any case: TABLE_SCHEMA,
+# TABLE_NAME and COLUMN_NAME, of tables and views other than label tables,
+# at most 1,000
+#' @noRd
+.browse_sql_search_columns <- function(db, term) {
+  sprintf(
+    "SELECT TOP 1000 c.TABLE_SCHEMA, c.TABLE_NAME, c.COLUMN_NAME
+     FROM %1$s.INFORMATION_SCHEMA.COLUMNS c
+     JOIN %1$s.INFORMATION_SCHEMA.TABLES t
+       ON t.TABLE_SCHEMA = c.TABLE_SCHEMA AND t.TABLE_NAME = c.TABLE_NAME
+     WHERE t.TABLE_TYPE IN ('BASE TABLE', 'VIEW')
+       AND t.TABLE_NAME NOT LIKE '%%DataLabels%%'
+       AND t.TABLE_NAME NOT IN ('DataProperties', 'DataPropertyTables')
+       AND LOWER(c.COLUMN_NAME) LIKE LOWER(%2$s) ESCAPE '\\'
+     ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION",
+    .sql_ident(db), .sql_like(term)
+  )
+}
+
+# The variable labels (types "labels") and value labels ("values") in one
+# label table (a row of `sources`) whose text holds `term`, in any case,
+# with the columns named as in DataProperties; TableSchema is NULL for a
+# DataLabels table. At most 1,000.
+#' @noRd
+.browse_sql_search_labels <- function(db, source, term,
+                                      types = c("labels", "values")) {
+  properties <- source$Layout == "properties"
+  columns <- if (properties) {
+    "TableSchema, TableName, ColumnName, PropertyType, PropertyCode, PropertyText"
+  } else {
+    paste("CAST(NULL AS nvarchar(128)) AS TableSchema, Dataset AS TableName,",
+          "VarName AS ColumnName, LabelType AS PropertyType,",
+          "DataCode AS PropertyCode, LabelName AS PropertyText")
+  }
+  names <- c(if ("labels" %in% types) c("VariableLabel", "Var"),
+             if ("values" %in% types) c("ValueLabel", "Opt"))
+  sprintf(
+    "SELECT TOP 1000 %s
+     FROM %s
+     WHERE %s IN (%s)
+       AND LOWER(%s) LIKE LOWER(%s) ESCAPE '\\'",
+    columns,
+    .sql_ident(db, source$TABLE_SCHEMA, source$TABLE_NAME),
+    if (properties) "PropertyType" else "LabelType",
+    paste(.sql_quote(names), collapse = ", "),
+    if (properties) "PropertyText" else "LabelName",
+    .sql_like(term)
+  )
+}
+
 
 # ── Lists, columns and code ─────────────────────────────────────────────────
 
@@ -410,6 +544,206 @@ episerver_browse_stop <- function() {
     },
     "."
   )
+}
+
+# ── Tables and search ───────────────────────────────────────────────────────
+
+# The tables and views of database db, or of the schemas given: schema,
+# table and type (BASE TABLE or VIEW), label tables left out
+# (.browse_sql_tables())
+#' @noRd
+.browse_all_tables <- function(query, db, schemas = NULL) {
+  if (is.null(schemas)) schemas <- query(.browse_sql_schemas(db))$TABLE_SCHEMA
+  out <- lapply(schemas, function(s) {
+    t <- query(.browse_sql_tables(db, s))
+    data.frame(schema = rep(s, nrow(t)), table = as.character(t$TABLE_NAME),
+               type = as.character(t$TABLE_TYPE), stringsAsFactors = FALSE)
+  })
+  do.call(rbind, c(out, list(data.frame(schema = character(),
+                                        table = character(),
+                                        type = character(),
+                                        stringsAsFactors = FALSE))))
+}
+
+# Dates as yyyy-mm-dd, from date-times or text; "" where there is none
+#' @noRd
+.browse_date <- function(x) {
+  if (is.null(x)) return(character())
+  out <- if (inherits(x, "POSIXt")) format(x, "%Y-%m-%d") else {
+    substr(as.character(x), 1, 10)
+  }
+  out[is.na(out)] <- ""
+  out
+}
+
+# The Tables tab's table: for each table and view of `tables`
+# (.browse_sql_tables()), its dataset label (`labels`, from
+# .lbl_dataset_labels()), type, approximate rows and the dates it was made
+# and last altered (`details`, .browse_sql_details()), its number of columns
+# (`columns`, .browse_sql_schema_columns()), and, from `coverage`
+# (.browse_sql_coverage() of the label tables `sources`), the label table
+# its labels come from, the first that holds rows for it, and how many of
+# its columns have no variable label there. Names are matched in lower
+# case, as SQL Server matches them.
+#' @noRd
+.browse_tables_overview <- function(tables, labels, details, columns,
+                                    coverage = NULL, sources = NULL) {
+  name <- as.character(tables$TABLE_NAME)
+  key  <- tolower(name)
+  label <- unname(labels[key])
+  d <- details[match(key, tolower(details$TableName)), , drop = FALSE]
+  cols_of <- split(tolower(trimws(as.character(columns$COLUMN_NAME))),
+                   tolower(as.character(columns$TABLE_NAME)))
+  n_cols <- vapply(key, function(k) length(cols_of[[k]]), integer(1),
+                   USE.NAMES = FALSE)
+  from <- rep("", length(key))
+  without <- n_cols
+  if (!is.null(coverage) && nrow(coverage) && !is.null(sources) &&
+      nrow(sources)) {
+    held_by <- tolower(trimws(as.character(coverage$TableName)))
+    for (i in seq_along(key)) {
+      held <- coverage[held_by == key[i], , drop = FALSE]
+      if (!nrow(held)) next
+      first <- min(held$Source)
+      from[i] <- paste0(sources$TABLE_SCHEMA[first], ".",
+                        sources$TABLE_NAME[first])
+      labelled <- held$ColumnKey[held$Source == first & !is.na(held$ColumnKey)]
+      without[i] <- sum(!cols_of[[key[i]]] %in% labelled)
+    }
+  }
+  data.frame(
+    Table               = name,
+    Description         = ifelse(is.na(label), "", label),
+    Type                = ifelse(tables$TABLE_TYPE == "VIEW", "View", "Table"),
+    Rows                = as.numeric(d$ApproxRows),
+    Columns             = n_cols,
+    `Without var labels` = without,
+    `Labels from`       = from,
+    Created             = .browse_date(d$Created),
+    `Structure changed` = .browse_date(d$Altered),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+}
+
+# The columns of database db that `term` finds, in any case: by their name
+# ("names" in `look_in`), variable label ("labels") or value labels
+# ("values"), from the label tables `sources`. With `auto`, a label counts
+# only when its table takes its labels from that label table, the first
+# that holds rows for it, so that the search finds the labels the browser
+# shows; otherwise `sources` is the one label table chosen. Labels in a
+# DataLabels table are filed by table name alone, so they count for the
+# tables of that name in every schema. Returns the columns found (results:
+# Schema, Table, Column, the variable label and the value labels that
+# matched, at most three of them shown) and whether a query stopped at its
+# limit of 1,000 rows (capped).
+#' @noRd
+.browse_search <- function(query, db, term, look_in, sources, auto = TRUE) {
+  limit <- 1000
+  capped <- FALSE
+  tables <- .browse_all_tables(query, db)
+  in_db <- paste(tolower(tables$schema), tolower(tables$table), sep = ".")
+  empty <- data.frame(schema = character(), table = character(),
+                      column = character(), kind = character(),
+                      code = character(), text = character(),
+                      stringsAsFactors = FALSE)
+  found <- list(empty)
+
+  if ("names" %in% look_in) {
+    n <- query(.browse_sql_search_columns(db, term))
+    capped <- capped || nrow(n) >= limit
+    n <- n[paste(tolower(n$TABLE_SCHEMA), tolower(n$TABLE_NAME), sep = ".") %in%
+             in_db, , drop = FALSE]
+    found$names <- data.frame(
+      schema = as.character(n$TABLE_SCHEMA), table = as.character(n$TABLE_NAME),
+      column = as.character(n$COLUMN_NAME), kind = rep("name", nrow(n)),
+      code = rep("", nrow(n)), text = rep("", nrow(n)),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  types <- intersect(c("labels", "values"), look_in)
+  if (length(types) && !is.null(sources) && nrow(sources)) {
+    text <- function(x) {
+      x <- trimws(as.character(x))
+      x[is.na(x)] <- ""
+      x
+    }
+    labs <- do.call(rbind, lapply(seq_len(nrow(sources)), function(i) {
+      r <- query(.browse_sql_search_labels(db, sources[i, , drop = FALSE],
+                                           term, types))
+      capped <<- capped || nrow(r) >= limit
+      type <- unname(.lbl_types[tolower(text(r$PropertyType))])
+      out <- data.frame(
+        source = rep(i, nrow(r)), lschema = text(r$TableSchema),
+        ltable = text(r$TableName), column = text(r$ColumnName),
+        kind = ifelse(type %in% "ValueLabel", "value", "label"),
+        code = text(r$PropertyCode), text = text(r$PropertyText),
+        stringsAsFactors = FALSE
+      )
+      out[type %in% c("VariableLabel", "ValueLabel") & nzchar(out$text) &
+            nzchar(out$column), , drop = FALSE]
+    }))
+    if (!is.null(labs) && nrow(labs)) {
+      # Each label to the tables it is for: by schema and name, or by name
+      # alone for a DataLabels table, whose rows have no schema
+      to <- lapply(seq_len(nrow(labs)), function(j) {
+        which(tolower(tables$table) == tolower(labs$ltable[j]) &
+                (!nzchar(labs$lschema[j]) |
+                   tolower(tables$schema) == tolower(labs$lschema[j])))
+      })
+      j <- rep(seq_len(nrow(labs)), lengths(to))
+      t <- unlist(to)
+      m <- data.frame(schema = tables$schema[t], table = tables$table[t],
+                      labs[j, c("column", "kind", "code", "text", "source")],
+                      stringsAsFactors = FALSE)
+      if (auto && nrow(sources) > 1 && nrow(m)) {
+        # The first label table that holds rows for each table, from the
+        # query that gives the Table list its dataset labels
+        first <- unlist(lapply(unique(m$schema), function(s) {
+          r <- query(.lbl_sql_dataset_labels(db, sources, s))
+          if (!nrow(r)) return(NULL)
+          tapply(r$Source, paste(tolower(s), tolower(text(r$TableName)),
+                                 sep = "."), min)
+        }))
+        f <- first[paste(tolower(m$schema), tolower(m$table), sep = ".")]
+        f[is.na(f)] <- Inf
+        m <- m[m$source <= f, , drop = FALSE]
+      }
+      found$labels <- m[names(empty)]
+    }
+  }
+
+  all <- do.call(rbind, found)
+  results <- data.frame(Schema = character(), Table = character(),
+                        Column = character(), `Variable label` = character(),
+                        `Value labels` = character(), check.names = FALSE,
+                        stringsAsFactors = FALSE)
+  if (nrow(all)) {
+    key <- paste(tolower(all$schema), tolower(all$table), tolower(all$column),
+                 sep = "\r")
+    results <- do.call(rbind, lapply(split(all, factor(key, unique(key))),
+                                     function(a) {
+      named <- a$column[a$kind == "name"]
+      vals <- a[a$kind == "value", , drop = FALSE]
+      vals <- vals[!duplicated(vals$code), , drop = FALSE]
+      vals <- vals[.lbl_code_order(vals$code), , drop = FALSE]
+      shown <- utils::head(vals, 3)
+      data.frame(
+        Schema = a$schema[1], Table = a$table[1],
+        Column = if (length(named)) named[1] else a$column[1],
+        `Variable label` = c(a$text[a$kind == "label"], "")[1],
+        `Value labels` = if (nrow(vals)) {
+          paste0(paste0(shown$code, " = ", shown$text, collapse = "; "),
+                 if (nrow(vals) > 3) paste0("; and ", nrow(vals) - 3, " more"))
+        } else "",
+        check.names = FALSE, stringsAsFactors = FALSE
+      )
+    }))
+    results <- results[order(tolower(results$Schema), tolower(results$Table),
+                             tolower(results$Column)), , drop = FALSE]
+    rownames(results) <- NULL
+  }
+  list(results = results, capped = capped)
 }
 
 # R code that reads table schema.table of db: a pipe from
@@ -688,6 +1022,33 @@ episerver_browse_stop <- function() {
       "with an underscore, and the label tables are not listed."
     ),
 
+    shiny::h5("Tables"),
+    shiny::p(
+      "The Tables tab lists every table and view of the schema with its ",
+      "description (its dataset label), its type, its rows, its number of ",
+      "columns, how many of them have no variable label, the label table its ",
+      "labels come from, and when it was made and when its structure last ",
+      "changed. Click a table to choose it."
+    ),
+    shiny::p(
+      "Rows are approximate: SQL Server's count from its statistics, which ",
+      "views do not have. Structure changed is when the table's definition, ",
+      "such as its columns, last changed, not when its data changed. With ",
+      "Labels table set to a label table, the label columns describe that ",
+      "label table alone. The tab's details are read only while it is shown."
+    ),
+
+    shiny::h5("Var Finder"),
+    shiny::p(
+      "The Var Finder tab finds the columns of the database, in every schema, ",
+      "whose names, variable labels or value labels hold the text typed, in ",
+      "any case. Look in chooses where to look. Labels are searched as the ",
+      "browser reads them: with Labels table set to Automatic, a table's ",
+      "labels count only in the label table its labels come from; with a ",
+      "label table chosen, in that one alone. At most 1,000 matches of each ",
+      "kind are read. Click a column to open its table on the Columns tab."
+    ),
+
     shiny::h5("Labels"),
     shiny::p(
       "A table's labels are read from the label tables of its database, ",
@@ -950,25 +1311,46 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # The columns' table fits the window below its top, so that it needs
-      # no page scrolling: a script sets --browse-table-height, which caps
-      # its scrolling body (scrollY)
+      # The tables of the Tables, Columns and Var Finder tabs fit the window
+      # below their top, so that they need no page scrolling: a script sets
+      # --browse-table-height on each, which caps its scrolling body
+      # (scrollY)
       shiny::tags$script(shiny::HTML("
         (function() {
-          function fit() {
-            var body = document.querySelector('#col_table .dataTables_scrollBody');
+          function fit(id) {
+            var body = document.querySelector('#' + id + ' .dataTables_scrollBody');
             if (!body || !body.offsetParent) return;
             var top = body.getBoundingClientRect().top;
             for (var el = body.parentElement; el; el = el.parentElement) {
               top += el.scrollTop;
             }
             var room = Math.max(window.innerHeight - top - 16, 200);
-            document.getElementById('col_table')
+            document.getElementById(id)
               .style.setProperty('--browse-table-height', room + 'px');
           }
-          function soon() { setTimeout(fit, 0); }
+          function soon() {
+            setTimeout(function() {
+              ['col_table', 'tables_table', 'search_table'].forEach(fit);
+            }, 0);
+          }
           $(window).on('resize', soon);
           $(document).on('shown.bs.tab shiny:value init.dt', soon);
+        })();
+      ")),
+
+      # The Var Finder tab's button, or Enter in its box, sends the box's
+      # text as input$search_run, as the box's own value reaches the server
+      # only once typing pauses
+      shiny::tags$script(shiny::HTML("
+        (function() {
+          function run() {
+            Shiny.setInputValue('search_run', $('#search_text').val(),
+                                {priority: 'event'});
+          }
+          $(document).on('click', '#search_go', run);
+          $(document).on('keydown', '#search_text', function(e) {
+            if (e.key === 'Enter') run();
+          });
         })();
       ")),
 
@@ -1081,6 +1463,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     ),
 
+    # Every table and view of the schema, with its rows, dates and labels.
+    # A click on one chooses it. The browser opens on this tab, the first.
+    bslib::nav_panel(
+      "Tables", value = "tables",
+      shiny::div(
+        class = "options-row",
+        shiny::span(class = "browse-chosen",
+                    shiny::textOutput("tables_note", inline = TRUE))
+      ),
+      DT::dataTableOutput("tables_table")
+    ),
+
     # The columns, with buttons for their value labels and the rows chosen
     bslib::nav_panel(
       "Columns", value = "columns",
@@ -1109,6 +1503,37 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     # columns, as some tables have many notes
     bslib::nav_panel("Collection", value = "collection",
                      shiny::uiOutput("about")),
+
+    # Var Finder: the columns of the database that a name, label or value
+    # label finds. A click on one opens its table.
+    bslib::nav_panel(
+      "Var Finder", value = "search",
+      .epi_tab_settings(
+        "search_settings",
+        shiny::tagList(
+          shiny::textInput("search_text", "Find", width = "100%"),
+          shiny::checkboxGroupInput(
+            "search_in", "Look in",
+            choices  = c("Column names" = "names",
+                         "Variable labels" = "labels",
+                         "Value labels" = "values"),
+            selected = c("names", "labels", "values"), width = "100%"
+          ),
+          shiny::div(
+            class = "epi-stack",
+            shiny::tags$button(id = "search_go", type = "button",
+                               class = "btn btn-sm btn-primary",
+                               shiny::icon("magnifying-glass"), "Search")
+          )
+        ),
+        shiny::div(
+          class = "options-row",
+          shiny::span(class = "browse-chosen",
+                      shiny::textOutput("search_note", inline = TRUE))
+        ),
+        DT::dataTableOutput("search_table")
+      )
+    ),
 
     bslib::nav_panel("Help", value = "help", .browse_help()),
 
@@ -1183,6 +1608,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       list(labels = .lbl_dataset_labels(r$data), error = r$error)
     })
 
+    # A table to choose in another schema once its list arrives, as a click
+    # in the Var Finder tab asks: list(schema, table)
+    wanted <- shiny::reactiveVal(NULL)
+
     # The table chosen stays chosen while it is in the list; otherwise the
     # first table, or the first view
     shiny::observe({
@@ -1190,6 +1619,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       choices <- .browse_table_choices(t$data, dataset_labels()$labels)
       names <- unname(unlist(choices))
       current <- shiny::isolate(input$table)
+      w <- shiny::isolate(wanted())
+      if (!is.null(w) && identical(w$schema, shiny::isolate(input$schema))) {
+        wanted(NULL)
+        if (w$table %in% names) current <- w$table
+      }
       selected <- if (length(current) && current %in% names) current else names[1]
       shiny::updateSelectizeInput(session, "table", choices = choices,
                                   selected = if (length(names)) selected else character())
@@ -1391,6 +1825,213 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         return(invisible(NULL))
       }
       .epi_send_code(session, table_code(ch))
+    })
+
+    # Chooses table `table` of `schema` in the sidebar, through the Table
+    # list once the schema's list arrives when the schema changes
+    open_table <- function(schema, table) {
+      if (identical(schema, input$schema)) {
+        shiny::updateSelectizeInput(session, "table", selected = table)
+      } else {
+        wanted(list(schema = schema, table = table))
+        shiny::updateSelectInput(session, "schema", selected = schema)
+      }
+    }
+
+    # ── The Tables tab ─────────────────────────────────────────────────────
+    # Every table and view of the schema, with when it was made and last
+    # altered, its rows, its columns and its labels (.browse_tables_overview()).
+    # The queries run only while the tab is shown.
+    overview <- shiny::reactive({
+      t <- tables()
+      shiny::req(is.null(t$error))
+      db <- input$db
+      schema <- input$schema
+      src <- active()
+      details <- read(.browse_sql_details(db, schema))
+      cols <- read(.browse_sql_schema_columns(db, schema))
+      coverage <- if (nrow(src)) read(.browse_sql_coverage(db, src, schema))
+      list(
+        table = .browse_tables_overview(
+          t$data, dataset_labels()$labels,
+          or(details$data, data.frame(TableName = character(),
+                                      Created = character(),
+                                      Altered = character(),
+                                      ApproxRows = numeric())),
+          or(cols$data, data.frame(TABLE_NAME = character(),
+                                   COLUMN_NAME = character())),
+          coverage$data, src
+        ),
+        errors = c(
+          if (!is.null(details$error)) {
+            paste("The rows and dates could not be read:", details$error)
+          },
+          if (!is.null(cols$error)) {
+            paste("The columns could not be read:", cols$error)
+          },
+          if (!is.null(coverage$error)) {
+            paste("The label tables could not be read:", coverage$error)
+          }
+        )
+      )
+    })
+
+    output$tables_note <- shiny::renderText({
+      o <- overview()
+      n <- nrow(o$table)
+      where <- paste0(input$db, ".", input$schema)
+      paste(c(
+        if (n) {
+          paste0(n, " table", if (n != 1) "s", " and view", if (n != 1) "s",
+                 " in ", where, ". Click one to choose it.")
+        } else {
+          paste0(where, " has no tables or views that you can read.")
+        },
+        o$errors
+      ), collapse = " ")
+    })
+
+    output$tables_table <- DT::renderDataTable({
+      d <- overview()$table
+      # Each heading's notes, shown when the pointer is over it
+      notes <- c(
+        Description = "The table's dataset label",
+        Rows = paste("Approximate, from SQL Server's statistics; views have",
+                     "none"),
+        `Without var labels` = paste("Columns without a variable label in the",
+                                 "label table that the labels come from"),
+        `Labels from` = paste("The label table that the table's labels come",
+                              "from, as the bar above the columns says"),
+        Created = "When the table or view was made",
+        `Structure changed` = paste("When its definition, such as its",
+                                    "columns, last changed; not when its",
+                                    "data changed")
+      )
+      heads <- htmltools::tags$table(htmltools::tags$thead(htmltools::tags$tr(
+        lapply(names(d), function(n) {
+          htmltools::tags$th(n, title = if (n %in% names(notes)) notes[[n]])
+        })
+      )))
+      row <- match(shiny::isolate(input$table), d$Table)
+      DT::formatRound(
+        DT::datatable(
+          d,
+          container = heads,
+          options   = list(
+            paging         = FALSE,
+            dom            = "ft",
+            scrollY        = "var(--browse-table-height, 50vh)",
+            scrollCollapse = TRUE,
+            autoWidth      = FALSE
+          ),
+          rownames  = FALSE,
+          selection = list(mode = "single", target = "row",
+                           selected = if (!is.na(row)) row),
+          class     = "compact stripe hover",
+          style     = "bootstrap5"
+        ),
+        "Rows", digits = 0
+      )
+    })
+
+    # A click on a table chooses it; the table chosen is marked in the tab
+    tables_proxy <- DT::dataTableProxy("tables_table")
+    shiny::observeEvent(input$tables_table_rows_selected, {
+      table <- overview()$table$Table[input$tables_table_rows_selected]
+      if (length(table) && !identical(table, input$table)) {
+        open_table(input$schema, table)
+      }
+    })
+    shiny::observe({
+      shiny::req(identical(input$view, "tables"), input$table)
+      row <- match(input$table, overview()$table$Table)
+      if (!is.na(row) &&
+          !identical(as.integer(shiny::isolate(input$tables_table_rows_selected)),
+                     row)) {
+        DT::selectRows(tables_proxy, row)
+      }
+    })
+
+    # ── The Var Finder tab ─────────────────────────────────────────────────
+    # The columns of the database that the text finds (.browse_search()),
+    # from the label tables looked in. The results belong to one database
+    # and label table choice, so they are cleared when either changes.
+    found <- shiny::reactiveVal(NULL)
+    run_search <- function(text) {
+      term <- trimws(or(text, ""))
+      problem <- if (!nzchar(term)) {
+        "Type a name, or a word of a label, to find."
+      } else if (!length(input$search_in)) {
+        "Choose where to look."
+      }
+      if (!is.null(problem)) {
+        shiny::showNotification(problem, duration = 6, type = "warning")
+        return(invisible(NULL))
+      }
+      db <- input$db
+      r <- tryCatch(
+        shiny::withProgress(message = "Searching", value = 0.5, {
+          .browse_search(query, db, term, input$search_in, active(), auto())
+        }),
+        error = function(e) list(error = conditionMessage(e))
+      )
+      found(c(r, list(db = db, term = term)))
+    }
+    shiny::observeEvent(input$search_run, run_search(input$search_run))
+    shiny::observeEvent(list(input$db, input$labels_source), found(NULL),
+                        ignoreInit = TRUE)
+
+    output$search_note <- shiny::renderText({
+      f <- found()
+      if (is.null(f)) {
+        return(paste0("Finds the columns of ", or(input$db, "the database"),
+                      ", in every schema, whose names, variable labels or ",
+                      "value labels hold the text typed, in the labels the ",
+                      "browser reads. Click a column to open its table."))
+      }
+      if (!is.null(f$error)) return(paste("The search failed:", f$error))
+      n <- nrow(f$results)
+      paste0(
+        if (n) {
+          paste0(n, " column", if (n != 1) "s", " of ", f$db,
+                 if (n != 1) " match \"" else " matches \"", f$term, "\".")
+        } else {
+          paste0("No column of ", f$db, " matches \"", f$term, "\".")
+        },
+        if (isTRUE(f$capped)) {
+          paste(" Only the first 1,000 matches of each kind were read; more",
+                "text finds fewer.")
+        },
+        if (n) " Click a column to open its table."
+      )
+    })
+
+    output$search_table <- DT::renderDataTable({
+      f <- found()
+      shiny::req(f, is.null(f$error))
+      # No search box of its own beside the tab's
+      DT::datatable(
+        f$results,
+        options   = list(
+          paging         = FALSE,
+          dom            = "t",
+          scrollY        = "var(--browse-table-height, 50vh)",
+          scrollCollapse = TRUE,
+          autoWidth      = FALSE
+        ),
+        rownames  = FALSE,
+        selection = list(mode = "single", target = "row"),
+        class     = "compact stripe hover",
+        style     = "bootstrap5"
+      )
+    })
+
+    # A click on a column opens its table on the Columns tab
+    shiny::observeEvent(input$search_table_rows_selected, {
+      r <- found()$results[input$search_table_rows_selected, , drop = FALSE]
+      shiny::req(nrow(r) == 1)
+      open_table(r$Schema, r$Table)
+      bslib::nav_select("view", "columns")
     })
 
     # ── Dictionary ─────────────────────────────────────────────────────────

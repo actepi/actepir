@@ -63,8 +63,9 @@ By default the app runs in a background R process using
 console stays free while the browser is open. It opens in the system web
 browser and can be opened from the RStudio Addins menu (\emph{Open Dataset
 Browser}). The settings are in a sidebar on the left, in sections that
-open and close, and the columns, the dataset notes and the help in tabs
-on the top bar. The
+open and close, and the tables of the schema, the columns, the dataset
+notes, a finder of columns in the database and the help in tabs on the
+top bar. The
 information button beside a setting shows notes on it, and the bug button
 at the foot of the sidebar prepares a report of a problem to send to
 \email{healthinfo@act.gov.au}.
@@ -123,6 +124,20 @@ labels, while value labels are shown, and clear the rows chosen.
 The \emph{Collection} tab holds the table's description (its dataset label),
 its notes and its linked tables, apart from the columns, as some tables
 have many notes.
+
+\strong{Tables and Var Finder}
+
+The \emph{Tables} tab lists every table and view of the schema with its
+description, type, approximate rows (from SQL Server's statistics; views
+have none), number of columns, the columns without a variable label, the
+label table its labels come from, and when it was made and when its
+structure (not its data) last changed. Click a table to choose it.
+
+The \emph{Var Finder} tab finds the columns of the database, in every schema,
+whose names, variable labels or value labels hold the text typed, in the
+labels the browser reads: with \emph{Labels table} set to Automatic, only in
+the label table each table's labels come from. Click a column to open its
+table.
 
 \strong{Code}
 

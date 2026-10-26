@@ -52,6 +52,13 @@
   paste0(if (unicode) "N", "'", gsub("'", "''", x, fixed = TRUE), "'")
 }
 
+# A Unicode LIKE pattern that finds `term` anywhere in a text, with LIKE's
+# wildcards and the escape character escaped, for LIKE ... ESCAPE '\'
+#' @noRd
+.sql_like <- function(term) {
+  .sql_quote(paste0("%", gsub("([\\\\%_[])", "\\\\\\1", term), "%"), TRUE)
+}
+
 # The label tables of database db that have every column of their layout,
 # tables or views, in the order a table's labels are looked for:
 # ref.DataProperties, then tables named DataLabels, then DataLabelsNew, then

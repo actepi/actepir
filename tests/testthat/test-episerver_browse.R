@@ -61,6 +61,67 @@ test_that("the catalogue queries quote names and leave out label tables", {
 
 })
 
+test_that("the Tables tab's queries read the catalogue and the label tables", {
+
+  details <- .browse_sql_details("My]DB", "O'Brien")
+  expect_match(details, "FROM [My]]DB].sys.objects o", fixed = TRUE)
+  expect_match(details, "JOIN [My]]DB].sys.schemas s", fixed = TRUE)
+  expect_match(details, "WHERE s.name = N'O''Brien'", fixed = TRUE)
+  expect_match(details, "o.type IN ('U', 'V')", fixed = TRUE)
+  # Rows of the heap or clustered index, as a float
+  expect_match(details, "CAST(SUM(p.rows) AS float)", fixed = TRUE)
+  expect_match(details, "p.index_id IN (0, 1)", fixed = TRUE)
+  expect_match(.browse_sql_schema_columns("Analysis", "dbo"),
+               "SELECT TABLE_NAME, COLUMN_NAME\\s+FROM \\[Analysis\\]\\.INFORMATION_SCHEMA\\.COLUMNS\\s+WHERE TABLE_SCHEMA = N'dbo'")
+
+  sources <- data.frame(TABLE_SCHEMA = c("ref", "ref"),
+                        TABLE_NAME = c("DataProperties", "DataLabels"),
+                        Layout = c("properties", "labels"))
+  coverage <- .browse_sql_coverage("Analysis", sources, "dbo")
+  parts <- strsplit(coverage, "\nUNION ALL\n", fixed = TRUE)[[1]]
+  expect_length(parts, 2)
+  expect_match(parts[1], "SELECT DISTINCT 1 AS Source", fixed = TRUE)
+  expect_match(parts[1], "FROM [Analysis].[ref].[DataProperties]\n       WHERE TableSchema = N'dbo'",
+               fixed = TRUE)
+  expect_match(parts[1], "LOWER(LTRIM(RTRIM(ColumnName))) COLLATE DATABASE_DEFAULT",
+               fixed = TRUE)
+  # DataLabels rows are filed by name alone, so they are not filtered
+  expect_match(parts[2], "SELECT DISTINCT 2 AS Source,\n         Dataset COLLATE DATABASE_DEFAULT",
+               fixed = TRUE)
+  expect_match(parts[2], "CASE WHEN LabelType IN ('VariableLabel', 'Var')", fixed = TRUE)
+  expect_no_match(parts[2], "WHERE", fixed = TRUE)
+
+})
+
+test_that("the search's queries escape the text and leave out label tables", {
+
+  expect_equal(.sql_like("50%_[a]\\b'c"), "N'%50\\%\\_\\[a]\\\\b''c%'")
+
+  names <- .browse_sql_search_columns("Analysis", "sex_")
+  expect_match(names, "SELECT TOP 1000 c.TABLE_SCHEMA, c.TABLE_NAME, c.COLUMN_NAME",
+               fixed = TRUE)
+  expect_match(names, "LOWER(c.COLUMN_NAME) LIKE LOWER(N'%sex\\_%') ESCAPE '\\'",
+               fixed = TRUE)
+  expect_match(names, "t.TABLE_NAME NOT LIKE '%DataLabels%'", fixed = TRUE)
+  expect_match(names, "t.TABLE_TYPE IN ('BASE TABLE', 'VIEW')", fixed = TRUE)
+
+  properties <- data.frame(TABLE_SCHEMA = "ref", TABLE_NAME = "DataProperties",
+                           Layout = "properties")
+  labels <- data.frame(TABLE_SCHEMA = "ref", TABLE_NAME = "DataLabels",
+                       Layout = "labels")
+  both <- .browse_sql_search_labels("Analysis", properties, "female")
+  expect_match(both, "FROM [Analysis].[ref].[DataProperties]", fixed = TRUE)
+  expect_match(both, "PropertyType IN ('VariableLabel', 'Var', 'ValueLabel', 'Opt')",
+               fixed = TRUE)
+  expect_match(both, "LOWER(PropertyText) LIKE LOWER(N'%female%')", fixed = TRUE)
+  values <- .browse_sql_search_labels("Analysis", labels, "female", "values")
+  expect_match(values, "CAST(NULL AS nvarchar(128)) AS TableSchema, Dataset AS TableName",
+               fixed = TRUE)
+  expect_match(values, "LabelType IN ('ValueLabel', 'Opt')", fixed = TRUE)
+  expect_match(values, "LOWER(LabelName) LIKE", fixed = TRUE)
+
+})
+
 # ── Lists, columns and code ─────────────────────────────────────────────────
 
 test_that("system databases and those starting with an underscore are hidden", {
@@ -89,6 +150,112 @@ test_that("the Table list groups tables and views, with their dataset labels", {
   expect_named(.browse_table_choices(tables[1:2, ], character()), "Tables")
   expect_equal(.browse_table_choices(tables[0, ], character()), list())
   expect_equal(.browse_table_choices(NULL, character()), list())
+
+})
+
+test_that("the Tables tab gives each table's rows, dates, columns and labels", {
+
+  fake <- fake_browse_episerver()
+  q <- fake$query
+  sources <- q(.lbl_sql_sources("Analysis"))
+  tables <- q(.browse_sql_tables("Analysis", "dbo"))
+  details <- q(.browse_sql_details("Analysis", "dbo"))
+  columns <- q(.browse_sql_schema_columns("Analysis", "dbo"))
+  labels <- .lbl_dataset_labels(q(.lbl_sql_dataset_labels("Analysis", sources, "dbo")))
+
+  d <- .browse_tables_overview(tables, labels, details, columns,
+                               q(.browse_sql_coverage("Analysis", sources, "dbo")),
+                               sources)
+  expect_named(d, c("Table", "Description", "Type", "Rows", "Columns",
+                    "Without var labels", "Labels from", "Created",
+                    "Structure changed"))
+  expect_equal(d$Table, c("ACTGHSMYX", "APC", "Births", "Deaths", "ED", "Plain",
+                          "vw_ED"))
+  expect_equal(d$Description[1:2], c("General health survey", "Admitted patient care"))
+  expect_equal(d$Type, c(rep("Table", 6), "View"))
+  expect_equal(d$Rows, c(45210, 1234567, 5300, 2104, 890000, 0, NA))
+  expect_equal(d$Columns, c(2L, 43L, 1L, 1L, 2L, 1L, 1L))
+  # Each table's labels come from the first label table holding rows for
+  # it; APC's two labelled columns of 43 are from ref.DataProperties, not
+  # ref.DataLabels
+  expect_equal(d$`Labels from`, c("ref.DataProperties", "ref.DataProperties",
+                                  "ref.DataProperties", "dbo.DataLabels",
+                                  "ref.DataLabels", "", "ref.DataLabels"))
+  expect_equal(d$`Without var labels`, c(1L, 41L, 0L, 0L, 1L, 1L, 0L))
+  expect_equal(d$Created[1], "2020-01-15")
+  expect_equal(d$`Structure changed`[1], "2020-04-24")
+
+  # A label table chosen: its rows alone
+  chosen <- sources[sources$TABLE_NAME == "DataLabels" & sources$TABLE_SCHEMA == "ref", ]
+  d <- .browse_tables_overview(tables, labels, details, columns,
+                               q(.browse_sql_coverage("Analysis", chosen, "dbo")),
+                               chosen)
+  expect_equal(d$`Labels from`, c("ref.DataLabels", "ref.DataLabels", "ref.DataLabels",
+                                  "", "ref.DataLabels", "", "ref.DataLabels"))
+  expect_equal(d$`Without var labels`, c(1L, 42L, 0L, 1L, 1L, 1L, 0L))
+
+  # Without label tables or details: no labels, no rows or dates
+  none <- details[0, ]
+  d <- .browse_tables_overview(tables, character(), none, columns)
+  expect_equal(d$`Labels from`, rep("", 7))
+  expect_equal(d$`Without var labels`, d$Columns)
+  expect_true(all(is.na(d$Rows)))
+  expect_equal(d$Created, rep("", 7))
+  expect_equal(.browse_date(c("2021-03-04 10:00:00", NA)), c("2021-03-04", ""))
+
+})
+
+test_that("the search finds columns by name and by the labels the browser reads", {
+
+  fake <- fake_browse_episerver()
+  sources <- fake$query(.lbl_sql_sources("Analysis"))
+  search <- function(term, look_in = c("names", "labels", "values"),
+                     src = sources, auto = TRUE) {
+    .browse_search(fake$query, "Analysis", term, look_in, src, auto)
+  }
+
+  # Names and variable labels, in any case, in every schema of the database
+  r <- search("SEX")
+  expect_false(r$capped)
+  expect_equal(r$results$Table, c("ACTGHSMYX", "APC", "APC"))
+  expect_equal(r$results$Schema, c("dbo", "dbo", "stage"))
+  expect_equal(r$results$Column, c("RSEX_Y20", "Sex", "Sex"))
+  expect_equal(r$results$`Variable label`,
+               c("Sex of respondent", "Sex of the patient", "Sex as staged"))
+  expect_named(r$results, c("Schema", "Table", "Column", "Variable label",
+                            "Value labels"))
+  # Names alone
+  expect_equal(search("sex", "names")$results$`Variable label`, rep("", 3))
+
+  # Value labels, in code order
+  r <- search("e", "values")
+  expect_equal(r$results$`Value labels`[r$results$Table == "APC"],
+               "1 = Male; 2 = Female; 9 = Not stated; and 1 more")
+  expect_equal(search("female", "values")$results$Table, c("ACTGHSMYX", "APC"))
+
+  # A label counts only in the label table the table's labels come from:
+  # APC's come from ref.DataProperties, so ref.DataLabels' are not found
+  expect_equal(nrow(search("Old sex label")$results), 0)
+  # With that label table chosen they are, for every table of the name, as
+  # DataLabels rows are filed by name alone
+  chosen <- sources[sources$TABLE_SCHEMA == "ref" & sources$TABLE_NAME == "DataLabels", ]
+  r <- search("Old sex label", src = chosen, auto = FALSE)
+  expect_equal(paste(r$results$Schema, r$results$Table, r$results$Column),
+               c("dbo APC Sex", "stage APC Sex"))
+  # Label tables themselves are not searched as tables
+  expect_false(any(c("DataLabels", "DataProperties") %in% search("Label")$results$Table))
+  # LIKE's wildcards are taken as text
+  expect_equal(nrow(search("%")$results), 0)
+
+  # A query that stops at 1,000 rows is reported
+  capped <- function(sql) {
+    if (grepl("SELECT TOP 1000 c.TABLE_SCHEMA", sql, fixed = TRUE)) {
+      return(data.frame(TABLE_SCHEMA = rep("dbo", 1000), TABLE_NAME = "APC",
+                        COLUMN_NAME = paste0("x", 1:1000)))
+    }
+    fake$query(sql)
+  }
+  expect_true(.browse_search(capped, "Analysis", "x", "names", sources)$capped)
 
 })
 
@@ -311,15 +478,20 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*Dataset Browser\\s*<",
                perl = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
-  tabs <- vapply(c("columns", "collection", "help"), function(tab) {
+  tabs <- vapply(c("tables", "columns", "collection", "search", "help"), function(tab) {
     in_bar(paste0("data-value=\"", tab, "\""))
   }, integer(1))
   expect_false(is.unsorted(c(in_bar("Dataset Browser"), tabs,
                              in_bar("class=\"epi-logo\""))))
   expect_true(all(tabs > 0))
-  # The Collection tab's title is its name alone
+  # The Collection tab's title is its name alone; the search is Var Finder
   expect_match(navbar, "(?s)data-value=\"collection\"[^>]*>\\s*Collection\\s*</a>",
                perl = TRUE)
+  expect_match(navbar, "(?s)data-value=\"search\"[^>]*>\\s*Var Finder\\s*</a>",
+               perl = TRUE)
+  # The browser opens on the Tables tab, the first
+  expect_equal(sub(".*data-value=\"([a-z]+)\".*", "\\1",
+                   part("<div class=\"tab-pane active\"[^>]*>")), "tables")
   expect_false(has_id(page, "done"))
   expect_no_match(page, "gadget", fixed = TRUE)
 
@@ -362,6 +534,15 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"collection\".*?</div>")
   expect_true(has_id(notes, "about"))
   expect_false(has_id(columns, "about"))
+  # The Tables tab; the Var Finder tab, its settings in a panel at its left
+  tables <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"tables\".*?id=\"tables_table\"")
+  expect_true(has_id(tables, "tables_note"))
+  search <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"search\".*?data-value=\"help\"")
+  expect_match(search, "epi-tab-layout", fixed = TRUE)
+  for (id in c("search_settings", "search_text", "search_in", "search_go",
+               "search_note", "search_table")) {
+    expect_true(has_id(search, id), label = id)
+  }
   # Analysis is chosen; system databases are not offered
   expect_match(page, "<option value=\"Analysis\" selected>Analysis</option>",
                fixed = TRUE)
@@ -629,6 +810,113 @@ test_that("the line above the table counts the columns chosen, and Clear selecti
     expect_length(cleared, 1)
     expect_match(cleared[[1]]$id, "col_table$")
     expect_null(cleared[[1]]$selected)
+  })
+
+})
+
+test_that("the Tables tab lists the schema's tables, and a click chooses one", {
+
+  sent <- list()
+  capture <- function(session, inputId, label = NULL, choices = NULL,
+                      selected = NULL, ...) {
+    sent[[inputId]] <<- list(choices = choices, selected = selected)
+  }
+  local_mocked_bindings(updateSelectInput = capture,
+                        updateSelectizeInput = capture, .package = "shiny")
+  marked <- NULL
+  local_mocked_bindings(selectRows = function(proxy, selected, ...) {
+    marked <<- selected
+  }, .package = "DT")
+  app <- episerver_browse_app(query = fake_browse_episerver()$query)
+
+  # testServer() computes every output, shown or not, so that the tab's
+  # queries wait until it is shown rests on Shiny suspending the outputs of
+  # a hidden tab; only the marking of the table chosen is held back here
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC", view = "columns")
+    expect_null(marked)
+    session$setInputs(view = "tables")
+    expect_equal(output$tables_note,
+                 "7 tables and views in Analysis.dbo. Click one to choose it.")
+    expect_equal(overview()$table$`Labels from`[2], "ref.DataProperties")
+    expect_match(output$tables_table, "Structure changed", fixed = TRUE)
+    # The table chosen is marked; a click on another chooses it
+    expect_equal(marked, 2L)
+    session$setInputs(tables_table_rows_selected = 5L)
+    expect_equal(sent$table$selected, "ED")
+    session$setInputs(table = "ED")
+    expect_equal(marked, 2L)
+    # A table chosen in the sidebar is marked
+    session$setInputs(table = "Deaths")
+    expect_equal(marked, 4L)
+  })
+
+  # A query that fails is reported, and the rest is shown
+  app <- episerver_browse_app(query = fake_browse_episerver(fail = "AS ColumnKey")$query)
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC", view = "tables")
+    expect_match(output$tables_note, "The label tables could not be read: Fake failure",
+                 fixed = TRUE)
+    expect_equal(overview()$table$Rows[2], 1234567)
+  })
+
+})
+
+test_that("the Var Finder tab finds columns, and a click opens the column's table", {
+
+  sent <- list()
+  capture <- function(session, inputId, label = NULL, choices = NULL,
+                      selected = NULL, ...) {
+    sent[[inputId]] <<- list(choices = choices, selected = selected)
+  }
+  local_mocked_bindings(updateSelectInput = capture,
+                        updateSelectizeInput = capture, .package = "shiny")
+  tab <- NULL
+  local_mocked_bindings(nav_select = function(id, selected, ...) {
+    tab <<- c(id, selected)
+  }, .package = "bslib")
+  warned <- NULL
+  local_mocked_bindings(showNotification = function(ui, ...) warned <<- ui,
+                        .package = "shiny")
+  app <- episerver_browse_app(query = fake_browse_episerver()$query)
+
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC",
+                      search_in = c("names", "labels", "values"))
+    expect_match(output$search_note, "Finds the columns of Analysis, in every schema",
+                 fixed = TRUE)
+    session$setInputs(search_run = "  ")
+    expect_match(warned, "Type a name", fixed = TRUE)
+    expect_null(found())
+
+    session$setInputs(search_run = "sex")
+    expect_equal(output$search_note, paste(
+      "3 columns of Analysis match \"sex\". Click a column to open its table."
+    ))
+    expect_match(output$search_table, "Variable label", fixed = TRUE)
+    expect_equal(found()$results$`Variable label`[2], "Sex of the patient")
+    session$setInputs(search_run = "female")
+    expect_equal(found()$term, "female")
+    expect_equal(found()$results$Table, c("ACTGHSMYX", "APC"))
+
+    # A column in another schema: the schema, then the table once its list
+    # arrives, on the Columns tab
+    session$setInputs(search_run = "staged")
+    session$setInputs(search_table_rows_selected = 1L)
+    expect_equal(sent$schema$selected, "stage")
+    expect_equal(tab, c("view", "columns"))
+    session$setInputs(schema = "stage")
+    expect_equal(sent$table$selected, "APC")
+    expect_null(wanted())
+
+    # Results belong to one database
+    session$setInputs(db = "HospitalAPC")
+    expect_null(found())
+    session$setInputs(search_in = character(), search_run = "sex")
+    expect_match(warned, "Choose where to look.", fixed = TRUE)
   })
 
 })

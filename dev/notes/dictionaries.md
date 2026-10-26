@@ -6,7 +6,7 @@ The full data dictionary of any table or view on EpiServer, built from its label
 
 | Pull request | Content |
 |---|---|
-| #18, plan pull request 3 (open, waiting on the maintainer's test against EpiServer) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files, and the browser's Download menu with Dictionaries of all tables. `create_dictionary()` removed. |
+| #18, plan pull request 3 (merged) | `episerver_dictionary()`, `dictionary_logo()`, the PDF and HTML files, and the browser's Download menu with Dictionaries of all tables. `create_dictionary()` removed. |
 
 The design was agreed with the maintainer on 25 Oct 2026, narrowed on 26 Oct 2026 when the linkage dictionary was set aside, and settled the same day (see Decisions).
 
@@ -50,7 +50,7 @@ The linkage dictionary and variable list stay in the maintainer's local process,
   - The footer gives the table's full name, the label table and the date; the PDF's also gives the page, as "page 1 of 2".
   - A table without notes or linked tables says so under Dataset information.
 - **A whole database** (the maintainer asked for it on 26 Oct 2026). `episerver_dictionary(db = "Analysis")`, or with `schema`, writes the dictionary of every table and view that a label table holds labels for, and leaves out the rest, with a message counting them.
-  - `.dict_tables()` lists the schemas (`.browse_sql_schemas()`) and their tables and views (`.browse_sql_tables()`, which leaves out label tables), and asks `.lbl_sql_pick()` of each, against the database's label tables or the one the `lbl_*` arguments name: one small query a table, and no new SQL.
+  - `.dict_tables()` lists the schemas and their tables and views with `.browse_all_tables()` (through `.browse_sql_schemas()` and `.browse_sql_tables()`, which leaves out label tables; the browser's search lists them the same way), and asks `.lbl_sql_pick()` of each, against the database's label tables or the one the `lbl_*` arguments name: one small query a table, and no new SQL.
   - Without `schema`, each schema's files go in a folder of its name, as tables of one name can be in several schemas (`dbo.APC` and `stage.APC`). With `schema`, or with tables named, the files go in `dir` itself.
   - `.dict_write_all()` builds and writes each table's files in turn. For a database it keeps going when a table fails, and `episerver_dictionary()` then warns, naming each table with its error; for tables named, the first error stops it.
   - The browser does the same with Dictionaries of all tables (see Browser).

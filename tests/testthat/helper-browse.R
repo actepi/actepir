@@ -136,6 +136,23 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
                                          "DataCode", "LabelName", "DataType"))
   )
 
+  # When each object was made and last altered, and its rows, invented: one
+  # month apart in the order of the catalogue, altered 100 days after, with
+  # rows for tables and none for views
+  rows <- c(ACTGHSMYX = 45210, APC = 1234567, Births = 5300, Deaths = 2104,
+            ED = 890000, Plain = 0, StandardPops = 19)
+  details <- function(db, schema) {
+    t <- catalogue[[db]][[schema]]
+    if (is.null(t)) t <- objects(character())
+    created <- as.POSIXct("2020-01-15 09:30:00", tz = "UTC") +
+      (seq_len(nrow(t)) - 1) * 30 * 86400
+    data.frame(TableName = t$TABLE_NAME, Created = created,
+               Altered = created + 100 * 86400,
+               ApproxRows = ifelse(t$TABLE_TYPE == "VIEW", NA,
+                                   unname(rows[t$TABLE_NAME])),
+               stringsAsFactors = FALSE)
+  }
+
   # Reading the SQL: the quoted values in order, the first [database], and
   # the [database].[schema].[table] after FROM
   quoted <- function(sql) {
@@ -167,6 +184,19 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
                ColumnName = d$VarName, PropertyType = d$LabelType,
                PropertyCode = d$DataCode, PropertyText = d$LabelName,
                stringsAsFactors = FALSE)
+  }
+  # Whether text x holds the term of a LIKE ... ESCAPE '\' pattern in the
+  # SQL, in any case
+  like <- function(sql, x) {
+    m <- regmatches(sql, regexec("LIKE LOWER\\(N'((?:[^']|'')*)'\\) ESCAPE",
+                                 sql, perl = TRUE))[[1]][2]
+    term <- gsub("\\\\(.)", "\\1", gsub("''", "'", sub("^%(.*)%$", "\\1", m)))
+    x <- as.character(x)
+    !is.na(x) & grepl(tolower(term), tolower(x), fixed = TRUE)
+  }
+  is_label_table <- function(name) {
+    grepl("DataLabels", name, ignore.case = TRUE) |
+      name %in% c("DataProperties", "DataPropertyTables")
   }
 
   calls <- character()
@@ -218,6 +248,68 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
       v <- quoted(sql)
       found <- columns[[paste(db, v[1], v[2], sep = ".")]]
       return(if (is.null(found)) cols(character(), character()) else found)
+    }
+    if (grepl("AS ApproxRows", sql, fixed = TRUE)) {
+      return(details(db, quoted(sql)[1]))
+    }
+    # Every column of a schema, or the columns of a database whose names
+    # hold a term
+    in_db <- function() {
+      keys <- names(columns)[startsWith(names(columns), paste0(db, "."))]
+      parts <- strsplit(keys, ".", fixed = TRUE)
+      do.call(rbind, c(lapply(seq_along(keys), function(i) {
+        data.frame(TABLE_SCHEMA = parts[[i]][2], TABLE_NAME = parts[[i]][3],
+                   COLUMN_NAME = columns[[keys[i]]]$col, stringsAsFactors = FALSE)
+      }), list(data.frame(TABLE_SCHEMA = character(), TABLE_NAME = character(),
+                          COLUMN_NAME = character()))))
+    }
+    if (grepl("SELECT TABLE_NAME, COLUMN_NAME", sql, fixed = TRUE)) {
+      d <- in_db()
+      d <- d[d$TABLE_SCHEMA == quoted(sql)[1], c("TABLE_NAME", "COLUMN_NAME"),
+             drop = FALSE]
+      rownames(d) <- NULL
+      return(d)
+    }
+    if (grepl("SELECT TOP 1000 c.TABLE_SCHEMA", sql, fixed = TRUE)) {
+      d <- in_db()
+      d <- d[!is_label_table(d$TABLE_NAME) & like(sql, d$COLUMN_NAME), ,
+             drop = FALSE]
+      rownames(d) <- NULL
+      return(d)
+    }
+
+    # The tables each label table holds rows for, with the columns it gives
+    # a variable label, by schema
+    if (grepl("AS ColumnKey", sql, fixed = TRUE)) {
+      parts <- strsplit(sql, "\nUNION ALL\n", fixed = TRUE)[[1]]
+      out <- lapply(parts, function(part) {
+        d <- as_properties(store[[from(part)]])
+        source <- as.integer(sub("(?s)^SELECT DISTINCT ([0-9]+).*$", "\\1",
+                                 part, perl = TRUE))
+        if (grepl("TableSchema =", part, fixed = TRUE)) {
+          schema <- sub("(?s).*TableSchema = N'([^']*)'.*", "\\1", part, perl = TRUE)
+          d <- d[tolower(d$TableSchema) %in% tolower(schema), , drop = FALSE]
+        }
+        labelled <- tolower(d$PropertyType) %in% c("variablelabel", "var") &
+          !is.na(d$PropertyText) & nzchar(trimws(d$PropertyText))
+        out <- data.frame(Source = rep(source, nrow(d)), TableName = d$TableName,
+                          ColumnKey = ifelse(labelled, tolower(trimws(d$ColumnName)),
+                                             NA_character_),
+                          stringsAsFactors = FALSE)
+        out[!duplicated(out), , drop = FALSE]
+      })
+      out <- do.call(rbind, out)
+      rownames(out) <- NULL
+      return(out)
+    }
+    # The labels of one label table whose text holds a term
+    if (grepl("SELECT TOP 1000 TableSchema|SELECT TOP 1000 CAST\\(NULL", sql)) {
+      d <- as_properties(store[[from(sql)]])
+      types <- quoted(regmatches(sql, regexpr("IN \\([^)]*\\)", sql)))
+      d <- d[tolower(d$PropertyType) %in% tolower(types) &
+               like(sql, d$PropertyText), , drop = FALSE]
+      rownames(d) <- NULL
+      return(d)
     }
 
     # Labels: which label table to read, the dataset labels of a schema and
