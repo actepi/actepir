@@ -167,7 +167,7 @@ test_that("the Tables tab gives each table's rows, dates, columns and labels", {
                                q(.browse_sql_coverage("Analysis", sources, "dbo")),
                                sources)
   expect_named(d, c("Table", "Description", "Type", "Rows", "Columns",
-                    "Without labels", "Labels from", "Created",
+                    "Without var labels", "Labels from", "Created",
                     "Structure changed"))
   expect_equal(d$Table, c("ACTGHSMYX", "APC", "Births", "Deaths", "ED", "Plain",
                           "vw_ED"))
@@ -181,7 +181,7 @@ test_that("the Tables tab gives each table's rows, dates, columns and labels", {
   expect_equal(d$`Labels from`, c("ref.DataProperties", "ref.DataProperties",
                                   "ref.DataProperties", "dbo.DataLabels",
                                   "ref.DataLabels", "", "ref.DataLabels"))
-  expect_equal(d$`Without labels`, c(1L, 41L, 0L, 0L, 1L, 1L, 0L))
+  expect_equal(d$`Without var labels`, c(1L, 41L, 0L, 0L, 1L, 1L, 0L))
   expect_equal(d$Created[1], "2020-01-15")
   expect_equal(d$`Structure changed`[1], "2020-04-24")
 
@@ -192,13 +192,13 @@ test_that("the Tables tab gives each table's rows, dates, columns and labels", {
                                chosen)
   expect_equal(d$`Labels from`, c("ref.DataLabels", "ref.DataLabels", "ref.DataLabels",
                                   "", "ref.DataLabels", "", "ref.DataLabels"))
-  expect_equal(d$`Without labels`, c(1L, 42L, 0L, 1L, 1L, 1L, 0L))
+  expect_equal(d$`Without var labels`, c(1L, 42L, 0L, 1L, 1L, 1L, 0L))
 
   # Without label tables or details: no labels, no rows or dates
   none <- details[0, ]
   d <- .browse_tables_overview(tables, character(), none, columns)
   expect_equal(d$`Labels from`, rep("", 7))
-  expect_equal(d$`Without labels`, d$Columns)
+  expect_equal(d$`Without var labels`, d$Columns)
   expect_true(all(is.na(d$Rows)))
   expect_equal(d$Created, rep("", 7))
   expect_equal(.browse_date(c("2021-03-04 10:00:00", NA)), c("2021-03-04", ""))
@@ -478,15 +478,20 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_match(navbar, "(?s)class=\"navbar-brand\"[^>]*>\\s*Dataset Browser\\s*<",
                perl = TRUE)
   in_bar <- function(x) regexpr(x, navbar, fixed = TRUE)
-  tabs <- vapply(c("columns", "collection", "tables", "search", "help"), function(tab) {
+  tabs <- vapply(c("tables", "columns", "collection", "search", "help"), function(tab) {
     in_bar(paste0("data-value=\"", tab, "\""))
   }, integer(1))
   expect_false(is.unsorted(c(in_bar("Dataset Browser"), tabs,
                              in_bar("class=\"epi-logo\""))))
   expect_true(all(tabs > 0))
-  # The Collection tab's title is its name alone
+  # The Collection tab's title is its name alone; the search is Var Finder
   expect_match(navbar, "(?s)data-value=\"collection\"[^>]*>\\s*Collection\\s*</a>",
                perl = TRUE)
+  expect_match(navbar, "(?s)data-value=\"search\"[^>]*>\\s*Var Finder\\s*</a>",
+               perl = TRUE)
+  # The browser opens on the Tables tab, the first
+  expect_equal(sub(".*data-value=\"([a-z]+)\".*", "\\1",
+                   part("<div class=\"tab-pane active\"[^>]*>")), "tables")
   expect_false(has_id(page, "done"))
   expect_no_match(page, "gadget", fixed = TRUE)
 
@@ -529,7 +534,7 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   notes <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"collection\".*?</div>")
   expect_true(has_id(notes, "about"))
   expect_false(has_id(columns, "about"))
-  # The Tables tab; the Search tab, with its settings in a panel at its left
+  # The Tables tab; the Var Finder tab, its settings in a panel at its left
   tables <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"tables\".*?id=\"tables_table\"")
   expect_true(has_id(tables, "tables_note"))
   search <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"search\".*?data-value=\"help\"")
@@ -859,7 +864,7 @@ test_that("the Tables tab lists the schema's tables, and a click chooses one", {
 
 })
 
-test_that("the Search tab finds columns, and a click opens the column's table", {
+test_that("the Var Finder tab finds columns, and a click opens the column's table", {
 
   sent <- list()
   capture <- function(session, inputId, label = NULL, choices = NULL,

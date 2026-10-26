@@ -13,8 +13,9 @@
 #' console stays free while the browser is open. It opens in the system web
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
-#' open and close, and the columns, the dataset notes, the tables of the
-#' schema, a search of the database and the help in tabs on the top bar. The
+#' open and close, and the tables of the schema, the columns, the dataset
+#' notes, a finder of columns in the database and the help in tabs on the
+#' top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -88,7 +89,7 @@
 #' its notes and its linked tables, apart from the columns, as some tables
 #' have many notes.
 #'
-#' **Tables and search**
+#' **Tables and Var Finder**
 #'
 #' The *Tables* tab lists every table and view of the schema with its
 #' description, type, approximate rows (from SQL Server's statistics; views
@@ -96,10 +97,11 @@
 #' label table its labels come from, and when it was made and when its
 #' structure (not its data) last changed. Click a table to choose it.
 #'
-#' The *Search* tab finds the columns of the database, in every schema, whose
-#' names, variable labels or value labels hold the text typed, in the labels
-#' the browser reads: with *Labels table* set to Automatic, only in the label
-#' table each table's labels come from. Click a column to open its table.
+#' The *Var Finder* tab finds the columns of the database, in every schema,
+#' whose names, variable labels or value labels hold the text typed, in the
+#' labels the browser reads: with *Labels table* set to Automatic, only in
+#' the label table each table's labels come from. Click a column to open its
+#' table.
 #'
 #' **Code**
 #'
@@ -615,7 +617,7 @@ episerver_browse_stop <- function() {
     Type                = ifelse(tables$TABLE_TYPE == "VIEW", "View", "Table"),
     Rows                = as.numeric(d$ApproxRows),
     Columns             = n_cols,
-    `Without labels`    = without,
+    `Without var labels` = without,
     `Labels from`       = from,
     Created             = .browse_date(d$Created),
     `Structure changed` = .browse_date(d$Altered),
@@ -1036,9 +1038,9 @@ episerver_browse_stop <- function() {
       "label table alone. The tab's details are read only while it is shown."
     ),
 
-    shiny::h5("Search"),
+    shiny::h5("Var Finder"),
     shiny::p(
-      "The Search tab finds the columns of the database, in every schema, ",
+      "The Var Finder tab finds the columns of the database, in every schema, ",
       "whose names, variable labels or value labels hold the text typed, in ",
       "any case. Look in chooses where to look. Labels are searched as the ",
       "browser reads them: with Labels table set to Automatic, a table's ",
@@ -1309,7 +1311,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # The tables of the Columns, Tables and Search tabs fit the window
+      # The tables of the Tables, Columns and Var Finder tabs fit the window
       # below their top, so that they need no page scrolling: a script sets
       # --browse-table-height on each, which caps its scrolling body
       # (scrollY)
@@ -1336,9 +1338,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # The Search tab's button, or Enter in its box, sends the box's text as
-      # input$search_run, as the box's own value reaches the server only
-      # once typing pauses
+      # The Var Finder tab's button, or Enter in its box, sends the box's
+      # text as input$search_run, as the box's own value reaches the server
+      # only once typing pauses
       shiny::tags$script(shiny::HTML("
         (function() {
           function run() {
@@ -1461,6 +1463,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     ),
 
+    # Every table and view of the schema, with its rows, dates and labels.
+    # A click on one chooses it. The browser opens on this tab, the first.
+    bslib::nav_panel(
+      "Tables", value = "tables",
+      shiny::div(
+        class = "options-row",
+        shiny::span(class = "browse-chosen",
+                    shiny::textOutput("tables_note", inline = TRUE))
+      ),
+      DT::dataTableOutput("tables_table")
+    ),
+
     # The columns, with buttons for their value labels and the rows chosen
     bslib::nav_panel(
       "Columns", value = "columns",
@@ -1490,22 +1504,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     bslib::nav_panel("Collection", value = "collection",
                      shiny::uiOutput("about")),
 
-    # Every table and view of the schema, with its rows, dates and labels.
-    # A click on one chooses it.
+    # Var Finder: the columns of the database that a name, label or value
+    # label finds. A click on one opens its table.
     bslib::nav_panel(
-      "Tables", value = "tables",
-      shiny::div(
-        class = "options-row",
-        shiny::span(class = "browse-chosen",
-                    shiny::textOutput("tables_note", inline = TRUE))
-      ),
-      DT::dataTableOutput("tables_table")
-    ),
-
-    # The columns of the database that a name, label or value label finds.
-    # A click on one opens its table.
-    bslib::nav_panel(
-      "Search", value = "search",
+      "Var Finder", value = "search",
       .epi_tab_settings(
         "search_settings",
         shiny::tagList(
@@ -1607,7 +1609,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # A table to choose in another schema once its list arrives, as a click
-    # in the Search tab asks: list(schema, table)
+    # in the Var Finder tab asks: list(schema, table)
     wanted <- shiny::reactiveVal(NULL)
 
     # The table chosen stays chosen while it is in the list; otherwise the
@@ -1896,7 +1898,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         Description = "The table's dataset label",
         Rows = paste("Approximate, from SQL Server's statistics; views have",
                      "none"),
-        `Without labels` = paste("Columns without a variable label in the",
+        `Without var labels` = paste("Columns without a variable label in the",
                                  "label table that the labels come from"),
         `Labels from` = paste("The label table that the table's labels come",
                               "from, as the bar above the columns says"),
@@ -1950,7 +1952,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       }
     })
 
-    # ── The Search tab ─────────────────────────────────────────────────────
+    # ── The Var Finder tab ─────────────────────────────────────────────────
     # The columns of the database that the text finds (.browse_search()),
     # from the label tables looked in. The results belong to one database
     # and label table choice, so they are cleared when either changes.

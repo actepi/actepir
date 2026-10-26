@@ -210,7 +210,7 @@ test_that("the Tables tab's rows, dates, columns and labels match the browser's"
     }
     expect_equal(row$`Labels from`, from, label = t)
     labelled <- r$rows$Key[r$rows$Type == "VariableLabel"]
-    expect_equal(row$`Without labels`, sum(!tolower(trimws(cols$col)) %in% labelled),
+    expect_equal(row$`Without var labels`, sum(!tolower(trimws(cols$col)) %in% labelled),
                  label = t)
   }
 
@@ -314,7 +314,7 @@ test_that("the app lists and describes a table against EpiServer", {
     expect_match(output$info_bar$html, "Labels from ref.", fixed = TRUE)
     expect_no_match(output$info_bar$html, "epi-warn", fixed = TRUE)
 
-    # The Tables tab and the Search tab
+    # The Tables tab and the Var Finder tab
     session$setInputs(view = "tables")
     expect_null(overview()$errors)
     expect_match(output$tables_note, "Click one to choose it.", fixed = TRUE)

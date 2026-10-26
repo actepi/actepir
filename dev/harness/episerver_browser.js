@@ -44,7 +44,13 @@ const fs = require('fs');
   const info = () => text('#info_bar');
   const rows = () => page.$$eval('#col_table tbody tr', r => r.length);
 
+  // The browser opens on the Tables tab; the checks below start on Columns
   await page.goto(url);
+  await page.waitForSelector('#tables_table tbody tr', { timeout: 60000 });
+  await settle();
+  console.log('OPENS ON:', await text('.navbar-nav a.nav-link.active'), '| columns drawn',
+    !!(await page.$('#col_table tbody tr')));
+  await page.click('a[data-value=columns]');
   await page.waitForSelector('#col_table tbody tr', { timeout: 60000 });
   await settle();
 
@@ -381,7 +387,7 @@ const fs = require('fs');
   await select('table', 'ACTGHSMYX');
   console.log('TABLES sidebar ACTGHSMYX: marked', JSON.stringify(await marked('#tables_table')));
 
-  // The Search tab: its settings in a panel at its left; Enter, or the
+  // The Var Finder tab: its settings in a panel at its left; Enter, or the
   // button straight after typing, searches the text typed; a click on a
   // column opens its table on the Columns tab
   await page.click('a[data-value=search]');
