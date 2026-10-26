@@ -6,16 +6,20 @@
 
 | Pull request | Content |
 |---|---|
-| #13, plan pull request 1 (open; the live tests passed against EpiServer on 26 Oct 2026) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. After review: the description and dataset notes on a Collection tab of their own; value labels shown by default, with Expand and Collapse buttons; chosen rows in Lavender with an Iris bar, a line counting them and Clear selection. Offline, `testServer()` and live tests, and the harness. |
+| #13, plan pull request 1 (open; the live and offline tests passed in the maintainer's runs on 26 Oct 2026) | The browser rebuilt as a bslib app, and the labels lookup: `ref.DataProperties` first, then the DataLabels tables, each table falling back separately. The problem report, bug button, stopped page and Help tab style shared with the DSR Calculator; miniUI removed; the add-in renamed Open Dataset Browser. After review: the description and dataset notes on a Collection tab of their own; value labels shown by default, with Expand and Collapse buttons; chosen rows in Lavender with an Iris bar, a line counting them and Clear selection. Offline, `testServer()` and live tests, and the harness. |
 
-Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. The maintainer's run of `testthat::test_local()` in RStudio on 26 Oct 2026 ran every live test and passed them. Three offline tests failed there, because the code button reads Insert Code in RStudio and the tests expected Copy Code; one of them, in `test-episerver_dsr.R`, failed on `main` too. The tests now fix the label by mocking `rstudioapi::isAvailable()` (see `shared-apps.md`). Pull requests 2 to 6 have not started. After pull request 1 is merged, restart the session branch from `main` for pull request 2.
+Pull request 1 was started on the branch `claude/sweet-ritchie-rt6bn7` (commit "Dataset Browser: work in progress and handoff notes") and finished on `claude/elegant-pasteur-05gapn`, which builds on that commit. The maintainer's run of `testthat::test_local()` in RStudio on 26 Oct 2026 ran every live test and passed them. Three offline tests failed there, because the code button reads Insert Code in RStudio and the tests expected Copy Code; one of them, in `test-episerver_dsr.R`, failed on `main` too. The tests now fix the label by mocking `rstudioapi::isAvailable()` (see `shared-apps.md`), and the maintainer's second run passed. Pull requests 2 to 6 have not started; the decisions for pull request 2 are below. After pull request 1 is merged, restart the session branch from `main` for pull request 2.
 
 ## Plan agreed with the maintainer (25 Oct 2026)
 
 One pull request at a time on the session branch. The maintainer tests each one against EpiServer and merges it before the next starts; after a merge, restart the branch from `main`.
 
 1. **Dataset Browser.** The rebuild and the labels lookup (this file).
-2. **Labels in scripts.** `collect_withlabels()` and `episerver_getlabels()` use the same lookup, including the labels of linked tables (Link rows). Until this is merged, code copied from the browser imports labels from `ref.DataLabels` only.
+2. **Labels in scripts.** `collect_withlabels()` and `episerver_getlabels()` use the same lookup. Until this is merged, code copied from the browser imports labels from `ref.DataLabels` only. Decided with the maintainer on 26 Oct 2026:
+   - `episerver_getlabels()` keeps returning rows in the DataLabels layout (`Dataset`, `VarName`, `LabelType`, `DataCode`, `LabelName`), with rows from `ref.DataProperties` translated into it, so that existing scripts and `applydatalabels()` keep working.
+   - Only variable labels and value labels are applied, as now. Column notes, the dataset label and dataset notes are not attached to the data: the maintainer considered attributes for them, but they would be of little use to analysts for now. This may be revisited.
+   - `lbl_db`, `lbl_schema` and `lbl_table`, when given, name the one label table to read, as the browser's Labels table choice does; left empty, the lookup chooses as the browser's Automatic does. This is what the arguments were written to mean.
+   - The labels of linked tables (Link rows) are not applied automatically: `collect_withlabels()` applies the labels of the table collected. sqldta joins linked tables because Stata has no equivalent of dbplyr for writing the join; in R the analyst writes it, and split tables are rarely used. This may be revisited if `ref.DataProperties` comes to support one-to-many links. Plan pull request 2 originally included linked tables; the maintainer dropped them.
 3. **Dictionary tables.** The SQL that creates them in `Analysis.ref`, and a script that converts the maintainer's `definitions.xlsx` into an INSERT script for SSMS (see `dictionaries.md`).
 4. **Dictionaries.**
    - One builder for a full dictionary or a profile's (Linkage) dictionary, exported as PDF (Typst) and standalone HTML.
@@ -29,7 +33,7 @@ One pull request at a time on the session branch. The maintainer tests each one 
    - preview the first 100 rows with labels;
    - a profile of one column, on demand only (counts by value with labels, missing values, minimum and maximum, codes without labels);
    - label coverage: columns without labels, and tables with DataLabels rows but no DataProperties rows;
-   - split tables: Link rows shown as one dataset, with the join in the copied code; `collect_withlabels()` may need refactoring for this;
+   - split tables: Link rows shown as one dataset, with the join in the copied code; `collect_withlabels()` may need refactoring for this. To be confirmed with the maintainer before it is built, as they chose not to automate linked tables in pull request 2;
    - reopen at the last database, schema and table (browser storage);
    - copy the dictionary as a table for Excel.
 
