@@ -19,7 +19,7 @@ R package for analysts in the Epidemiology Section, ACT Health and Community Ser
 - The maintainer pulls each branch onto a machine inside the network, tests it against EpiServer, and merges only if it passes. Write the pull request description for that step:
   1. what changed and why;
   2. what was verified offline, with the commands run and their results;
-  3. what could not be verified offline, with the exact calls the maintainer should run against EpiServer to confirm it.
+  3. what could not be verified offline, with the exact calls the maintainer should run against EpiServer to confirm it. Give focused test commands rather than the whole suite: the offline tests (`testthat::test_local(filter = "_live", invert = TRUE)`) and the live test files the change touches (`testthat::test_local(filter = "<name>_live")`). Say when a change to shared code, such as `R/epi_app.R`, the labels code or a test helper, calls for the whole suite.
 - Keep diffs minimal. Match the style of the file being edited and do not reformat code the change does not touch.
 - Do not change `Version` in `DESCRIPTION`. The maintainer sets the version when merging.
 - If a request conflicts with a rule in this file, say so and ask before proceeding.
