@@ -441,6 +441,81 @@ test_that("a profile gives the counts with their labels and the codes without la
 
 })
 
+test_that("the whole table's profile gives a row for each column profiled", {
+
+  cols <- data.frame(col = c("Sex", "Cause", "Notes", "Code", "Bad", "Left"),
+                     dtype = c("int", "varchar", "text", "char", "int", "int"),
+                     charlen = c(NA, 200L, 2147483647L, 2L, NA, NA),
+                     numprec = c(10L, NA, NA, NA, 10L, 10L),
+                     numscale = c(0L, NA, NA, NA, 0L, 0L))
+  lbl <- list(
+    label = c(sex = "Sex of the patient", code = "A code"),
+    values = list(
+      sex = data.frame(Code = c("1", "2", "9", "10"),
+                       Text = c("Male", "Female", "Not stated", "Other")),
+      code = data.frame(Code = "A", Text = "First")
+    )
+  )
+  results <- list(
+    list(summary = data.frame(TotalRows = 150, Present = 135, DistinctValues = 5,
+                              MinValue = 1, MaxValue = 10, Blank = NA),
+         counts = data.frame(ProfileValue = c(1, 2, NA, 4, 9, 10),
+                             ProfileCount = c(45, 45, 15, 15, 15, 15))),
+    list(summary = data.frame(TotalRows = 150, Present = 120, DistinctValues = 3,
+                              MinValue = "  ", MaxValue = strrep("x", 300),
+                              Blank = 15)),
+    list(summary = data.frame(TotalRows = 150, Present = 150, DistinctValues = NA,
+                              MinValue = NA, MaxValue = NA, Blank = NA)),
+    list(summary = data.frame(TotalRows = 150, Present = 150, DistinctValues = 8,
+                              MinValue = "A", MaxValue = "H", Blank = 0),
+         counts = data.frame(ProfileValue = LETTERS[1:8], ProfileCount = 1)),
+    list(error = "Invalid column")
+  )
+  w <- .browse_table_profile(cols, results, lbl)
+  t <- w$table
+  # The columns profiled so far, as when the run is stopped
+  expect_equal(t$Column, c("Sex", "Cause", "Notes", "Code", "Bad"))
+  expect_named(t, c("Column", "Description", "Type", "Missing %", "Blank %",
+                    "Distinct values", "Minimum", "Maximum", "Value labels",
+                    "Codes without labels", "Codes", "Note"))
+  expect_equal(t$Description, c("Sex of the patient", "", "", "A code", ""))
+  expect_equal(t$Type, c("int", "varchar(200)", "text(2147483647)", "char(2)", "int"))
+  expect_equal(t$`Missing %`, c(10, 20, 0, 0, NA))
+  expect_equal(t$`Blank %`, c(NA, 10, NA, 0, NA))
+  expect_equal(t$`Distinct values`, c(5, 3, NA, 8, NA))
+  expect_equal(t$Minimum, c("1 (Male)", "  ", NA, "A (First)", NA))
+  expect_equal(t$Maximum[2], paste0(strrep("x", 40), "\u2026"))
+  expect_equal(t$`Value labels`, c(4, NA, NA, 1, NA))
+  expect_equal(t$`Codes without labels`, c(1, NA, NA, 7, NA))
+  expect_equal(t$Codes, c("4", "", "", "B, C, D, E, F and 2 more", ""))
+  expect_equal(t$Note, c("", "", "", "", "Could not be read: Invalid column"))
+  expect_equal(w$rows, 150)
+  expect_false(w$capped)
+
+  # No Note without errors; codes looked for among the 1,000 most common
+  # values alone
+  many <- list(summary = data.frame(TotalRows = 2000, Present = 2000,
+                                    DistinctValues = 1500, MinValue = "A",
+                                    MaxValue = "Z", Blank = 0),
+               counts = data.frame(ProfileValue = sprintf("v%04d", 1:1000),
+                                   ProfileCount = 1))
+  w <- .browse_table_profile(cols[4, ], list(many), lbl)
+  expect_false("Note" %in% names(w$table))
+  expect_true(w$capped)
+  expect_equal(w$table$`Codes without labels`, 1000)
+
+  # A table without rows, and no columns profiled
+  empty <- list(summary = data.frame(TotalRows = 0, Present = NA,
+                                     DistinctValues = 0, MinValue = NA,
+                                     MaxValue = NA, Blank = NA))
+  expect_equal(.browse_table_profile(cols[1, ], list(empty), lbl)$table$`Missing %`,
+               NA_real_)
+  w <- .browse_table_profile(cols, list(), lbl)
+  expect_equal(nrow(w$table), 0)
+  expect_true(is.na(w$rows))
+
+})
+
 test_that("types show lengths, and precision and scale when there is a scale", {
 
   expect_equal(
@@ -718,18 +793,19 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_true(has_id(notes, "about"))
   expect_false(has_id(columns, "about"))
   # The Profiler tab, its settings in a panel at its left, its lists drawn
-  # over the page
+  # over the page; Stop shows while the whole table is profiled
   expect_match(navbar, "(?s)data-value=\"profile\"[^>]*>\\s*Profiler\\s*</a>",
                perl = TRUE)
   profile <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"profile\".*?data-value=\"collection\"")
   expect_match(profile, "epi-tab-layout", fixed = TRUE)
-  for (id in c("profile_settings", "profile_column", "profile_by", "profile_show",
-               "profile_go", "profile_summary", "profile_exclude",
-               "profile_exclude_save", "profile_exclude_reset", "profile_note",
-               "profile_table")) {
+  for (id in c("profile_settings", "profile_mode", "profile_column", "profile_by",
+               "profile_show", "profile_go", "profile_stop", "profile_summary",
+               "profile_exclude", "profile_exclude_save", "profile_exclude_reset",
+               "profile_note", "profile_table")) {
     expect_true(has_id(profile, id), label = id)
   }
   expect_match(profile, "\"dropdownParent\":\"body\"", fixed = TRUE)
+  expect_match(profile, "data-display-if=\"output.profile_running\"", fixed = TRUE)
   # The Tables tab; the Var Finder tab, its settings in a panel at its left
   tables <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"tables\".*?id=\"tables_table\"")
   expect_true(has_id(tables, "tables_note"))
@@ -1200,6 +1276,84 @@ test_that("the Profiler profiles the column chosen, only when asked, and leaves 
     expect_match(output$profile_summary$html, "Blank text", fixed = TRUE)
     expect_true(profile()$complete)
     expect_equal(profile()$counts$Rows, c(8, 8, 7, 7))
+  })
+
+})
+
+test_that("the Profiler profiles the whole table a column at a time, and can be stopped", {
+
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+  sent <- list()
+  capture <- function(session, inputId, label = NULL, choices = NULL,
+                      selected = NULL, value = NULL, ...) {
+    sent[[inputId]] <<- list(choices = choices, selected = selected, value = value)
+  }
+  local_mocked_bindings(updateSelectizeInput = capture,
+                        updateRadioButtons = capture,
+                        updateTextAreaInput = capture, .package = "shiny")
+  fake <- fake_browse_episerver()
+  reads <- function(what) sum(grepl(what, fake$calls(), fixed = TRUE))
+  app <- episerver_browse_app(query = fake$query)
+
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC", view = "profile",
+                      profile_mode = "table")
+    expect_match(output$profile_note, "Click Profile to profile every column",
+                 fixed = TRUE)
+    expect_equal(reads("AS TotalRows"), 0)
+
+    # One column at each step, with the page free between them; PatientID,
+    # the primary key, is left out
+    session$setInputs(profile_go = 1)
+    expect_equal(reads("AS TotalRows"), 1)
+    expect_true(output$profile_running)
+    expect_equal(output$profile_note,
+                 "Profiling column 2 of 42. Stop keeps the columns profiled so far.")
+    for (i in 1:41) session$elapse(1)
+    expect_equal(reads("AS TotalRows"), 42)
+    expect_false(output$profile_running)
+    # The counts are read for the columns with value labels alone
+    expect_equal(reads("AS ProfileValue"), 1)
+    expect_match(output$profile_note,
+                 "^Profile of Analysis\\.dbo\\.APC, 150 rows: 42 columns, 1 left out, in \\d+ s\\. Click a column to profile it alone\\.$")
+    t <- whole_profile()$profile$table
+    expect_equal(t$Column[1:3], c("Sex", "AgeYrs", "Diagnosis1"))
+    expect_equal(t$`Codes without labels`[1:3], c(1, NA, NA))
+    expect_equal(t$Codes[1], "4")
+    expect_match(output$profile_table, "Codes without labels", fixed = TRUE)
+    # One column and back: nothing is read again
+    session$setInputs(profile_mode = "column")
+    session$setInputs(profile_mode = "table")
+    expect_equal(reads("AS TotalRows"), 42)
+    expect_equal(nrow(whole_profile()$profile$table), 42)
+
+    # A click on a column profiles it alone
+    session$setInputs(profile_table_rows_selected = 2L)
+    expect_equal(sent$profile_mode$selected, "column")
+    expect_equal(sent$profile_column$selected, "AgeYrs")
+    expect_equal(sent$profile_by$selected, "")
+    expect_equal(reads("AS TotalRows"), 43)
+    expect_equal(profile()$column, "AgeYrs")
+
+    # Stop keeps the columns profiled so far
+    session$setInputs(profile_mode = "table", profile_go = 2)
+    session$setInputs(profile_stop = 1)
+    session$elapse(1)
+    expect_equal(reads("AS TotalRows"), 44)
+    expect_match(output$profile_note, "stopped after 1 of 42 columns, 1 left out",
+                 fixed = TRUE)
+    expect_equal(whole_profile()$profile$table$Column, "Sex")
+
+    # Choosing another table ends the run, and its profile is not shown
+    session$setInputs(profile_go = 3)
+    session$setInputs(table = "Deaths")
+    session$elapse(1)
+    expect_equal(reads("AS TotalRows"), 45)
+    expect_false(output$profile_running)
+    expect_null(whole_profile())
+    expect_match(output$profile_note, "Click Profile to profile every column",
+                 fixed = TRUE)
   })
 
 })

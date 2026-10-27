@@ -144,11 +144,14 @@ table.
 The \emph{Profiler} tab describes one column over the whole table: its missing
 and distinct values, minimum and maximum, and the rows of each value with
 its label, listing codes without a value label. With a \emph{By} column it
-gives a cross tab of the two, as rows or per cents of rows or columns. It
-runs only when \emph{Profile} is clicked. Columns that are by themselves a
-primary key or unique index, or whose names match a list of regular
-expressions kept between sessions (identifiers such as \verb{ID$} and \code{MRN}),
-are left out of its lists.
+gives a cross tab of the two, as rows or per cents of rows or columns.
+\emph{The whole table} gives a row for each column, with its missing and
+blank values, distinct values, minimum, maximum and codes without a value
+label, reading the columns in turn until done or stopped. It runs only
+when \emph{Profile} is clicked. Columns that are by themselves a primary key
+or unique index, or whose names match a list of regular expressions kept
+between sessions (identifiers such as \verb{ID$} and \code{MRN}), are left out of
+its lists and of the whole table's profile.
 
 \strong{Code}
 
