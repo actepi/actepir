@@ -624,29 +624,28 @@ episerver_browse_stop <- function() {
   out
 }
 
-# The Collection tab: the table's dataset label (its description), notes
-# and linked tables (dataset, from .lbl_table()), or a line saying it has
-# none
+# The Collection tab, from the table's dataset labels (dataset, from
+# .lbl_table()): its dataset label as the heading, or its full name `name`
+# when it has none; its dataset notes, in the order of their codes, or a line
+# saying it has none; and its linked tables, when it has any
 #' @noRd
-.browse_about <- function(dataset) {
+.browse_about <- function(dataset, name) {
   label <- dataset$label
-  has_label <- length(label) && !is.na(label)
   links <- dataset$links
-  if (!has_label && !length(dataset$notes) && !nrow(links)) {
-    return(shiny::div(
-      class = "browse-about",
-      shiny::p("This table has no description, notes or linked tables.")
-    ))
-  }
   shiny::div(
     class = "browse-about",
-    if (has_label) shiny::h5(label),
-    lapply(dataset$notes, shiny::p),
+    shiny::h5(if (length(label) && !is.na(label)) label else name),
+    shiny::h6("Dataset notes"),
+    if (length(dataset$notes)) {
+      lapply(dataset$notes, shiny::p)
+    } else {
+      shiny::p("No dataset notes available for this collection.")
+    },
     if (nrow(links)) {
-      shiny::p(paste0(
-        "Linked tables: ",
-        paste0(links$Table, " (on ", links$Key, ")", collapse = ", "), "."
-      ))
+      shiny::tagList(
+        shiny::h6("Linked tables"),
+        shiny::p(paste0(links$Table, " (on ", links$Key, ")", collapse = ", "))
+      )
     }
   )
 }
@@ -1431,7 +1430,7 @@ episerver_browse_stop <- function() {
 
 # The dialog that sets the dictionaries' logo through dictionary_logo(): the
 # logo shown on the band's Nightshade (logo_shown), a PNG to choose, and the
-# actepir lockup again
+# actepir logo again
 #' @noRd
 .browse_logo_dialog <- function() {
   shiny::modalDialog(
@@ -1448,7 +1447,7 @@ episerver_browse_stop <- function() {
              "A white logo on a transparent background, at least 600 pixels ",
              "wide and under 500 KB, suits the band."),
     footer = shiny::tagList(
-      shiny::actionButton("logo_reset", "Use the actepir lockup",
+      shiny::actionButton("logo_reset", "Use the actepir logo",
                           icon = shiny::icon("rotate-left"),
                           class = "btn-sm btn-primary"),
       shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
@@ -1504,193 +1503,213 @@ episerver_browse_stop <- function() {
 
     shiny::h5("Finding a table"),
     shiny::p(
-      "Choose a database, a schema and a table or view in the Dataset ",
-      "section. The Table list holds the tables and views of the schema, ",
-      "each with its dataset label. To find a table by its name or its ",
-      "label, click the list, delete the table shown with Backspace and ",
-      "type. SQL Server's system databases, databases whose name begins ",
-      "with an underscore, and the label tables are not listed."
+      "Choose a database, schema and table in the Dataset section of the ",
+      "sidebar. The Table list shows each table and view with its ",
+      "description. To search the list, click it, press Backspace to clear ",
+      "the table shown, then type part of a table's name or description."
+    ),
+    shiny::p(
+      "System databases, databases whose names start with an underscore, ",
+      "and the label tables themselves are not listed."
     ),
 
     shiny::h5("Tables"),
     shiny::p(
-      "The Tables tab lists every table and view of the schema with its ",
-      "description (its dataset label), its type, its rows, its number of ",
-      "columns, how many of them have no variable label, the label table its ",
-      "labels come from, and when it was made and when its structure last ",
-      "changed. Click a table to choose it."
+      "The Tables tab lists every table and view in the schema. For each, it ",
+      "shows:"
+    ),
+    shiny::tags$ul(
+      shiny::tags$li("its description, and whether it is a table or a view;"),
+      shiny::tags$li("its approximate number of rows;"),
+      shiny::tags$li("its number of columns, and how many have no variable ",
+                     "label;"),
+      shiny::tags$li("the label table its labels come from;"),
+      shiny::tags$li("when it was created, and when its structure last ",
+                     "changed.")
     ),
     shiny::p(
-      "Rows are approximate: SQL Server's count from its statistics, which ",
-      "views do not have. Structure changed is when the table's definition, ",
-      "such as its columns, last changed, not when its data changed. With ",
-      "Labels table set to a label table, the label columns describe that ",
-      "label table alone. The tab's details are read only while it is shown."
+      "Click a row to choose that table. Row counts come from SQL Server's ",
+      "statistics, so they are approximate, and views have none. Structure ",
+      "changed is when the table's columns or definition last changed, not ",
+      "its data. If you choose a label table in the sidebar, the label ",
+      "columns refer to that label table only."
     ),
 
-    shiny::h5("Var Finder"),
+    shiny::h5("Columns"),
     shiny::p(
-      "The Var Finder tab finds the columns of the database, in every schema, ",
-      "whose names, variable labels or value labels hold the text typed, in ",
-      "any case. Look in chooses where to look. Labels are searched as the ",
-      "browser reads them: with Labels table set to Automatic, a table's ",
-      "labels count only in the label table its labels come from; with a ",
-      "label table chosen, in that one alone. At most 1,000 matches of each ",
-      "kind are read. Click a column to open its table on the Columns tab."
+      "The Columns tab lists the table's columns with their descriptions ",
+      "(variable labels) and types. When Show value labels is ticked in the ",
+      "sidebar, each column's value labels are in a list you can open; ",
+      "Expand value labels and Collapse value labels open or close them all. ",
+      "A column's notes, when it has any, are in a list in the Notes column, ",
+      "numbered notes first, in order."
+    ),
+    shiny::p(
+      "Click rows to choose the columns for your code, and click a row again ",
+      "to remove it. Chosen rows are shaded, and the line above the table ",
+      "says how many you have chosen. Clear selection removes them all. ",
+      "Searching or sorting the table does not change your choice. If you ",
+      "choose no columns, the code reads them all."
     ),
 
-    shiny::h5("Labels"),
+    shiny::h5("Copying code"),
     shiny::p(
-      "A table's labels are read from the label tables of its database, ",
-      "which may be tables or views, in this order:"
+      "Copy Code, in the panel on the left of the Columns tab, copies R code ",
+      "that reads the table and selects the columns you have chosen, ready ",
+      "to paste into a script. If you started the browser with ",
+      code("episerver_browse(background = FALSE)"), ", the button is called ",
+      "Insert Code and puts the code at the cursor in RStudio instead."
     ),
-    shiny::tags$ol(
+    shiny::p("The settings above the button shape the code:"),
+    shiny::tags$ul(
       shiny::tags$li(
-        code("ref.DataProperties"), ", which the Stata command sqldta also ",
-        "reads, with rows filed by the table's schema and name;"
+        "Connection: quickconnect reads the table with ",
+        code("episerver_quickconnect()"), "; connect opens a connection with ",
+        code("episerver_connect()"), " and the table with ",
+        code("episerver_lazytable()"), "; none leaves out the connection, so ",
+        "the code starts from a lazy table called ", code("tb"), " that you ",
+        "have already made."
       ),
       shiny::tags$li(
-        "tables named ", code("DataLabels"), ", then ",
-        code("DataLabelsNew"), ", then others whose name holds DataLabels, ",
-        "each in the ", code("ref"), " schema before others, with rows ",
-        "filed by the table's name alone."
+        "Declare packages puts ", code("actepir::"), " and ", code("dplyr::"),
+        " before each function, or adds ", code("library()"), " calls when ",
+        "Connection is connect."
+      ),
+      shiny::tags$li(
+        "Import with labels reads the data with ",
+        code("collect_withlabels()"), ", which applies the same variable and ",
+        "value labels the browser shows. If you have chosen a label table in ",
+        "the sidebar, the code names it."
+      )
+    ),
+
+    shiny::h5("Dictionaries"),
+    shiny::p(
+      "The Download menu, under Copy Code, gives the table's data ",
+      "dictionary: its description, notes and linked tables, and every ",
+      "column with its labels, including value labels that are not shown."
+    ),
+    shiny::tags$ul(
+      shiny::tags$li(
+        "Dictionary as PDF shows up to 50 value labels for each column. It ",
+        "needs the Quarto that comes with RStudio."
+      ),
+      shiny::tags$li(
+        "Dictionary as HTML is a single file with every value label and a ",
+        "search box, which you can send to others as it is."
+      ),
+      shiny::tags$li(
+        "Copy dictionary for Excel copies the dictionary as a table, with a ",
+        "row for each value label, to paste into a worksheet. Codes such as ",
+        "01 and labels such as 1-4 keep their exact form."
+      ),
+      shiny::tags$li(
+        "Dictionaries of all tables writes a dictionary for every table and ",
+        "view with labels in the schema, or in the whole database, to a ",
+        "folder on your computer, as HTML, PDF or both. Type or paste the ",
+        "folder, or find it in the list below the box; a folder that does ",
+        "not exist is created. Each PDF takes a second or two, so a large ",
+        "database can take several minutes."
+      ),
+      shiny::tags$li(
+        "Dictionary logo changes the logo on the dictionaries. Choose a PNG ",
+        "file, or go back to the actepir logo. Your choice is kept for later ",
+        "sessions, and ", code("dictionary_logo()"), " does the same in the ",
+        "console."
       )
     ),
     shiny::p(
-      "With Labels table set to Automatic, each table takes its labels ",
-      "from the first label table that holds rows for it, and the bar ",
-      "above the columns says which. Choosing a label table reads the ",
-      "labels from it alone. A label table is offered only if it has every ",
-      "column of its layout."
-    ),
-    shiny::p(
-      "The Description of a column is its variable label. Show value labels, ",
-      "on by default, adds its value labels, which are read only while ",
-      "shown; Expand value labels and Collapse value labels above the table ",
-      "open and close every list. Notes on columns are shown when any ",
-      "column has them, those with a code first, in code order."
-    ),
-    shiny::p(
-      "The Collection tab holds the table's description (its dataset ",
-      "label), its notes and its linked tables."
-    ),
-
-    shiny::h5("Choosing columns"),
-    shiny::p(
-      "Click rows of the table to choose columns for the code, and click a ",
-      "row again to drop it. Rows chosen are shaded, with a bar at their ",
-      "left, and the line above the table counts them. Clear selection ",
-      "drops them all. The search box and the headings search and sort the ",
-      "table without changing the columns chosen."
+      code("episerver_dictionary()"), " makes the same files from a script."
     ),
 
     shiny::h5("Profiler"),
     shiny::p(
-      "The Profiler tab describes one column over every row of the table. ",
-      "Its summary, in the panel, gives the rows, missing (NULL) values, ",
-      "blank text, distinct values, minimum and maximum, and the codes found ",
-      "without a value label. The table gives the rows of each of the 1,000 ",
-      "most common values, with its value label. The column offered is the ",
-      "first chosen in the Columns tab. A profile reads the whole table, so ",
-      "it runs only when Profile is clicked, and a large table can take a ",
-      "while."
+      "The Profiler tab summarises the values in a column, or in every ",
+      "column, across all the rows of the table. Choose One column or The ",
+      "whole table at the top of the panel, then click Profile. Profiling ",
+      "reads the whole table, so it runs only when you click Profile, and a ",
+      "large table can take a while."
     ),
     shiny::p(
-      "With a By column, the table is a cross tab: a row for each value of ",
-      "the column and a column for each of the 20 most common values of By, ",
-      "the rest in Other, with totals. Show gives the rows, or per cents of ",
-      "each row or column."
+      "One column: the panel shows the number of rows, missing (NULL) ",
+      "values, blank text, distinct values, the minimum and maximum, and any ",
+      "codes that have no value label. The table lists the 1,000 most common ",
+      "values with their labels, counts and per cents. The first column you ",
+      "chose on the Columns tab is offered first."
     ),
     shiny::p(
-      "The whole table gives a row for each column: its missing (NULL) ",
-      "values and blank text as per cents of the rows, distinct values, ",
-      "minimum, maximum, number of value labels, and the codes found without ",
-      "a value label. Each column is read in turn over every row of the ",
-      "table, so a large table can take minutes; Stop keeps the columns read ",
-      "so far. Click a heading to sort by it, and a column to profile it ",
-      "alone."
+      "By: choose a second column for a cross tab. Each value of the first ",
+      "column is a row, and the 20 most common values of the second are ",
+      "columns, with the rest grouped as Other. Show switches between counts ",
+      "and per cents of each row or column."
     ),
     shiny::p(
-      "Columns left out, at the foot of the panel, lists the columns that ",
-      "are not offered or profiled: those that are by themselves a primary key or a ",
-      "unique index, and those whose names match a line of the list. Each ",
-      "line is a regular expression, matched with the name's case: ^ID ",
-      "begins with ID, ID$ ends with ID, MRN holds MRN anywhere, and (?i) at ",
-      "the start of a line ignores case. Save the list keeps it for later ",
-      "sessions; Restore the defaults goes back to the list the browser ",
-      "came with."
+      "The whole table: a row for each column, with its missing values and ",
+      "blank text as per cents of the rows, its distinct values, minimum and ",
+      "maximum, its number of value labels, and any codes without a value ",
+      "label. The columns are read one at a time, and Stop keeps the results ",
+      "so far. Click a heading to sort by it, or a row to profile that ",
+      "column on its own."
+    ),
+    shiny::p(
+      "Identifiers are left out: columns that are a primary key or unique ",
+      "index on their own, and columns whose names match a pattern in ",
+      "Columns left out, at the bottom of the panel. Each line of that list ",
+      "is a regular expression and is case sensitive: ^ID matches names that ",
+      "start with ID, ID$ names that end with ID, and MRN names that contain ",
+      "MRN. Start a line with (?i) to ignore case. Save the list keeps your ",
+      "changes for later sessions; Restore the defaults goes back to the ",
+      "original list."
     ),
 
-    shiny::h5("Code"),
+    shiny::h5("Collection"),
     shiny::p(
-      "Copy Code, in the Columns tab's panel, copies R code that reads the ",
-      "table, with a ", code("select()"), " of the columns chosen. When the ",
-      "browser runs in the R session (",
-      code("episerver_browse(background = FALSE)"), "), the button is ",
-      "Insert Code and puts the code at the cursor. The settings above it ",
-      "set its form:"
+      "The Collection tab shows the table's description (its dataset label), ",
+      "or its full name when it has none. Below it are the table's dataset ",
+      "notes, numbered notes first, in order, and any linked tables."
     ),
-    shiny::tags$ul(
+
+    shiny::h5("Var Finder"),
+    shiny::p(
+      "The Var Finder tab searches every schema in the database for columns ",
+      "whose names, variable labels or value labels contain the text you ",
+      "type, ignoring case. Look in sets where to search. Labels are ",
+      "searched as the browser reads them: with Labels table set to ",
+      "Automatic, only the label table each table takes its labels from is ",
+      "searched. Each kind of search returns at most 1,000 matches. Click a ",
+      "result to open its table on the Columns tab."
+    ),
+
+    shiny::h5("Where labels come from"),
+    shiny::p(
+      "Labels are read from the label tables (tables or views) in the ",
+      "table's database, in this order:"
+    ),
+    shiny::tags$ol(
       shiny::tags$li(
-        "quickconnect: a pipe from ", code("episerver_quickconnect()"), ";"
+        code("ref.DataProperties"), ", which the Stata command sqldta also ",
+        "reads, matched by the table's schema and name;"
       ),
       shiny::tags$li(
-        "connect: a connection from ", code("episerver_connect()"),
-        " and the table from ", code("episerver_lazytable()"), ";"
-      ),
-      shiny::tags$li("none: the pipe alone, from a lazy table ",
-                     code("tb"), " made earlier.")
+        "tables named ", code("DataLabels"), ", then ",
+        code("DataLabelsNew"), ", then other tables with DataLabels in ",
+        "their name, those in the ", code("ref"), " schema first, matched ",
+        "by the table's name only."
+      )
     ),
     shiny::p(
-      "Declare packages adds ", code("actepir::"), " and ", code("dplyr::"),
-      " to the calls, or ", code("library()"), " calls to the connect form. ",
-      "Import with labels collects the data with ",
-      code("collect_withlabels()"), ", which applies the variable and value ",
-      "labels of the label table the browser reads. When Labels table names ",
-      "a label table, the code names it too."
+      "With Labels table set to Automatic, each table takes its labels from ",
+      "the first label table that has rows for it, and the bar at the top ",
+      "of each tab says which one. Choose a label table to read labels from ",
+      "it only. A label table is offered only when it has all the columns ",
+      "its layout needs."
     ),
 
-    shiny::h5("Dictionary"),
-    shiny::p(
-      "Download, under the code button, gives the table's data dictionary ",
-      "as a PDF or an HTML file: its description, notes and linked tables, ",
-      "and its columns with the labels from the label table read, value ",
-      "labels included whether or not they are shown. The PDF shows the ",
-      "first 50 value labels of a column; the HTML file shows them all, with ",
-      "a search box, and can be sent on as it is. The PDF needs the Quarto ",
-      "that comes with RStudio. ", code("episerver_dictionary()"),
-      " gives the same files in a script."
-    ),
-    shiny::p(
-      "Copy dictionary for Excel copies the dictionary as a table, a row for ",
-      "each value label of each column and one for a column without value ",
-      "labels, to paste into a worksheet. Its cells are marked as text, so ",
-      "Excel keeps codes such as 01 and labels such as 1-4 as they are."
-    ),
-    shiny::p(
-      "Dictionaries of all tables, in the same menu, writes the dictionaries ",
-      "of every table and view with labels in the schema, or in the whole ",
-      "database, to a folder on this computer, as HTML, PDF or both. Tables ",
-      "and views without labels are left out. A PDF takes a second or two, ",
-      "so a large database can take some minutes."
-    ),
-    shiny::p(
-      "Type or paste the folder, or find it in the list below the box: click ",
-      "a folder to open it, or Up, Home or Working directory. A folder that ",
-      "does not exist is made, so a new folder's name can be typed at the end."
-    ),
-    shiny::p(
-      "Dictionary logo sets the logo at the right of the dictionaries' band: ",
-      "choose a PNG, or go back to the actepir lockup. It is kept for later ",
-      "sessions, and ", code("dictionary_logo()"), " sets the same logo in ",
-      "the console."
-    ),
-
-    shiny::h5("Problems"),
+    shiny::h5("Reporting a problem"),
     shiny::p(paste0(
-      "The bug button at the foot of the sidebar prepares a report to send ",
-      "to ", .epi_contact, ". It holds the settings and the names of the ",
-      "database, table and columns chosen, but no data or labels."
+      "The bug button at the bottom of the sidebar prepares a report to send ",
+      "to ", .epi_contact, ". It includes your settings and the names of the ",
+      "database, table and columns you chose, but no data or labels."
     ))
   )
 }
@@ -1788,6 +1807,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         .browse-about { max-width: 900px; }
         .browse-about h5 { color: var(--epi-primary); font-weight: 600;
                            margin: 4px 0 6px 0; }
+        .browse-about h6 { color: var(--epi-primary); font-weight: 600;
+                           margin: 14px 0 4px 0; }
         .browse-about p { margin-bottom: 6px; }
         .browse-chosen { color: #555; }
         td.browse-values details summary,
@@ -2425,7 +2446,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
 
     # ── The Collection tab and the columns ─────────────────────────────────
     output$about <- shiny::renderUI({
-      .browse_about(lbl()$dataset)
+      ch <- chosen()
+      .browse_about(lbl()$dataset, paste(ch$db, ch$schema, ch$table, sep = "."))
     })
 
     # The table the columns' table was last drawn for, as its rows chosen
@@ -3291,7 +3313,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                      shiny::tags$img(src = .dict_logo_src(logo), alt = logo$alt)
                    }),
         shiny::p(class = "epi-note", if (is.null(info)) {
-          "The dictionaries show the actepir lockup."
+          "The dictionaries show the actepir logo."
         } else {
           sprintf("The dictionaries show your logo, %s by %s pixels.",
                   info$width, info$height)

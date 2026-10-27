@@ -11,7 +11,7 @@ dictionary_logo(path = NULL, remove = FALSE)
 which logo is set.}
 
 \item{remove}{If \code{TRUE}, removes the logo set, so the dictionaries show the
-actepir lockup again.}
+actepir logo again.}
 }
 \value{
 Invisibly, the path of the logo the dictionaries show.
@@ -19,7 +19,7 @@ Invisibly, the path of the logo the dictionaries show.
 \description{
 Sets the logo that the dictionaries of \code{\link[=episerver_dictionary]{episerver_dictionary()}} and the
 Dataset Browser show in the band at the top of each page, in place of the
-actepir lockup. The logo is kept in actepir's folder in R's settings for
+actepir logo. The logo is kept in actepir's folder in R's settings for
 the user (\code{tools::R_user_dir("actepir", "config")}), so it stays set in
 later sessions and projects.
 }
@@ -37,7 +37,7 @@ dictionary_logo("C:/logos/logo_white.png")
 # Which logo is set
 dictionary_logo()
 
-# Back to the actepir lockup
+# Back to the actepir logo
 dictionary_logo(remove = TRUE)
 }
 }

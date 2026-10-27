@@ -375,6 +375,14 @@ test_that("the app lists and describes a table against EpiServer", {
     expect_match(d$`Value labels`[d$Column == "RSEX_Y20"], "Male", fixed = TRUE)
     expect_match(output$info_bar$html, "Labels from ref.", fixed = TRUE)
     expect_no_match(output$info_bar$html, "epi-warn", fixed = TRUE)
+    # The Collection tab: the dataset label, or the table's full name, as
+    # its heading, then the dataset notes or a line saying there are none
+    label <- lbl()$dataset$label
+    heading <- if (!is.na(label)) label else "Analysis.dbo.ACTGHSMYX"
+    expect_match(output$about$html,
+                 paste0("<h5>", htmltools::htmlEscape(heading), "</h5>"),
+                 fixed = TRUE)
+    expect_match(output$about$html, "<h6>Dataset notes</h6>", fixed = TRUE)
 
     # The Tables tab and the Var Finder tab
     session$setInputs(view = "tables")
