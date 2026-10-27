@@ -571,22 +571,35 @@ test_that("the columns' table escapes text and adds value labels and notes", {
 
 })
 
-test_that("the dataset label, notes and linked tables go on their own tab", {
+test_that("the dataset label, notes and linked tables go on their own tab, under headings", {
 
+  # The dataset label as the heading; the notes in the order of their codes,
+  # numerically, then those without a code in the order of the rows
   lbl <- .lbl_table(.lbl_normalise(data.frame(
-    ColumnName = c("", "", "id"),
-    PropertyType = c("DatasetLabel", "DatasetNote", "Link"),
-    PropertyCode = NA,
-    PropertyText = c("Admitted patient care", "Extracted monthly.",
-                     "APC_Extra")
+    ColumnName = c("", "", "", "", "", "id"),
+    PropertyType = c("DatasetLabel", "DatasetNote", "DatasetNote",
+                     "DatasetNote", "DatasetNote", "Link"),
+    PropertyCode = c(NA, "10", NA, "2", "1", NA),
+    PropertyText = c("Admitted patient care", "Tenth.", "Not coded.",
+                     "Second.", "First.", "APC_Extra")
   )))
-  html <- as.character(.browse_about(lbl$dataset))
+  html <- as.character(.browse_about(lbl$dataset, "Analysis.dbo.APC"))
   expect_match(html, "<h5>Admitted patient care</h5>", fixed = TRUE)
-  expect_match(html, "<p>Extracted monthly.</p>", fixed = TRUE)
-  expect_match(html, "<p>Linked tables: APC_Extra (on id).</p>", fixed = TRUE)
-  expect_equal(strip_html(as.character(
-    .browse_about(.lbl_table(.lbl_normalise(NULL))$dataset))),
-    "This table has no description, notes or linked tables.")
+  expect_no_match(html, "Analysis.dbo.APC", fixed = TRUE)
+  expect_match(html, paste0("(?s)<h6>Dataset notes</h6>\\s*<p>First.</p>\\s*",
+                            "<p>Second.</p>\\s*<p>Tenth.</p>\\s*<p>Not coded.</p>"),
+               perl = TRUE)
+  expect_match(html, "(?s)<h6>Linked tables</h6>\\s*<p>APC_Extra \\(on id\\)</p>",
+               perl = TRUE)
+
+  # Without a dataset label, notes or links: the table's full name, and a
+  # line saying it has no notes
+  html <- as.character(.browse_about(.lbl_table(.lbl_normalise(NULL))$dataset,
+                                     "Analysis.dbo.Plain"))
+  expect_equal(strip_html(html), paste("Analysis.dbo.Plain Dataset notes No",
+                                       "dataset notes available for this",
+                                       "collection."))
+  expect_no_match(html, "Linked tables", fixed = TRUE)
 
 })
 
@@ -936,9 +949,9 @@ test_that("each table takes its labels from the first label table holding rows",
       "<br>Uncoded note.</div></details>"))
     expect_false("Value labels" %in% names(d))
     about <- strip_html(output$about$html)
-    expect_equal(about, paste("Admitted patient care Coded first. Coded",
-                              "second. Not coded. Linked tables: APC_Extra",
-                              "(on PatientID)."))
+    expect_equal(about, paste("Admitted patient care Dataset notes Coded",
+                              "first. Coded second. Not coded. Linked tables",
+                              "APC_Extra (on PatientID)"))
 
     session$setInputs(table = "ED")
     expect_equal(info(), paste("Analysis.dbo.ED (table), 2 columns",
@@ -958,7 +971,9 @@ test_that("each table takes its labels from the first label table holding rows",
 
     session$setInputs(table = "Plain")
     expect_match(info(), "No label table holds labels for this table", fixed = TRUE)
-    expect_match(output$about$html, "This table has no description", fixed = TRUE)
+    expect_equal(strip_html(output$about$html),
+                 paste("Analysis.dbo.Plain Dataset notes No dataset notes",
+                       "available for this collection."))
 
     # Births takes its labels from ref.DataProperties, without a dataset
     # label, although ref.DataLabels holds one

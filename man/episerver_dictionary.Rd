@@ -129,7 +129,7 @@ large database is quicker as HTML alone.
 
 \strong{Logo}
 
-The band shows the actepir lockup, or the logo set with
+The band shows the actepir logo, or the logo set with
 \code{\link[=dictionary_logo]{dictionary_logo()}}.
 }
 \examples{

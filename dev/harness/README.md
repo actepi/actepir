@@ -157,8 +157,17 @@ Plan pull request 8 (`dev/notes/dataset-browser.md`) added Copy dictionary for E
 |---|---|
 | `episerver_browser.js`, Download | The menu holds "Dictionary as PDF (needs Quarto)", disabled, "Dictionary as HTML", "Copy dictionary for Excel", "Dictionaries of all tables…" and "Dictionary logo…". It ends at y = 648, and the panel does not scroll. |
 | `episerver_browser.js`, Excel | The clipboard holds `text/plain` and `text/html`: 47 lines of text, the headings and APC's 46 rows (Sex's code 9 reads "Analysis.dbo.APC, 2, Sex, Sex of the patient, int, 9, Not stated"), and an HTML table of 47 rows whose 322 cells but the positions (46 rows of 7) carry `mso-number-format`, with AgeYrs's notes in one cell. |
-| `episerver_browser.js`, logo | The dialog shows the lockup (`data:image/svg+xml`) 48px tall on Nightshade, rgb(50, 5, 87), and "The dictionaries show the actepir lockup."; a 640 by 200 PNG chosen gives `data:image/png` and "The dictionaries show your logo, 640 by 200 pixels.", with no warning; Use the actepir lockup goes back. |
+| `episerver_browser.js`, logo | The dialog shows the lockup (`data:image/svg+xml`) 48px tall on Nightshade, rgb(50, 5, 87), and "The dictionaries show the actepir lockup." ("logo" since plan pull request 9); a 640 by 200 PNG chosen gives `data:image/png` and "The dictionaries show your logo, 640 by 200 pixels.", with no warning; Use the actepir lockup (now Use the actepir logo) goes back. |
 | `dryrun_live.R` | 28 tests, 576 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 571 expectations, 0 failed, 4 skipped. |
+
+Plan pull request 9 (`dev/notes/dataset-browser.md`) changed the browser's wording, the Collection tab and the Help tab; the calculator's results were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, Collection | APC: "Admitted patient care", then "Dataset notes" with "Coded first.", "Coded second." and "Not coded.", then "Linked tables" with "APC_Extra (on PatientID)". Plain: "Analysis.dbo.Plain", then "Dataset notes" with "No dataset notes available for this collection.", and no Linked tables. |
+| `episerver_browser.js`, logo | "The dictionaries show the actepir logo." before and after a logo is set. |
+| `episerver_browser.js`, Help | 10 sections: Finding a table, Tables, Columns, Copying code, Dictionaries, Profiler, Collection, Var Finder, Where labels come from and Reporting a problem. |
+| `dryrun_live.R` | 28 tests, 578 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 573 expectations, 0 failed, 4 skipped. |
 
 ## How it works
 

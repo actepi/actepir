@@ -336,9 +336,9 @@ const fs = require('fs');
     '| notes in one cell', excel.html.includes('mso-data-placement:same-cell'));
   await page.waitForTimeout(2500);
 
-  // Dictionary logo: the lockup on the band's Nightshade; a white logo on
-  // a transparent background, made here as a screenshot, then the lockup
-  // again
+  // Dictionary logo: the actepir logo on the band's Nightshade; a white logo on
+  // a transparent background, made here as a screenshot, then the actepir
+  // logo again
   if (!(await page.isVisible('#dict_logo'))) await page.click('#dict_download');
   await page.click('#dict_logo');
   await page.waitForSelector('#logo_file', { state: 'attached' });
@@ -362,7 +362,7 @@ const fs = require('fs');
   await shot('08c_logo_dialog');
   await page.click('#logo_reset');
   await settle();
-  console.log('LOGO lockup again:', JSON.stringify(await logoShown()));
+  console.log('LOGO actepir logo again:', JSON.stringify(await logoShown()));
   await page.click('.modal-footer button[data-bs-dismiss=modal]');
   await settle(400);
 

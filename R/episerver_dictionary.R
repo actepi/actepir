@@ -43,7 +43,7 @@
 #'
 #' **Logo**
 #'
-#' The band shows the actepir lockup, or the logo set with
+#' The band shows the actepir logo, or the logo set with
 #' [dictionary_logo()].
 #'
 #' @param tables The tables: names of tables in `Analysis.dbo`, or full
@@ -195,7 +195,7 @@ episerver_dictionary <- function(tables = NULL, db = NULL, schema = NULL,
 #'
 #' Sets the logo that the dictionaries of [episerver_dictionary()] and the
 #' Dataset Browser show in the band at the top of each page, in place of the
-#' actepir lockup. The logo is kept in actepir's folder in R's settings for
+#' actepir logo. The logo is kept in actepir's folder in R's settings for
 #' the user (`tools::R_user_dir("actepir", "config")`), so it stays set in
 #' later sessions and projects.
 #'
@@ -207,7 +207,7 @@ episerver_dictionary <- function(tables = NULL, db = NULL, schema = NULL,
 #' @param path The PNG file of the logo to set. Without it, the function says
 #'   which logo is set.
 #' @param remove If `TRUE`, removes the logo set, so the dictionaries show the
-#'   actepir lockup again.
+#'   actepir logo again.
 #'
 #' @return Invisibly, the path of the logo the dictionaries show.
 #'
@@ -222,7 +222,7 @@ episerver_dictionary <- function(tables = NULL, db = NULL, schema = NULL,
 #' # Which logo is set
 #' dictionary_logo()
 #'
-#' # Back to the actepir lockup
+#' # Back to the actepir logo
 #' dictionary_logo(remove = TRUE)
 #' }
 dictionary_logo <- function(path = NULL, remove = FALSE) {
@@ -231,7 +231,7 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
   if (isTRUE(remove)) {
     if (!is.null(path)) stop("Give a path or remove = TRUE, not both.", call. = FALSE)
     if (file.exists(stored)) unlink(stored)
-    message("The dictionaries will show the actepir lockup.")
+    message("The dictionaries will show the actepir logo.")
     return(invisible(.dict_lockup()))
   }
 
@@ -242,7 +242,7 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
               " by ", info$height, " pixels).")
       return(invisible(stored))
     }
-    message("The dictionaries show the actepir lockup. Give dictionary_logo() ",
+    message("The dictionaries show the actepir logo. Give dictionary_logo() ",
             "a PNG to show your own logo.")
     return(invisible(.dict_lockup()))
   }

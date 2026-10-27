@@ -431,7 +431,7 @@ test_that("dictionary_logo() keeps a logo for the user, and checks it", {
   withr::local_envvar(R_USER_CONFIG_DIR = config)
   png <- function(...) fake_png(tempfile(fileext = ".png"), ...)
 
-  expect_message(lockup <- dictionary_logo(), "show the actepir lockup")
+  expect_message(lockup <- dictionary_logo(), "show the actepir logo")
   expect_equal(basename(lockup), "logo-lockup.svg")
   expect_equal(.dict_logo()$mime, "image/svg+xml")
 
@@ -458,7 +458,7 @@ test_that("dictionary_logo() keeps a logo for the user, and checks it", {
   expect_error(dictionary_logo(text), "is not a PNG file")
   expect_error(dictionary_logo(text, remove = TRUE), "not both")
 
-  expect_message(dictionary_logo(remove = TRUE), "actepir lockup")
+  expect_message(dictionary_logo(remove = TRUE), "actepir logo")
   expect_false(file.exists(stored))
   expect_equal(.dict_logo()$ext, "svg")
 
@@ -725,11 +725,11 @@ test_that("the browser copies the dictionary for Excel, and sets its logo throug
                            list(message = copied$message)))
     expect_match(copied$text, "\tSex\tSex of the patient\tint\t9\tNot stated\t")
 
-    # The logo: the lockup, then a PNG chosen, with what it warns of, a
-    # file that is not a PNG, and the lockup again
+    # The logo: the actepir logo, then a PNG chosen, with what it warns of,
+    # a file that is not a PNG, and the actepir logo again
     session$setInputs(dict_logo = 1)
     expect_match(output$logo_shown$html, "data:image/svg+xml;base64,", fixed = TRUE)
-    expect_match(output$logo_shown$html, "The dictionaries show the actepir lockup.",
+    expect_match(output$logo_shown$html, "The dictionaries show the actepir logo.",
                  fixed = TRUE)
     session$setInputs(logo_file = upload(fake_png(file.path(dir, "0.png"), 1400, 430),
                                          "white.png"))
@@ -750,7 +750,7 @@ test_that("the browser copies the dictionary for Excel, and sets its logo throug
     expect_match(output$logo_shown$html, "300 by 90 pixels", fixed = TRUE)
     session$setInputs(logo_reset = 1)
     expect_false(file.exists(.dict_logo_file()))
-    expect_match(output$logo_shown$html, "The dictionaries show the actepir lockup.",
+    expect_match(output$logo_shown$html, "The dictionaries show the actepir logo.",
                  fixed = TRUE)
   })
 
