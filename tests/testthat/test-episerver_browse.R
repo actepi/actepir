@@ -552,7 +552,9 @@ test_that("the columns' table escapes text and adds value labels and notes", {
   # Labels match columns in any case, as SQL Server matches names
   expect_equal(d$Description, c("Sex of the patient", "Age &lt;in years&gt;", ""))
   expect_equal(d$Type, c("int", "int", "varchar(5)"))
-  expect_equal(d$Notes, c("", "A &amp; B", ""))
+  # Notes in a list that opens, as value labels are
+  expect_equal(d$Notes, c("", paste0("<details><summary>1 note</summary>",
+                                     "<div>A &amp; B</div></details>"), ""))
 
   v <- .browse_columns(cols, lbl, values = TRUE)
   expect_named(v, c("#", "Column", "Description", "Type", "Value labels",
@@ -753,8 +755,8 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_false(has_id(page, "done"))
   expect_no_match(page, "gadget", fixed = TRUE)
 
-  # The sidebar: three sections that start open, then the code and bug
-  # buttons at its foot. It can be resized.
+  # The sidebar: two sections that start open, then the bug button at its
+  # foot. It can be resized.
   sidebar <- part("(?s)<aside id=\"settings\" class=\"sidebar.*?</aside>")
   expect_length(sidebar, 1)
   expect_match(part("<aside id=\"settings\"[^>]*>"), "data-resizable")
@@ -762,30 +764,41 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   headings <- regmatches(sidebar, gregexpr(
     "(?s)<button class=\"accordion-button[^>]*>.*?</button>", sidebar,
     perl = TRUE))[[1]]
-  expect_equal(strip_html(headings), c("Dataset", "Labels", "Code"))
+  expect_equal(strip_html(headings), c("Dataset", "Labels"))
   expect_no_match(paste(headings, collapse = ""), "collapsed")
   for (id in c("db", "schema", "table", "labels_source", "show_values",
-               "insert_mode", "declare_pkgs", "use_labels", "insert_code",
                "bug_report")) {
     expect_true(has_id(sidebar, id), label = id)
   }
-  foot <- part("(?s)<div class=\"epi-actions\">.*?id=\"bug_report\"")
-  expect_match(foot, "id=\"insert_code\"[^>]*>(?s).*Copy Code", perl = TRUE)
-  # Download, between them: a menu of the dictionary as PDF and HTML
-  expect_match(foot, paste0("(?s)id=\"insert_code\".*<div class=\"dropup\">.*",
-                            "id=\"dict_download\".*Download.*",
-                            "Dictionary as PDF.*",
-                            "id=\"dict_html\".*Dictionary as HTML"), perl = TRUE)
+  for (id in c("insert_mode", "declare_pkgs", "use_labels", "insert_code",
+               "dict_download")) {
+    expect_false(has_id(sidebar, id), label = id)
+  }
+  foot <- part("(?s)<div class=\"epi-actions\">.*?</aside>")
+  expect_true(has_id(foot, "bug_report"))
   # Value labels are shown by default
   expect_match(sidebar, "<input id=\"show_values\"[^>]* checked")
-  # Above the columns' table: buttons that expand and collapse the value
-  # labels and clear the rows chosen, which starts disabled, and a line on
-  # the columns chosen
-  columns <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"columns\".*?id=\"col_table\"")
+  # The Columns tab: its own panel at its left with the code's settings,
+  # Copy Code and Download, a menu of the dictionary as PDF and HTML and of
+  # the dictionaries of all tables, placed so that the panel cannot clip it;
+  # above the table, buttons that expand and collapse the value labels and
+  # clear the rows chosen, which starts disabled, and a line on the columns
+  # chosen
+  columns <- part("(?s)<div class=\"tab-pane[^>]*data-value=\"columns\".*?data-value=\"profile\"")
   expect_length(columns, 1)
-  for (id in c("values_open", "values_close", "clear_rows", "chosen_note")) {
+  expect_match(columns, "epi-tab-layout", fixed = TRUE)
+  for (id in c("columns_settings", "insert_mode", "declare_pkgs", "use_labels",
+               "insert_code", "dict_download", "dict_html", "dict_bulk",
+               "values_open", "values_close", "clear_rows", "chosen_note")) {
     expect_true(has_id(columns, id), label = id)
   }
+  expect_match(columns, "id=\"insert_code\"[^>]*>(?s).*Copy Code", perl = TRUE)
+  expect_match(columns, paste0("(?s)id=\"insert_code\".*<div class=\"dropdown\">.*",
+                               "id=\"dict_download\"[^>]*data-bs-popper-config=",
+                               "\"\\{&quot;strategy&quot;:&quot;fixed&quot;\\}\".*",
+                               "Download.*Dictionary as PDF.*",
+                               "id=\"dict_html\".*Dictionary as HTML.*",
+                               "Dictionaries of all tables"), perl = TRUE)
   expect_match(columns, "<button id=\"clear_rows\" type=\"button\" disabled",
                fixed = TRUE)
   # The dataset's description and notes are on the Collection tab
@@ -915,7 +928,9 @@ test_that("each table takes its labels from the first label table holding rows",
     d <- .browse_columns(columns()$data, lbl())
     expect_equal(d$Description[1:4], c("", "Sex of the patient",
                                        "Age in years (&lt;1 is 0)", ""))
-    expect_equal(d$Notes[3], "Second note.<br>Tenth note.<br>Uncoded note.")
+    expect_equal(d$Notes[3], paste0(
+      "<details><summary>3 notes</summary><div>Second note.<br>Tenth note.",
+      "<br>Uncoded note.</div></details>"))
     expect_false("Value labels" %in% names(d))
     about <- strip_html(output$about$html)
     expect_equal(about, paste("Admitted patient care Coded first. Coded",
@@ -1402,10 +1417,10 @@ test_that("the code button inserts the code when the app runs in RStudio", {
   app  <- episerver_browse_app(query = fake_browse_episerver()$query)
   page <- app$httpHandler(list(PATH_INFO = "/", REQUEST_METHOD = "GET",
                                QUERY_STRING = ""))$content
-  foot <- regmatches(page, regexpr("(?s)<div class=\"epi-actions\">.*?</div>",
-                                   page, perl = TRUE))
-  expect_match(foot, "id=\"insert_code\"[^>]*>(?s).*Insert Code", perl = TRUE)
-  expect_no_match(foot, "Copy Code", fixed = TRUE)
+  button <- regmatches(page, regexpr("(?s)<button[^>]*id=\"insert_code\".*?</button>",
+                                     page, perl = TRUE))
+  expect_match(button, "Insert Code", fixed = TRUE)
+  expect_no_match(button, "Copy Code", fixed = TRUE)
 
 })
 
