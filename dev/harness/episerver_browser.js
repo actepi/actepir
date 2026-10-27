@@ -87,18 +87,22 @@ const fs = require('fs');
     return { label: [label.fontSize, label.fontWeight], box: box.fontSize, gap: field.marginBottom };
   })));
 
-  // Each information button shows its notes and hides them again
-  for (const id of await page.$$eval('aside#settings .epi-help', ds => ds.map(d => d.id))) {
-    // A closed <details> hides its content with content-visibility
-    const visible = () => page.$eval(`#${id} .epi-note`, e => e.checkVisibility());
-    const before = await visible();
-    await page.click(`#${id} > summary`);
-    await page.waitForTimeout(300);
-    const open = await visible();
-    await page.click(`#${id} > summary`);
-    await page.waitForTimeout(300);
-    console.log(`HELP ${id}: hidden ${!before}, shown ${open}, hidden again ${!(await visible())}`);
-  }
+  // Each information button shows its notes and hides them again: the
+  // sidebar's here, the Columns tab's once it is shown
+  const helpButtons = async panel => {
+    for (const id of await page.$$eval(`${panel} .epi-help`, ds => ds.map(d => d.id))) {
+      // A closed <details> hides its content with content-visibility
+      const visible = () => page.$eval(`#${id} .epi-note`, e => e.checkVisibility());
+      const before = await visible();
+      await page.click(`#${id} > summary`);
+      await page.waitForTimeout(300);
+      const open = await visible();
+      await page.click(`#${id} > summary`);
+      await page.waitForTimeout(300);
+      console.log(`HELP ${id}: hidden ${!before}, shown ${open}, hidden again ${!(await visible())}`);
+    }
+  };
+  await helpButtons('aside#settings');
 
   // The Table list: tables, then views, each with its dataset label muted;
   // the chosen table shows its name alone. Typing finds a table by its label.
@@ -146,6 +150,14 @@ const fs = require('fs');
     '| table header below info bar by', await page.evaluate(() => Math.round(
       document.querySelector('#col_table .dataTables_scrollHead').getBoundingClientRect().top -
       document.querySelector('#info_bar .info-bar').getBoundingClientRect().bottom)), 'px');
+  // The tab's own panel: the code's settings, Copy Code and Download
+  console.log('COLUMNS panel:', JSON.stringify(await page.evaluate(() => {
+    const aside = document.querySelector('#columns_settings');
+    return { width: Math.round(aside.getBoundingClientRect().width),
+             settings: [...aside.querySelectorAll('label.control-label, .checkbox label')].map(l => l.textContent.trim()),
+             buttons: [...aside.querySelectorAll('.epi-stack > *')].map(e => (e.id || e.querySelector('[id]').id)) };
+  })));
+  await helpButtons('#columns_settings');
   await shot('02_columns');
 
   // The Collection tab: the description, notes and linked tables
@@ -168,7 +180,10 @@ const fs = require('fs');
       const r = body.getBoundingClientRect();
       return { tableBottom: Math.round(r.bottom), window: window.innerHeight,
                bodyScrolls: body.scrollHeight > body.clientHeight,
-               pageScrolls: document.scrollingElement.scrollHeight > window.innerHeight };
+               pageScrolls: document.scrollingElement.scrollHeight > window.innerHeight,
+               tableWidth: Math.round(r.width),
+               columns: [...document.querySelectorAll('#col_table .dataTables_scrollHead th')].map(th =>
+                 [th.textContent.trim(), Math.round(th.getBoundingClientRect().width)]) };
     })));
     if (w === 1536) await shot('03_fit_1536x730');
   }
@@ -201,6 +216,16 @@ const fs = require('fs');
   await page.click('#show_values');
   await settle();
   console.log('VALUE LABELS on again: buttons disabled', JSON.stringify(await page.$$eval('#values_open, #values_close', bs => bs.map(b => b.disabled))));
+
+  // Notes: a list that opens, as value labels do, without choosing its row
+  console.log('NOTES lists:', JSON.stringify(await page.$$eval('#col_table td.browse-notes details summary',
+    ss => ss.map(s => s.textContent.trim()))));
+  await page.click('#col_table td.browse-notes details summary');
+  await page.waitForTimeout(300);
+  console.log('NOTES one opened:', await text('#col_table td.browse-notes details[open] div'),
+    '| rows chosen:', await chosenRows());
+  await page.click('#col_table td.browse-notes details summary');
+  await page.waitForTimeout(300);
 
   // Rows chosen give the select() in the code. They are Lavender with
   // Nightshade text, with an Iris bar at their left.
@@ -251,7 +276,8 @@ const fs = require('fs');
   await select('labels_source', 'auto');
 
   // Download: the table's dictionary as PDF and HTML, in a menu that opens
-  // upwards. Without Quarto, the PDF's item is disabled and not a link.
+  // downwards from the Columns tab's panel, placed so that the panel does
+  // not clip it. Without Quarto, the PDF's item is disabled and not a link.
   await page.click('#dict_download');
   await page.waitForTimeout(400);
   console.log('DOWNLOAD MENU:', JSON.stringify(await page.$$eval(
@@ -260,7 +286,14 @@ const fs = require('fs');
     '| opens', await page.evaluate(() => {
       const menu = document.querySelector('#dict_download + .dropdown-menu').getBoundingClientRect();
       return menu.bottom <= document.querySelector('#dict_download').getBoundingClientRect().top ? 'up' : 'down';
-    }));
+    }), '|', JSON.stringify(await page.evaluate(() => {
+      const menu = document.querySelector('#dict_download + .dropdown-menu');
+      const aside = document.querySelector('#columns_settings');
+      return { position: getComputedStyle(menu).position,
+               bottom: Math.round(menu.getBoundingClientRect().bottom),
+               panelBottom: Math.round(aside.getBoundingClientRect().bottom),
+               panelScrolls: aside.scrollHeight > aside.clientHeight + 1 };
+    })));
   await shot('08_download_menu');
   for (const id of ['dict_html', 'dict_pdf']) {
     if (!(await page.$('#' + id))) continue;

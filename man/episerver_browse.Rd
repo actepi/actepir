@@ -155,12 +155,13 @@ its lists and of the whole table's profile.
 
 \strong{Code}
 
-The code button gives R code that reads the table, with a \code{select()} of
-the columns chosen. In foreground mode it is labelled \emph{Insert Code} and
-inserts the code at the cursor with \code{rstudioapi::insertText()}. A
-background process has no connection to the RStudio editor, so in
-background mode it is labelled \emph{Copy Code} and copies the code to the
-clipboard. The \emph{Code} section sets the form of the code:
+The code button, in the \emph{Columns} tab's own panel, gives R code that
+reads the table, with a \code{select()} of the columns chosen. In foreground
+mode it is labelled \emph{Insert Code} and inserts the code at the cursor with
+\code{rstudioapi::insertText()}. A background process has no connection to the
+RStudio editor, so in background mode it is labelled \emph{Copy Code} and
+copies the code to the clipboard. The settings above it set the form of
+the code:
 \itemize{
 \item \emph{Connection}: quickconnect (an \code{\link[=episerver_quickconnect]{episerver_quickconnect()}} pipe), connect
 (\code{\link[=episerver_connect]{episerver_connect()}} and \code{\link[=episerver_lazytable]{episerver_lazytable()}} calls) or none (only
@@ -175,7 +176,7 @@ and \code{lbl_table}.
 
 \strong{Dictionary}
 
-\emph{Download}, beside the code button, gives the table's data dictionary as a
+\emph{Download}, under the code button, gives the table's data dictionary as a
 PDF or a standalone HTML file, as \code{\link[=episerver_dictionary]{episerver_dictionary()}} writes them,
 from the labels of the label table read. The PDF needs the Quarto that
 comes with RStudio; without it, its item is disabled. \emph{Dictionaries of all

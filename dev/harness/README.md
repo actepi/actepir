@@ -144,6 +144,13 @@ Three checks were run once, with scripts not kept:
 - **Steps.** With the fake's wait taken out, 42 columns took 0.85 s with one column at each step, as built, and 0.36 s with a second's columns at each step, a version tried and dropped.
 - **The tallest panel.** At 1536 by 730, the panel with Sex by Diagnosis1 and its summary ends at y = 825, so the tab's main area scrolls 135px. The switch between one column and the whole table adds 84px to the panel.
 
+Plan pull request 7 (`dev/notes/dataset-browser.md`) moved Copy Code, the code's settings and Download to the Columns tab's own panel. `episerver_browser.js` checks the information buttons of the sidebar and of the Columns tab's panel in turn, the panel, the table's widths, the notes list and where the Download menu opens; the browser's other results and the calculator's were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, sidebar and Columns tab | The sidebar holds Dataset and Labels, and its foot `bug_report` alone. The Columns tab's panel is 240px wide, with Connection, Declare packages and Import with labels, then `insert_code` and `dict_download`; its information button works. The table's header is 114px below the info bar, and the table ends at y = 894 in a 950-pixel window and 674 in a 730-pixel one, as on the Profiler and Var Finder tabs; it is 1276px wide at 1920 and 892px at 1536, where its columns are #, 42, Column, 156, Description, 311, Type, 90, Value labels, 190 and Notes, 87. AgeYrs's notes read "3 notes" and open without choosing the row. Copy Code copies the same code as before. |
+| `episerver_browser.js`, Download | The menu opens downwards with a fixed position, ending at y = 584 below the panel's foot at 467, and the panel does not scroll. Its items and downloads are unchanged. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.

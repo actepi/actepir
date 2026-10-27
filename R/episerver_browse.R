@@ -119,12 +119,13 @@
 #'
 #' **Code**
 #'
-#' The code button gives R code that reads the table, with a `select()` of
-#' the columns chosen. In foreground mode it is labelled *Insert Code* and
-#' inserts the code at the cursor with `rstudioapi::insertText()`. A
-#' background process has no connection to the RStudio editor, so in
-#' background mode it is labelled *Copy Code* and copies the code to the
-#' clipboard. The *Code* section sets the form of the code:
+#' The code button, in the *Columns* tab's own panel, gives R code that
+#' reads the table, with a `select()` of the columns chosen. In foreground
+#' mode it is labelled *Insert Code* and inserts the code at the cursor with
+#' `rstudioapi::insertText()`. A background process has no connection to the
+#' RStudio editor, so in background mode it is labelled *Copy Code* and
+#' copies the code to the clipboard. The settings above it set the form of
+#' the code:
 #' * *Connection*: quickconnect (an [episerver_quickconnect()] pipe), connect
 #'   ([episerver_connect()] and [episerver_lazytable()] calls) or none (only
 #'   the pipe, from an existing lazy table `tb`);
@@ -137,7 +138,7 @@
 #'
 #' **Dictionary**
 #'
-#' *Download*, beside the code button, gives the table's data dictionary as a
+#' *Download*, under the code button, gives the table's data dictionary as a
 #' PDF or a standalone HTML file, as [episerver_dictionary()] writes them,
 #' from the labels of the label table read. The PDF needs the Quarto that
 #' comes with RStudio; without it, its item is disabled. *Dictionaries of all
@@ -582,8 +583,9 @@ episerver_browse_stop <- function() {
 # The Columns tab's table, as HTML with the text escaped: the position,
 # name, variable label and type of each column of `cols`
 # (.browse_sql_columns()), its value labels when `values` is TRUE, and its
-# notes when any column has notes. `lbl` is from .lbl_table(); columns are
-# matched to its labels in lower case, as SQL Server matches names.
+# notes when any column has notes, each in a list that opens. `lbl` is from
+# .lbl_table(); columns are matched to its labels in lower case, as SQL
+# Server matches names.
 #' @noRd
 .browse_columns <- function(cols, lbl, values = FALSE) {
   esc <- function(x) if (length(x)) htmltools::htmlEscape(x) else character()
@@ -610,7 +612,10 @@ episerver_browse_stop <- function() {
   notes <- lapply(key, function(k) lbl$notes[[k]])
   if (any(lengths(notes) > 0)) {
     out$Notes <- vapply(notes, function(n) {
-      paste(esc(n), collapse = "<br>")
+      if (!length(n)) return("")
+      sprintf("<details><summary>%d note%s</summary><div>%s</div></details>",
+              length(n), if (length(n) == 1) "" else "s",
+              paste(esc(n), collapse = "<br>"))
     }, character(1))
   }
   out
@@ -1587,11 +1592,12 @@ episerver_browse_stop <- function() {
 
     shiny::h5("Code"),
     shiny::p(
-      "Copy Code copies R code that reads the table, with a ",
-      code("select()"), " of the columns chosen. When the browser runs in ",
-      "the R session (", code("episerver_browse(background = FALSE)"),
-      "), the button is Insert Code and puts the code at the cursor. The ",
-      "Code section sets its form:"
+      "Copy Code, in the Columns tab's panel, copies R code that reads the ",
+      "table, with a ", code("select()"), " of the columns chosen. When the ",
+      "browser runs in the R session (",
+      code("episerver_browse(background = FALSE)"), "), the button is ",
+      "Insert Code and puts the code at the cursor. The settings above it ",
+      "set its form:"
     ),
     shiny::tags$ul(
       shiny::tags$li(
@@ -1615,7 +1621,7 @@ episerver_browse_stop <- function() {
 
     shiny::h5("Dictionary"),
     shiny::p(
-      "Download, beside the code button, gives the table's data dictionary ",
+      "Download, under the code button, gives the table's data dictionary ",
       "as a PDF or an HTML file: its description, notes and linked tables, ",
       "and its columns with the labels from the label table read, value ",
       "labels included whether or not they are shown. The PDF shows the ",
@@ -1728,9 +1734,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
 
       # Browser-only rules: the dataset labels in the Table list, light on
       # the chosen table's Nightshade, the Collection tab, the line on the
-      # columns chosen, the value labels in the columns' table, whose list
-      # scrolls once open, the folder list of Dictionaries of all tables, and
-      # the profile's summary
+      # columns chosen, the value labels and notes in the columns' table,
+      # whose lists scroll once open, the folder list of Dictionaries of all
+      # tables, and the profile's summary
       shiny::tags$style(shiny::HTML("
         .browse-label { color: #777; }
         .selectize-dropdown .option.selected .browse-label { color: inherit;
@@ -1740,9 +1746,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                            margin: 4px 0 6px 0; }
         .browse-about p { margin-bottom: 6px; }
         .browse-chosen { color: #555; }
-        td.browse-values details summary { cursor: pointer;
-                                           color: var(--epi-accent); }
-        td.browse-values details div { max-height: 150px; overflow-y: auto; }
+        td.browse-values details summary,
+        td.browse-notes details summary { cursor: pointer;
+                                          color: var(--epi-accent); }
+        td.browse-values details div,
+        td.browse-notes details div { max-height: 150px; overflow-y: auto; }
         .browse-folders { max-height: 220px; overflow-y: auto;
                           overscroll-behavior: contain;
                           margin-bottom: var(--epi-gap); }
@@ -1768,17 +1776,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       # Clipboard handler for the code button
       .epi_copy_script(),
 
-      # Clicks on the value labels open and scroll their list without
-      # choosing the row. DT's selection handler may be bound to mousedown or
-      # pointer events rather than click, so the guard stops the whole
-      # pointer-event family in the capture phase, before any delegated
+      # Clicks on the value labels or the notes open and scroll their list
+      # without choosing the row. DT's selection handler may be bound to
+      # mousedown or pointer events rather than click, so the guard stops the
+      # whole pointer-event family in the capture phase, before any delegated
       # handler. stopPropagation() leaves the browser's default actions, so
       # the <details> toggle, scrolling and text selection still work.
       shiny::tags$script(shiny::HTML("
         ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(function(type) {
           document.addEventListener(type, function(e) {
             var t = e.target;
-            if (t && t.closest && t.closest('#col_table td.browse-values')) {
+            if (t && t.closest &&
+                t.closest('#col_table td.browse-values, #col_table td.browse-notes')) {
               e.stopPropagation();
             }
           }, true);
@@ -1911,66 +1920,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
           ),
           shiny::checkboxInput("show_values", "Show value labels",
                                value = TRUE)
-        ),
-        bslib::accordion_panel(
-          "Code", value = "code",
-          .epi_with_help(
-            shiny::radioButtons(
-              "insert_mode", "Connection",
-              choices  = c("quickconnect", "connect", "none"),
-              selected = "quickconnect"
-            ),
-            "quickconnect reads the table with episerver_quickconnect(); ",
-            "connect opens a connection with episerver_connect() and the ",
-            "table with episerver_lazytable(); none gives the pipe alone, ",
-            "from a lazy table tb made earlier. Import with labels uses ",
-            "collect_withlabels(), which applies the variable and value ",
-            "labels of the label table the browser reads."
-          ),
-          shiny::checkboxInput("declare_pkgs", "Declare packages",
-                               value = TRUE),
-          shiny::checkboxInput("use_labels", "Import with labels",
-                               value = TRUE)
         )
       ),
       shiny::div(
         class = "epi-actions",
-        shiny::actionButton(
-          "insert_code", code_button_label,
-          icon  = shiny::icon("terminal"),
-          class = "btn-sm btn-primary"
-        ),
-        # Download: the table's dictionary, in a menu that opens upwards
-        shiny::div(
-          class = "dropup",
-          shiny::tags$button(
-            id = "dict_download", type = "button",
-            class = "btn btn-sm btn-primary dropdown-toggle",
-            `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
-            shiny::icon("download"), "Download"
-          ),
-          shiny::tags$ul(
-            class = "dropdown-menu",
-            # Shiny enables a download link once it has its address, so
-            # without Quarto the PDF's item is not a link
-            shiny::tags$li(if (has_quarto) {
-              shiny::downloadLink("dict_pdf", "Dictionary as PDF",
-                                  class = "dropdown-item")
-            } else {
-              shiny::tags$span(class = "dropdown-item disabled",
-                               `aria-disabled` = "true",
-                               "Dictionary as PDF (needs Quarto)")
-            }),
-            shiny::tags$li(shiny::downloadLink(
-              "dict_html", "Dictionary as HTML", class = "dropdown-item"
-            )),
-            shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
-            shiny::tags$li(shiny::actionLink(
-              "dict_bulk", "Dictionaries of all tables\u2026",
-              class = "dropdown-item"
-            ))
-          )
-        ),
         .epi_bug_button()
       )
     ),
@@ -1987,28 +1940,95 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       DT::dataTableOutput("tables_table")
     ),
 
-    # The columns, with buttons for their value labels and the rows chosen
+    # The columns, with the code and the dictionary in the tab's own panel,
+    # as the code reads the columns chosen here, and buttons above the table
+    # for their value labels and the rows chosen. The Download menu is
+    # placed with a fixed position, so that the panel does not clip it.
     bslib::nav_panel(
       "Columns", value = "columns",
-      shiny::div(
-        class = "options-row",
-        shiny::tags$button(
-          id = "values_open", type = "button", class = "btn btn-sm btn-primary",
-          shiny::icon("angles-down"), "Expand value labels"
+      .epi_tab_settings(
+        "columns_settings",
+        shiny::tagList(
+          .epi_with_help(
+            shiny::radioButtons(
+              "insert_mode", "Connection",
+              choices  = c("quickconnect", "connect", "none"),
+              selected = "quickconnect"
+            ),
+            "quickconnect reads the table with episerver_quickconnect(); ",
+            "connect opens a connection with episerver_connect() and the ",
+            "table with episerver_lazytable(); none gives the pipe alone, ",
+            "from a lazy table tb made earlier. Import with labels uses ",
+            "collect_withlabels(), which applies the variable and value ",
+            "labels of the label table the browser reads."
+          ),
+          shiny::checkboxInput("declare_pkgs", "Declare packages",
+                               value = TRUE),
+          shiny::checkboxInput("use_labels", "Import with labels",
+                               value = TRUE),
+          shiny::div(
+            class = "epi-stack",
+            shiny::actionButton(
+              "insert_code", code_button_label,
+              icon  = shiny::icon("terminal"),
+              class = "btn-sm btn-primary"
+            ),
+            # Download: the table's dictionary, and those of all tables
+            shiny::div(
+              class = "dropdown",
+              shiny::tags$button(
+                id = "dict_download", type = "button",
+                class = "btn btn-sm btn-primary dropdown-toggle",
+                `data-bs-toggle` = "dropdown", `aria-expanded` = "false",
+                `data-bs-popper-config` = '{"strategy":"fixed"}',
+                shiny::icon("download"), "Download"
+              ),
+              shiny::tags$ul(
+                class = "dropdown-menu",
+                # Shiny enables a download link once it has its address, so
+                # without Quarto the PDF's item is not a link
+                shiny::tags$li(if (has_quarto) {
+                  shiny::downloadLink("dict_pdf", "Dictionary as PDF",
+                                      class = "dropdown-item")
+                } else {
+                  shiny::tags$span(class = "dropdown-item disabled",
+                                   `aria-disabled` = "true",
+                                   "Dictionary as PDF (needs Quarto)")
+                }),
+                shiny::tags$li(shiny::downloadLink(
+                  "dict_html", "Dictionary as HTML", class = "dropdown-item"
+                )),
+                shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
+                shiny::tags$li(shiny::actionLink(
+                  "dict_bulk", "Dictionaries of all tables\u2026",
+                  class = "dropdown-item"
+                ))
+              )
+            )
+          )
         ),
-        shiny::tags$button(
-          id = "values_close", type = "button", class = "btn btn-sm btn-primary",
-          shiny::icon("angles-up"), "Collapse value labels"
+        shiny::div(
+          class = "options-row",
+          shiny::tags$button(
+            id = "values_open", type = "button",
+            class = "btn btn-sm btn-primary",
+            shiny::icon("angles-down"), "Expand value labels"
+          ),
+          shiny::tags$button(
+            id = "values_close", type = "button",
+            class = "btn btn-sm btn-primary",
+            shiny::icon("angles-up"), "Collapse value labels"
+          ),
+          shiny::tags$button(
+            id = "clear_rows", type = "button", disabled = NA,
+            class = "btn btn-sm btn-primary action-button",
+            shiny::icon("xmark"), "Clear selection"
+          ),
+          shiny::span(class = "browse-chosen",
+                      shiny::textOutput("chosen_note", inline = TRUE))
         ),
-        shiny::tags$button(
-          id = "clear_rows", type = "button", disabled = NA,
-          class = "btn btn-sm btn-primary action-button",
-          shiny::icon("xmark"), "Clear selection"
-        ),
-        shiny::span(class = "browse-chosen",
-                    shiny::textOutput("chosen_note", inline = TRUE))
-      ),
-      DT::dataTableOutput("col_table")
+        DT::dataTableOutput("col_table")
+      )
     ),
 
     # The Profiler: one column's profile, or a cross tab of it by another,
@@ -2363,17 +2383,18 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       show_values <- isTRUE(input$show_values) && !is.null(values())
       d <- .browse_columns(cols$data, lbl(), values = show_values)
 
-      # Width hints to DataTables; the value labels' cells are tagged for
-      # their CSS and the selection guard
-      widths <- c(`#` = 4, Column = 18, Description = 38, Type = 10,
-                  `Value labels` = 15, Notes = 15)
+      # Width hints to DataTables; the cells of the value labels and the
+      # notes are tagged for their CSS and the selection guard
+      widths <- c(`#` = 4, Column = 18, Description = 36, Type = 10,
+                  `Value labels` = 22, Notes = 10)
       defs <- lapply(intersect(names(widths), names(d)), function(nm) {
         list(width = paste0(widths[[nm]], "%"),
              targets = match(nm, names(d)) - 1L)
       })
-      if ("Value labels" %in% names(d)) {
-        defs <- c(defs, list(list(className = "browse-values",
-                                  targets = match("Value labels", names(d)) - 1L)))
+      lists <- c(`Value labels` = "browse-values", Notes = "browse-notes")
+      for (nm in intersect(names(lists), names(d))) {
+        defs <- c(defs, list(list(className = lists[[nm]],
+                                  targets = match(nm, names(d)) - 1L)))
       }
 
       DT::datatable(
