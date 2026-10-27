@@ -9,7 +9,7 @@ The package's Shiny apps share the code in `R/epi_app.R`. There are two: the Dat
 | `.run_app()` | Runs an app factory as a gadget in the session, or by default in a background `callr` process so the console stays free. Reuses an app that is already running, and opens it in the web browser. |
 | `.stop_app()` | Stops a background app. |
 | `.epi_connection()` | Opens one EpiServer connection per app through `episerver_connect()`. It checks the connection before each query and reconnects once after an error. Returns `list(query, disconnect)`. |
-| `.epi_send_code()`, `.epi_copy_text()`, `.epi_copy_script()` | Insert generated code at the cursor in RStudio, or copy text to the clipboard from the page. |
+| `.epi_send_code()`, `.epi_copy_text()`, `.epi_copy_script()` | Insert generated code at the cursor in RStudio, or copy text to the clipboard from the page; with `html`, the clipboard also holds that HTML, which programs such as Excel paste in place of the text (the Dataset Browser's Copy dictionary for Excel). |
 | `.epi_contact`, `.epi_session_report()` | Where problem reports go (healthinfo@act.gov.au), and lines on the R session for them. |
 | `.epi_bug_button()`, `.epi_report_script()`, `.epi_report_server()`, `.epi_problem_report()` | The problem report: the bug button at the right of a sidebar's foot, the browser's part of the report (`bug_client`), the dialog with Copy report, and the report's text from an app's state, settings and code (see `dsr-calculator.md`). |
 | `.epi_stopped_script()` | The page shown once an app stops, saying how to open it again. |

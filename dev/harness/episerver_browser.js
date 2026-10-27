@@ -318,6 +318,54 @@ const fs = require('fs');
     await html.close();
   }
 
+  // Copy dictionary for Excel: the clipboard holds an HTML table, every
+  // cell but the position marked as text, and the same rows as text
+  if (!(await page.isVisible('#dict_excel'))) await page.click('#dict_download');
+  await page.click('#dict_excel');
+  await page.waitForTimeout(800);
+  const excel = await page.evaluate(async () => {
+    const item = (await navigator.clipboard.read())[0];
+    return { types: item.types, html: await (await item.getType('text/html')).text(),
+             text: await (await item.getType('text/plain')).text() };
+  });
+  const excelLines = excel.text.split('\n');
+  console.log('EXCEL clipboard:', JSON.stringify(excel.types), '| text lines', excelLines.length,
+    '| headings', JSON.stringify(excelLines[0]), '| Sex 9', JSON.stringify(excelLines.find(l => l.includes('\t9\t'))),
+    '| html rows', (excel.html.match(/<tr>/g) || []).length,
+    '| cells as text', (excel.html.match(/mso-number-format/g) || []).length,
+    '| notes in one cell', excel.html.includes('mso-data-placement:same-cell'));
+  await page.waitForTimeout(2500);
+
+  // Dictionary logo: the lockup on the band's Nightshade; a white logo on
+  // a transparent background, made here as a screenshot, then the lockup
+  // again
+  if (!(await page.isVisible('#dict_logo'))) await page.click('#dict_download');
+  await page.click('#dict_logo');
+  await page.waitForSelector('#logo_file', { state: 'attached' });
+  await settle(400);
+  const logoShown = () => page.evaluate(() => {
+    const band = document.querySelector('#logo_shown .browse-logo');
+    const img = band.querySelector('img');
+    return { band: getComputedStyle(band).backgroundColor, src: img ? img.src.slice(0, 22) : null,
+             height: img ? Math.round(img.getBoundingClientRect().height) : null,
+             notes: [...document.querySelectorAll('#logo_shown .epi-note')].map(p => [p.className.replace('epi-note', '').trim(), p.textContent.trim()]) };
+  });
+  console.log('LOGO dialog:', await text('.modal-title'), '|', JSON.stringify(await logoShown()));
+  const maker = await context.newPage();
+  await maker.setContent('<div id=l style="width:640px;height:200px;font:bold 120px sans-serif;color:#fff">LOGO</div>');
+  const logoPng = `${out}/white_logo.png`;
+  await maker.locator('#l').screenshot({ path: logoPng, omitBackground: true });
+  await maker.close();
+  await page.setInputFiles('#logo_file', logoPng);
+  await settle();
+  console.log('LOGO set:', JSON.stringify(await logoShown()));
+  await shot('08c_logo_dialog');
+  await page.click('#logo_reset');
+  await settle();
+  console.log('LOGO lockup again:', JSON.stringify(await logoShown()));
+  await page.click('.modal-footer button[data-bs-dismiss=modal]');
+  await settle(400);
+
   // Dictionaries of all tables: the dialog, the folder list, then the whole
   // database's dictionaries written to a folder in the output directory
   if (!(await page.isVisible('#dict_bulk'))) await page.click('#dict_download');

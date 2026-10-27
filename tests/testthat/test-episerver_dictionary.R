@@ -108,6 +108,44 @@ test_that("the dictionary as data has a row per value label", {
 
 })
 
+test_that("the dictionary for Excel marks its cells as text, with a note's lines in one cell", {
+
+  flat <- data.frame(
+    table = "Analysis.dbo.APC", position = c(2L, 2L, 3L),
+    column = c("Sex", "Sex", "Age<"), description = c("Sex", "Sex", "Age & years"),
+    type = "int", code = c("01", "1-4", NA),
+    value_label = c("Male", "Ages\t1 to 4", NA),
+    notes = c(NA, NA, "First.\nSecond."), stringsAsFactors = FALSE
+  )
+  x <- .dict_excel(flat)
+  # Text: headings, then a line for each row, tabs and line breaks as spaces
+  lines <- strsplit(x$text, "\n")[[1]]
+  expect_equal(lines[1], paste("Table", "Position", "Column", "Description",
+                               "Type", "Code", "Value label", "Notes", sep = "\t"))
+  expect_length(lines, 4)
+  expect_equal(strsplit(lines[3], "\t")[[1]][6:7], c("1-4", "Ages 1 to 4"))
+  expect_match(lines[4], "\tFirst. Second.$")
+  # HTML: every cell but the position marked as text; text escaped
+  text_cell <- "<td style='mso-number-format:\"\\@\"'>"
+  rows <- regmatches(x$html, gregexpr("<tr>.*?</tr>", x$html))[[1]]
+  expect_length(rows, 4)
+  expect_equal(lengths(regmatches(rows[-1], gregexpr(text_cell, rows[-1], fixed = TRUE))),
+               c(7, 7, 7))
+  expect_match(rows[2], paste0(text_cell, "01</td>"), fixed = TRUE)
+  expect_match(rows[2], "<td>2</td>", fixed = TRUE)
+  expect_match(rows[4], "Age&lt;</td>", fixed = TRUE)
+  expect_match(rows[4], "Age &amp; years</td>", fixed = TRUE)
+  expect_match(rows[4], "First.<br style='mso-data-placement:same-cell'>Second.",
+               fixed = TRUE)
+  # A dictionary from the fake, and one without rows
+  d <- .dict_flat(.dict_build(fake_browse_episerver()$query, "Analysis", "dbo", "APC"))
+  expect_length(strsplit(.dict_excel(d)$text, "\n")[[1]], nrow(d) + 1)
+  empty <- .dict_excel(.dict_flat_empty())
+  expect_equal(empty$text, lines[1])
+  expect_match(empty$html, "<tbody></tbody>", fixed = TRUE)
+
+})
+
 test_that("the files' text falls back to the table's name, and limits the PDF's value labels", {
 
   fake <- fake_browse_episerver()
@@ -655,6 +693,65 @@ test_that("the browser writes the dictionaries of all tables with labels to the 
     empty <- file.path(one, "empty")
     session$setInputs(bulk_formats = character(), bulk_dir = empty, bulk_write = 3)
     expect_false(dir.exists(empty))
+  })
+
+})
+
+test_that("the browser copies the dictionary for Excel, and sets its logo through dictionary_logo()", {
+
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+  local_mocked_bindings(isAvailable = function(...) FALSE,
+                        .package = "rstudioapi")
+  copied <- NULL
+  local_mocked_bindings(.epi_copy_text = function(session, text, message,
+                                                  html = NULL) {
+    copied <<- list(text = text, html = html, message = message)
+  })
+  upload <- function(path, name) {
+    data.frame(name = name, size = file.size(path), type = "image/png",
+               datapath = path, stringsAsFactors = FALSE)
+  }
+  dir <- withr::local_tempdir()
+
+  app <- episerver_browse_app(query = fake_browse_episerver()$query)
+  shiny::testServer(app, {
+    session$setInputs(db = "Analysis", schema = "dbo", labels_source = "auto",
+                      show_values = FALSE, table = "APC")
+
+    # The dictionary as a table, with the value labels that are not shown
+    session$setInputs(dict_excel = 1)
+    expect_equal(copied$message, "Dictionary copied to the clipboard")
+    expect_equal(copied, c(.dict_excel(.dict_flat(dictionary())),
+                           list(message = copied$message)))
+    expect_match(copied$text, "\tSex\tSex of the patient\tint\t9\tNot stated\t")
+
+    # The logo: the lockup, then a PNG chosen, with what it warns of, a
+    # file that is not a PNG, and the lockup again
+    session$setInputs(dict_logo = 1)
+    expect_match(output$logo_shown$html, "data:image/svg+xml;base64,", fixed = TRUE)
+    expect_match(output$logo_shown$html, "The dictionaries show the actepir lockup.",
+                 fixed = TRUE)
+    session$setInputs(logo_file = upload(fake_png(file.path(dir, "0.png"), 1400, 430),
+                                         "white.png"))
+    expect_true(file.exists(.dict_logo_file()))
+    expect_match(output$logo_shown$html, "data:image/png;base64,", fixed = TRUE)
+    expect_match(output$logo_shown$html,
+                 "The dictionaries show your logo, 1400 by 430 pixels.", fixed = TRUE)
+    expect_no_match(output$logo_shown$html, "epi-warn", fixed = TRUE)
+    session$setInputs(logo_file = upload(fake_png(file.path(dir, "1.png"), 300, 90,
+                                                  colour = 2L), "small.png"))
+    expect_match(output$logo_shown$html, "The logo is 300 pixels wide", fixed = TRUE)
+    expect_match(output$logo_shown$html, "no transparent background", fixed = TRUE)
+    text <- file.path(dir, "2.png")
+    writeLines("not a PNG", text)
+    session$setInputs(logo_file = upload(text, "notes.png"))
+    expect_match(output$logo_shown$html, "notes.png is not a PNG file.", fixed = TRUE)
+    expect_no_match(output$logo_shown$html, dir, fixed = TRUE)
+    expect_match(output$logo_shown$html, "300 by 90 pixels", fixed = TRUE)
+    session$setInputs(logo_reset = 1)
+    expect_false(file.exists(.dict_logo_file()))
+    expect_match(output$logo_shown$html, "The dictionaries show the actepir lockup.",
+                 fixed = TRUE)
   })
 
 })

@@ -182,7 +182,10 @@ from the labels of the label table read. The PDF needs the Quarto that
 comes with RStudio; without it, its item is disabled. \emph{Dictionaries of all
 tables}, in the same menu, writes the dictionaries of every table and view
 with labels in the schema, or in the whole database, to a folder typed or
-found in the dialog's list of folders, as HTML, PDF or both.
+found in the dialog's list of folders, as HTML, PDF or both. \emph{Copy
+dictionary for Excel} copies the dictionary as a table, its cells marked
+as text so that Excel keeps codes such as \code{01} as written. \emph{Dictionary
+logo} sets or removes the dictionaries' logo, as \code{\link[=dictionary_logo]{dictionary_logo()}} does.
 
 \strong{Background process}
 

@@ -28,6 +28,13 @@ test_that("a dictionary holds the labels that scripts read, for the table's colu
     expect_equal(unname(described[tolower(vars$VarName)]), vars$LabelName,
                  label = t)
     flat <- .dict_flat(d)
+    # The dictionary for Excel: the headings and a line for each row, as
+    # text and as the HTML table's rows
+    excel <- .dict_excel(flat)
+    expect_length(strsplit(excel$text, "\n")[[1]], nrow(flat) + 1)
+    expect_equal(lengths(regmatches(excel$html, gregexpr("<tr>", excel$html,
+                                                         fixed = TRUE))),
+                 nrow(flat) + 1, label = t)
     flat <- flat[!is.na(flat$code), ]
     opts <- labels[labels$LabelType == "Opt", ]
     expect_setequal(paste(tolower(flat$column), flat$code, flat$value_label),
