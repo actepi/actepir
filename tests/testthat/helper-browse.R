@@ -153,8 +153,8 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
                stringsAsFactors = FALSE)
   }
 
-  # The rows of each table, invented, for the Preview and Profile tabs: 150
-  # for dbo.APC, so that the preview stops at 100, and 30 for the others.
+  # The rows of each table, invented, for the Profiler: 150 for dbo.APC
+  # and 30 for the others.
   # Sex, RSEX_Y20 and Triage hold codes with value labels, one without
   # (4, 3 and "3") and NULLs; Cause holds blank text.
   rows_of <- function(key) {
@@ -292,12 +292,26 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
       return(details(db, quoted(sql)[1]))
     }
 
-    # The preview, and a column's profile and counts
-    if (startsWith(sql, "SELECT TOP 100 ")) {
+    # A column's profile, counts and cross tab, and the columns that are
+    # keys: dbo.APC's PatientID is its primary key
+    if (grepl("sys.indexes", sql, fixed = TRUE)) {
+      v <- quoted(sql)
+      keys <- list("Analysis.dbo.APC" = "PatientID")[[paste(db, v[1], v[2], sep = ".")]]
+      return(data.frame(ColumnName = as.character(keys), stringsAsFactors = FALSE))
+    }
+    if (grepl("AS ProfileBy", sql, fixed = TRUE)) {
       d <- rows_of(paste0(db, ".", from(sql)))
-      cols <- sub("^AS \\[(.*)\\]$", "\\1",
-                  regmatches(sql, gregexpr("AS \\[[^]]+\\]", sql))[[1]])
-      return(utils::head(d[cols], 100))
+      select <- sub("(?s)\\s*FROM \\[.*$", "", sql, perl = TRUE)
+      names <- sub("^\\[(.*)\\]$", "\\1",
+                   regmatches(select, gregexpr("\\[[^]]+\\]", select))[[1]])
+      x <- d[[names[1]]]
+      y <- d[[names[2]]]
+      key <- paste(ifelse(is.na(x), "\r", x), ifelse(is.na(y), "\r", y))
+      first <- !duplicated(key)
+      n <- as.numeric(table(factor(key, unique(key))))
+      return(utils::head(data.frame(ProfileValue = x[first], ProfileBy = y[first],
+                                    ProfileCount = n, stringsAsFactors = FALSE),
+                         50001))
     }
     if (grepl("AS TotalRows", sql, fixed = TRUE)) {
       x <- rows_of(paste0(db, ".", from(sql)))[[profiled(sql)]]

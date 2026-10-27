@@ -82,7 +82,7 @@ The brand purples are in `act-brand.md`. In the apps:
 - **Labels** are 15px, regular weight, 2px above their box.
 - **Boxes** (selects, numbers, text) have 14px text and 4px by 10px padding.
 - **Choices** (radio buttons and tick boxes) are 15px, 2px apart.
-- **Between settings** there are 10px, from each control's margin. bslib's flex gaps in sidebars are removed, so a wrapper (such as `.epi_with_help()` or `conditionalPanel()`) adds no space of its own.
+- **Between settings** there are 10px, from each control's margin. bslib's flex gaps in sidebars are removed, so a wrapper (such as `.epi_with_help()` or `conditionalPanel()`) adds no space of its own. bslib also takes the margin off settings placed straight in a sidebar, as in a tab's own settings panel; `.epi_app_style()` gives it back, so those are 10px apart too.
 - **Rows of settings** use `div(class = "selector-row")` for boxes side by side, or `div(class = "options-row")` for buttons and tick boxes in a line.
 - **Buttons in a sidebar** go in `div(class = "epi-stack")`, which stacks them at full width, 6px apart. A bare button in a sidebar has no spacing.
 - **Primary buttons** are `class = "btn-sm btn-primary"`, with an icon where one helps.

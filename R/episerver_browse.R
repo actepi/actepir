@@ -13,9 +13,9 @@
 #' console stays free while the browser is open. It opens in the system web
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
-#' open and close, and the tables of the schema, the columns, a preview of
-#' the rows, a profile of a column, the dataset notes, a finder of columns in
-#' the database and the help in tabs on the top bar. The
+#' open and close, and the tables of the schema, the columns, a profiler of
+#' columns, the dataset notes, a finder of columns in the database and the
+#' help in tabs on the top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -103,14 +103,16 @@
 #' the label table each table's labels come from. Click a column to open its
 #' table.
 #'
-#' **Preview and profile**
+#' **Profiler**
 #'
-#' The *Preview* tab shows 100 rows of the columns chosen (every column when
-#' none are), with value labels in place of their codes unless *Show codes*
-#' is ticked. The *Profile* tab describes one column over the whole table:
-#' its missing and distinct values, minimum and maximum, and the rows of
-#' each value with its label, listing codes without a value label. It runs
-#' only when *Profile* is clicked.
+#' The *Profiler* tab describes one column over the whole table: its missing
+#' and distinct values, minimum and maximum, and the rows of each value with
+#' its label, listing codes without a value label. With a *By* column it
+#' gives a cross tab of the two, as rows or per cents of rows or columns. It
+#' runs only when *Profile* is clicked. Columns that are by themselves a
+#' primary key or unique index, or whose names match a list of regular
+#' expressions kept between sessions (identifiers such as `ID$` and `MRN`),
+#' are left out of its lists.
 #'
 #' **Code**
 #'
@@ -411,12 +413,7 @@ episerver_browse_stop <- function() {
   )
 }
 
-# Types that the preview reads last, as SQL Server's ODBC driver reads long
-# columns only after the others: (max) types (charlen -1) and these. Of them
-# and the spatial types, none can be compared, grouped or counted distinct
-# except the (max) types.
-#' @noRd
-.browse_long_types <- c("text", "ntext", "image", "xml")
+# Types that cannot be compared, grouped or counted distinct
 #' @noRd
 .browse_uncomparable <- c("text", "ntext", "image", "xml", "geography",
                           "geometry")
@@ -438,21 +435,6 @@ episerver_browse_stop <- function() {
     xml = sprintf("CAST(%s AS nvarchar(max))", id),
     id
   )
-}
-
-# The first 100 rows of table schema.table of db, in no set order, with the
-# columns of `cols` (from .browse_sql_columns()), each read as
-# .browse_sql_value() gives it, the long ones last
-#' @noRd
-.browse_sql_preview <- function(db, schema, table, cols) {
-  long <- cols$charlen %in% -1 | tolower(cols$dtype) %in% .browse_long_types
-  cols <- cols[order(long), , drop = FALSE]
-  values <- vapply(seq_len(nrow(cols)), function(i) {
-    paste(.browse_sql_value(cols$col[i], cols$dtype[i]), "AS",
-          .sql_ident(cols$col[i]))
-  }, character(1))
-  sprintf("SELECT TOP 100 %s\n     FROM %s",
-          paste(values, collapse = ",\n       "), .sql_ident(db, schema, table))
 }
 
 # One column's profile, over every row of table schema.table of db: its
@@ -502,6 +484,48 @@ episerver_browse_stop <- function() {
      GROUP BY %1$s
      ORDER BY COUNT_BIG(*) DESC, %1$s",
     value, .sql_ident(db, schema, table)
+  )
+}
+
+# The rows of each pair of values of column `col` and column `by` of table
+# schema.table of db, NULL among them, as ProfileValue, ProfileBy and
+# ProfileCount. It stops at 50,001 pairs, so that a cross tab too large to
+# show is found without reading it all.
+#' @noRd
+.browse_sql_crosstab <- function(db, schema, table, col, dtype, by, by_dtype) {
+  value <- .browse_sql_value(col, dtype)
+  group <- .browse_sql_value(by, by_dtype)
+  sprintf(
+    "SELECT TOP 50001 %1$s AS ProfileValue, %2$s AS ProfileBy,
+            CAST(COUNT_BIG(*) AS float) AS ProfileCount
+     FROM %3$s
+     GROUP BY %1$s, %2$s",
+    value, group, .sql_ident(db, schema, table)
+  )
+}
+
+# The columns of table schema.table of db that are by themselves a primary
+# key or a unique index, as ColumnName: each value of such a column is
+# found once, so the Profiler leaves it out. A column that is only one part
+# of a key is not unique, and is kept.
+#' @noRd
+.browse_sql_keys <- function(db, schema, table) {
+  sprintf(
+    "SELECT DISTINCT c.name AS ColumnName
+     FROM %1$s.sys.indexes i
+     JOIN %1$s.sys.objects o ON o.object_id = i.object_id
+     JOIN %1$s.sys.schemas s ON s.schema_id = o.schema_id
+     JOIN %1$s.sys.index_columns ic
+       ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+     JOIN %1$s.sys.columns c
+       ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+     WHERE s.name = %2$s AND o.name = %3$s
+       AND (i.is_primary_key = 1 OR i.is_unique = 1)
+       AND ic.is_included_column = 0
+       AND (SELECT COUNT(*) FROM %1$s.sys.index_columns k
+            WHERE k.object_id = i.object_id AND k.index_id = i.index_id
+              AND k.is_included_column = 0) = 1",
+    .sql_ident(db), .sql_quote(schema, TRUE), .sql_quote(table, TRUE)
   )
 }
 
@@ -849,7 +873,7 @@ episerver_browse_stop <- function() {
   list(results = results, capped = capped)
 }
 
-# ── Preview and profile ─────────────────────────────────────────────────────
+# ── Profiler ────────────────────────────────────────────────────────────────
 
 # Values as text: whole numbers without decimals or exponents, dates and
 # times as R prints them, and NA as NA
@@ -891,28 +915,143 @@ episerver_browse_stop <- function() {
   vals$Text[i]
 }
 
-# The Preview tab's table: the rows read (`data`, from
-# .browse_sql_preview()) in the order of `cols`, each value as text, cut at
-# 200 characters, with the value labels of `lbl` (.lbl_table()) in place of
-# their codes unless `codes`, and NULL as NA. Columns are matched in any
-# case.
+# The Profiler's list of the columns it leaves out, as regular expressions
+# (Perl's), each matched against a column's name with its case, so that ID
+# can be told from the id of Valid or Opioid. These are offered until the
+# analyst keeps a list of their own.
 #' @noRd
-.browse_preview <- function(data, cols, lbl, codes = FALSE) {
-  out <- lapply(as.character(cols$col), function(name) {
-    x <- .browse_text(data[[match(tolower(name), tolower(names(data)))]])
-    if (!codes) {
-      label <- .browse_value_labels(x, lbl$values[[tolower(name)]])
-      x <- ifelse(is.na(label), x, label)
-    }
-    x <- .browse_cut(x)
-    x[is.na(x)] <- "NA"
-    x
-  })
-  names(out) <- cols$col
-  as.data.frame(out, check.names = FALSE, stringsAsFactors = FALSE)
+.browse_exclude_default <- c("ID$", "Id$", "_id$", "^ID", "^id$", "MRN", "^URN")
+
+# Where the Profiler's list is kept between sessions: actepir's folder in
+# R's user settings directory, where the dictionaries' logo is kept
+#' @noRd
+.browse_exclude_file <- function() {
+  file.path(tools::R_user_dir("actepir", "config"), "profiler_exclude.txt")
 }
 
-# The Profile tab's results from one column's profile (`summary`, from
+# The list kept, or the defaults when none is
+#' @noRd
+.browse_exclude_read <- function() {
+  file <- .browse_exclude_file()
+  if (!file.exists(file)) return(.browse_exclude_default)
+  x <- trimws(readLines(file, warn = FALSE, encoding = "UTF-8"))
+  x[nzchar(x)]
+}
+
+# Keeps `patterns` for later sessions; NULL goes back to the defaults
+#' @noRd
+.browse_exclude_save <- function(patterns) {
+  file <- .browse_exclude_file()
+  if (is.null(patterns)) {
+    unlink(file)
+  } else {
+    dir.create(dirname(file), recursive = TRUE, showWarnings = FALSE)
+    con <- file(file, open = "w", encoding = "UTF-8")
+    on.exit(close(con))
+    writeLines(patterns, con)
+  }
+  invisible(NULL)
+}
+
+# The patterns typed, one a line (blank lines ignored), and those of them
+# that are not regular expressions
+#' @noRd
+.browse_exclude_parse <- function(text) {
+  x <- trimws(strsplit(if (is.null(text)) "" else text, "\n")[[1]])
+  x <- x[nzchar(x)]
+  valid <- vapply(x, function(p) {
+    !inherits(tryCatch(grepl(p, "", perl = TRUE), error = function(e) e),
+              "error")
+  }, logical(1), USE.NAMES = FALSE)
+  list(patterns = x, invalid = x[!valid])
+}
+
+# Why each of `names` is left out: "key" when it is by itself a primary key
+# or unique index (`keys`, matched in any case, as SQL Server matches
+# names), else the first of `patterns` that matches it, or NA when it is kept
+#' @noRd
+.browse_excluded <- function(names, patterns, keys = character()) {
+  why <- rep(NA_character_, length(names))
+  why[tolower(names) %in% tolower(keys)] <- "key"
+  for (p in patterns) {
+    hit <- is.na(why) & grepl(p, names, perl = TRUE)
+    why[hit] <- p
+  }
+  why
+}
+
+# The Profiler's cross tab from the rows of each pair of values (`pairs`,
+# from .browse_sql_crosstab()): a row for each of the column's `max_rows`
+# most common values, with its value label from `vals`; a column for each
+# of the `max_cols` most common values of the By column, with the value
+# label from `by_vals` as its heading; both in code order, NULL last; the
+# rest as Other values and Other; and totals. `show` gives the rows
+# ("rows"), or each cell as a per cent of its row's total ("row") or of its
+# column's ("column"). Returns the table, the headings' titles (code and
+# label), and whether rows or columns were put together as Other.
+#' @noRd
+.browse_crosstab <- function(pairs, vals = NULL, by_vals = NULL, show = "rows",
+                             max_rows = 1000, max_cols = 20) {
+  na <- "\r"
+  other <- "\rOther"
+  value <- .browse_text(pairs$ProfileValue)
+  by <- .browse_text(pairs$ProfileBy)
+  value[is.na(value)] <- na
+  by[is.na(by)] <- na
+  n <- pairs$ProfileCount
+
+  # The most common values, in code order, NULL last
+  top <- function(key, k) {
+    totals <- tapply(n, key, sum)
+    kept <- names(totals)[order(-totals)][seq_len(min(k, length(totals)))]
+    codes <- setdiff(kept, na)
+    c(codes[.lbl_code_order(codes)], intersect(na, kept))
+  }
+  rows <- top(value, max_rows)
+  cols <- top(by, max_cols)
+  value[!value %in% rows] <- other
+  by[!by %in% cols] <- other
+  rows <- c(rows, if (other %in% value) other)
+  cols <- c(cols, if (other %in% by) other)
+  m <- tapply(n, list(factor(value, rows), factor(by, cols)), sum)
+  m[is.na(m)] <- 0
+  m <- cbind(m, Total = rowSums(m))
+  m <- rbind(m, Total = colSums(m))
+  if (show == "row") {
+    m <- 100 * m / m[, ncol(m)]
+  } else if (show == "column") {
+    m <- 100 * sweep(m, 2, m[nrow(m), ], "/")
+  }
+  m[!is.finite(m)] <- NA
+
+  shown_as <- function(key, labels) {
+    text <- ifelse(key == na, "NA", ifelse(key == other, "Other", key))
+    code <- ifelse(key %in% c(na, other), NA, key)
+    list(text = text, label = .browse_value_labels(code, labels))
+  }
+  r <- shown_as(c(rows, "Total"), vals)
+  r$text[length(r$text)] <- "Total"
+  r$text[r$text == "Other"] <- "Other values"
+  table <- data.frame(Value = .browse_cut(r$text, 60), stringsAsFactors = FALSE)
+  if (!is.null(vals) && nrow(vals)) {
+    is_code <- !c(rows, "Total") %in% c(na, other, "Total")
+    table$Label <- ifelse(!is.na(r$label), r$label,
+                          ifelse(is_code, "(no label)", ""))
+  }
+  h <- shown_as(cols, by_vals)
+  heads <- .browse_cut(ifelse(is.na(h$label), h$text, h$label), 40)
+  same <- duplicated(heads) | duplicated(heads, fromLast = TRUE)
+  heads[same] <- paste0(heads[same], " (", h$text[same], ")")
+  titles <- ifelse(is.na(h$label), h$text, paste0(h$text, ": ", h$label))
+  body <- as.data.frame(unclass(m), check.names = FALSE)
+  names(body) <- c(heads, "Total")
+  table <- cbind(table, body)
+  rownames(table) <- NULL
+  list(table = table, titles = c(titles, ""),
+       rows_capped = other %in% rows, cols_capped = other %in% cols)
+}
+
+# The Profiler's results from one column's profile (`summary`, from
 # .browse_sql_profile()), its counts (`counts`, from
 # .browse_sql_profile_counts(), or NULL for a type that cannot be grouped)
 # and its value labels (`vals`, Code and Text, or NULL): the summary as
@@ -932,7 +1071,7 @@ episerver_browse_stop <- function() {
   with_label <- function(x) {
     x <- .browse_text(x)
     label <- .browse_value_labels(x, vals)
-    .browse_cut(ifelse(is.na(label), x, paste0(x, " (", label, ")")))
+    .browse_cut(ifelse(is.na(label), x, paste0(x, " (", label, ")")), 60)
   }
 
   out <- NULL
@@ -1329,25 +1468,32 @@ episerver_browse_stop <- function() {
       "table without changing the columns chosen."
     ),
 
-    shiny::h5("Preview"),
+    shiny::h5("Profiler"),
     shiny::p(
-      "The Preview tab shows 100 rows of the table, in no set order, with the ",
-      "columns chosen, or every column when none are. Value labels are shown ",
-      "in place of their codes; Show codes shows the codes. A column's ",
-      "variable label shows when the pointer is over its heading. The rows ",
-      "are read when the tab is shown, and read again only when the table or ",
-      "the columns chosen change."
+      "The Profiler tab describes one column over every row of the table. ",
+      "Its summary, in the panel, gives the rows, missing (NULL) values, ",
+      "blank text, distinct values, minimum and maximum, and the codes found ",
+      "without a value label. The table gives the rows of each of the 1,000 ",
+      "most common values, with its value label. The column offered is the ",
+      "first chosen in the Columns tab. A profile reads the whole table, so ",
+      "it runs only when Profile is clicked, and a large table can take a ",
+      "while."
     ),
-
-    shiny::h5("Profile"),
     shiny::p(
-      "The Profile tab describes one column over every row of the table: its ",
-      "rows, missing (NULL) values, blank text, distinct values, minimum and ",
-      "maximum, and the rows of each value, with its value label, for the ",
-      "1,000 most common values. Codes found without a value label are ",
-      "listed. The column offered is the first chosen in the Columns tab. A ",
-      "profile reads the whole table, so it runs only when Profile is ",
-      "clicked, and a large table can take a while."
+      "With a By column, the table is a cross tab: a row for each value of ",
+      "the column and a column for each of the 20 most common values of By, ",
+      "the rest in Other, with totals. Show gives the rows, or per cents of ",
+      "each row or column."
+    ),
+    shiny::p(
+      "Columns left out, at the foot of the panel, lists the columns that ",
+      "are not offered: those that are by themselves a primary key or a ",
+      "unique index, and those whose names match a line of the list. Each ",
+      "line is a regular expression, matched with the name's case: ^ID ",
+      "begins with ID, ID$ ends with ID, MRN holds MRN anywhere, and (?i) at ",
+      "the start of a line ignores case. Save the list keeps it for later ",
+      "sessions; Restore the defaults goes back to the list the browser ",
+      "came with."
     ),
 
     shiny::h5("Code"),
@@ -1513,9 +1659,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                           margin-bottom: var(--epi-gap); }
         .browse-folders .list-group-item { font-size: var(--epi-font-box);
           padding: var(--epi-box-pad-y) var(--epi-box-pad-x); }
-        .browse-profile { width: auto; min-width: 360px;
+        .browse-profile { font-size: var(--epi-font-box);
                           margin-bottom: var(--epi-gap); }
-        .browse-profile th { font-weight: 600; padding-right: 24px; }
+        .browse-profile th { font-weight: 600; padding-right: 12px; }
+        .browse-exclude > summary { cursor: pointer; color: var(--epi-accent);
+                                    margin-bottom: var(--epi-gap-small); }
       ")),
 
       # A click on a folder in the list of Dictionaries of all tables
@@ -1571,8 +1719,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         })();
       ")),
 
-      # The tables of the Tables, Columns, Preview, Profile and Var Finder
-      # tabs fit the window below their top, so that they need no page
+      # The tables of the Tables, Columns, Profiler and Var Finder tabs fit
+      # the window below their top, so that they need no page
       # scrolling: a script sets --browse-table-height on each, which caps
       # its scrolling body (scrollY)
       shiny::tags$script(shiny::HTML("
@@ -1585,13 +1733,27 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
               top += el.scrollTop;
             }
             var room = Math.max(window.innerHeight - top - 16, 200);
-            document.getElementById(id)
-              .style.setProperty('--browse-table-height', room + 'px');
+            var el = document.getElementById(id);
+            el.style.setProperty('--browse-table-height', room + 'px');
+            // What wraps the table can add space below it, as a tab's own
+            // settings panel does: take the greatest overflow of the areas
+            // around it that scroll off the table's height
+            var over = 0;
+            for (var box = body.parentElement; box; box = box.parentElement) {
+              if (/(auto|scroll)/.test(getComputedStyle(box).overflowY) ||
+                  box === document.scrollingElement) {
+                over = Math.max(over, box.scrollHeight - box.clientHeight);
+              }
+            }
+            if (over > 0) {
+              el.style.setProperty('--browse-table-height',
+                                   Math.max(room - over, 200) + 'px');
+            }
           }
           function soon() {
             setTimeout(function() {
-              ['col_table', 'tables_table', 'search_table', 'preview_table',
-               'profile_table'].forEach(fit);
+              ['col_table', 'tables_table', 'search_table', 'profile_table']
+                .forEach(fit);
             }, 0);
           }
           $(window).on('resize', soon);
@@ -1760,32 +1922,52 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       DT::dataTableOutput("col_table")
     ),
 
-    # 100 rows of the columns chosen, with value labels in place of codes,
-    # read when the tab is shown
+    # The Profiler: one column's profile, or a cross tab of it by another,
+    # read only when Profile is clicked. Its panel holds the column, By,
+    # the profile's summary and the columns left out. The lists draw their
+    # options over the page, as the panel is only as tall as its contents.
     bslib::nav_panel(
-      "Preview", value = "preview",
-      shiny::div(
-        class = "options-row",
-        shiny::checkboxInput("preview_codes", "Show codes", value = FALSE),
-        shiny::span(class = "browse-chosen",
-                    shiny::textOutput("preview_note", inline = TRUE))
-      ),
-      DT::dataTableOutput("preview_table")
-    ),
-
-    # One column's profile, read only when Profile is clicked
-    bslib::nav_panel(
-      "Profile", value = "profile",
+      "Profiler", value = "profile",
       .epi_tab_settings(
         "profile_settings",
         shiny::tagList(
-          shiny::selectInput("profile_column", "Column", choices = NULL,
-                             width = "100%"),
+          shiny::selectizeInput("profile_column", "Column", choices = NULL,
+                                width = "100%",
+                                options = list(dropdownParent = "body")),
+          shiny::selectizeInput("profile_by", "By", choices = c(None = ""),
+                                width = "100%",
+                                options = list(dropdownParent = "body")),
+          shiny::conditionalPanel(
+            "input.profile_by",
+            shiny::radioButtons("profile_show", "Show",
+                                choices = c("Rows" = "rows",
+                                            "Per cent of row" = "row",
+                                            "Per cent of column" = "column"))
+          ),
           shiny::div(
             class = "epi-stack",
             shiny::actionButton("profile_go", "Profile",
                                 icon = shiny::icon("chart-column"),
                                 class = "btn-sm btn-primary")
+          ),
+          shiny::uiOutput("profile_summary"),
+          shiny::tags$details(
+            class = "browse-exclude",
+            shiny::tags$summary(shiny::textOutput("profile_left_out",
+                                                  inline = TRUE)),
+            shiny::textAreaInput("profile_exclude", NULL, rows = 8,
+                                 width = "100%", resize = "vertical"),
+            shiny::uiOutput("profile_exclude_note"),
+            shiny::div(
+              class = "epi-stack",
+              shiny::actionButton("profile_exclude_save", "Save the list",
+                                  icon = shiny::icon("floppy-disk"),
+                                  class = "btn-sm btn-primary"),
+              shiny::actionButton("profile_exclude_reset",
+                                  "Restore the defaults",
+                                  icon = shiny::icon("rotate-left"),
+                                  class = "btn-sm btn-primary")
+            )
           )
         ),
         shiny::div(
@@ -1793,7 +1975,6 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
           shiny::span(class = "browse-chosen",
                       shiny::textOutput("profile_note", inline = TRUE))
         ),
-        shiny::uiOutput("profile_summary"),
         DT::dataTableOutput("profile_table")
       )
     ),
@@ -1992,7 +2173,7 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     })
 
     # The table's value labels whether or not they are shown, for the
-    # preview, the profile and the dictionary: those shown, or read for them
+    # Profiler and the dictionary: those shown, or read for them
     all_values <- shiny::reactive({
       l <- labels()
       if (is.null(l$source)) return(list(rows = .lbl_normalise(NULL)))
@@ -2359,101 +2540,117 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       bslib::nav_select("view", "columns")
     })
 
-    # ── The Preview tab ────────────────────────────────────────────────────
-    # 100 rows of the columns chosen, or of all when none are, read when the
-    # tab is shown. The rows are kept: showing the tab again reads them
-    # again only when the table or the columns chosen have changed, and
-    # Show codes and the labels change only what is shown. Nothing is read
-    # before the tab is first shown, as Shiny also holds back the outputs of
-    # a hidden tab; after that, switching tabs changes nothing it reads.
-    preview_seen <- shiny::reactiveVal(FALSE)
+    # ── The Profiler tab ───────────────────────────────────────────────────
+    # One column's profile (.browse_profile()), or a cross tab of it by
+    # another (.browse_crosstab()), read only when Profile is clicked, as it
+    # reads every row of the table. Columns are left out of the lists when
+    # they are by themselves a primary key or unique index, or match the
+    # list kept in the analyst's settings. The keys are read once the tab
+    # has been shown, and then for each table chosen.
+    profiler_seen <- shiny::reactiveVal(FALSE)
     shiny::observe({
-      if (identical(input$view, "preview")) preview_seen(TRUE)
-    })
-    preview_rows <- shiny::reactive({
-      shiny::req(preview_seen())
-      ch <- chosen()
-      cols <- columns()
-      shiny::req(is.null(cols$error), nrow(cols$data) > 0)
-      pick <- chosen_columns()
-      use <- if (length(pick)) {
-        cols$data[cols$data$col %in% pick, , drop = FALSE]
-      } else cols$data
-      r <- read(.browse_sql_preview(ch$db, ch$schema, ch$table, use))
-      list(name = paste(ch$db, ch$schema, ch$table, sep = "."), cols = use,
-           all = !length(pick), data = r$data, error = r$error)
+      if (identical(input$view, "profile")) profiler_seen(TRUE)
     })
 
-    output$preview_note <- shiny::renderText({
-      p <- preview_rows()
-      if (!is.null(p$error)) {
-        return(paste0("The rows of ", p$name, " could not be read: ", p$error))
+    # The list of patterns: the one kept, shown in its box. Save the list
+    # uses the list in the box and keeps it for later sessions, when every
+    # line is a regular expression; Restore the defaults goes back to them.
+    exclude <- shiny::reactiveVal(.browse_exclude_read())
+    exclude_invalid <- shiny::reactiveVal(character())
+    shiny::updateTextAreaInput(session, "profile_exclude",
+                               value = paste(shiny::isolate(exclude()),
+                                             collapse = "\n"))
+    shiny::observeEvent(input$profile_exclude_save, {
+      typed <- .browse_exclude_parse(input$profile_exclude)
+      exclude_invalid(typed$invalid)
+      if (length(typed$invalid)) {
+        shiny::showNotification("The list is not saved: see the lines named.",
+                                duration = 6, type = "warning")
+        return(invisible(NULL))
       }
-      n <- nrow(p$data)
-      k <- nrow(p$cols)
-      paste0(
-        if (n < 100) paste0("All ", n, " row", if (n != 1) "s") else "100 rows",
-        " of ", p$name, ", in no set order, with ",
-        if (p$all) "every column" else {
-          paste0("the ", k, " column", if (k != 1) "s",
-                 " chosen in the Columns tab")
-        },
-        ". ",
-        if (isTRUE(input$preview_codes)) "Codes are shown." else {
-          "Value labels are shown in place of their codes."
-        }
-      )
+      exclude(typed$patterns)
+      .browse_exclude_save(typed$patterns)
+      shiny::showNotification("The list is saved.", duration = 3,
+                              type = "message")
+    })
+    shiny::observeEvent(input$profile_exclude_reset, {
+      .browse_exclude_save(NULL)
+      exclude(.browse_exclude_default)
+      exclude_invalid(character())
+      shiny::updateTextAreaInput(session, "profile_exclude",
+                                 value = paste(.browse_exclude_default,
+                                               collapse = "\n"))
     })
 
-    output$preview_table <- DT::renderDataTable({
-      p <- preview_rows()
-      shiny::req(is.null(p$error))
-      shown <- .lbl_table(labels()$rows, all_values()$rows)
-      d <- .browse_preview(p$data, p$cols, shown,
-                           codes = isTRUE(input$preview_codes))
-      # Each column's variable label, shown when the pointer is over its
-      # heading
-      heads <- htmltools::tags$table(htmltools::tags$thead(htmltools::tags$tr(
-        lapply(names(d), function(n) {
-          htmltools::tags$th(n, title = unname(shown$label[tolower(n)]))
-        })
-      )))
-      DT::datatable(
-        d,
-        container = heads,
-        options   = list(
-          paging         = FALSE,
-          dom            = "t",
-          ordering       = FALSE,
-          scrollX        = TRUE,
-          scrollY        = "var(--browse-table-height, 50vh)",
-          scrollCollapse = TRUE,
-          autoWidth      = FALSE
-        ),
-        rownames  = FALSE,
-        selection = "none",
-        class     = "compact stripe hover",
-        style     = "bootstrap5"
-      )
+    keys <- shiny::reactive({
+      shiny::req(profiler_seen())
+      ch <- chosen()
+      read(.browse_sql_keys(ch$db, ch$schema, ch$table))
     })
-
-    # ── The Profile tab ────────────────────────────────────────────────────
-    # One column's profile (.browse_profile()), read only when Profile is
-    # clicked, as it reads every row of the table. The column offered is the
-    # first chosen in the Columns tab, or the one already offered.
-    shiny::observe({
+    # The table's columns, with why each left out is (NA for those kept)
+    profiler_columns <- shiny::reactive({
       cols <- columns()$data
       shiny::req(!is.null(cols))
-      pick <- chosen_columns()
+      cols$why <- .browse_excluded(as.character(cols$col), exclude(),
+                                   keys()$data$ColumnName)
+      cols
+    })
+
+    output$profile_left_out <- shiny::renderText({
+      n <- sum(!is.na(profiler_columns()$why))
+      paste0("Columns left out (", n, ")")
+    })
+    output$profile_exclude_note <- shiny::renderUI({
+      cols <- profiler_columns()
+      out <- cols[!is.na(cols$why), , drop = FALSE]
+      shiny::tagList(
+        if (length(exclude_invalid())) {
+          shiny::p(class = "epi-note epi-error",
+                   paste0("Not a regular expression, so the list was not saved: ",
+                          paste(exclude_invalid(), collapse = ", ")))
+        },
+        if (!is.null(keys()$error)) {
+          shiny::p(class = "epi-note epi-error",
+                   paste("The table's keys could not be read:", keys()$error))
+        },
+        shiny::p(class = "epi-note", paste0(
+          if (nrow(out)) {
+            paste0("Left out: ", paste0(out$col, " (", out$why, ")",
+                                        collapse = ", "), ". ")
+          } else "None of this table's columns is left out. ",
+          "Each line is a regular expression matched against each column's ",
+          "name, with its case: ^ID begins with ID, ID$ ends with ID, and MRN ",
+          "holds MRN anywhere. Start a line with (?i) to ignore case. Columns ",
+          "that are by themselves a primary key or a unique index (key) are ",
+          "left out too. Save the list to use it; it is kept for later ",
+          "sessions."
+        ))
+      )
+    })
+
+    # The columns offered: those kept, the first chosen in the Columns tab
+    # first; By offers those that can be grouped
+    shiny::observe({
+      cols <- profiler_columns()
+      kept <- cols[is.na(cols$why), , drop = FALSE]
+      names <- as.character(kept$col)
+      pick <- intersect(chosen_columns(), names)
       current <- shiny::isolate(input$profile_column)
       selected <- if (length(pick)) {
         pick[1]
-      } else if (length(current) && current %in% cols$col) {
+      } else if (length(current) && current %in% names) {
         current
-      } else as.character(cols$col[1])
-      shiny::updateSelectInput(session, "profile_column",
-                               choices = as.character(cols$col),
-                               selected = selected)
+      } else names[1]
+      shiny::updateSelectizeInput(
+        session, "profile_column", choices = names,
+        selected = if (length(names)) selected else character()
+      )
+      by <- names[!tolower(kept$dtype) %in% .browse_uncomparable]
+      current_by <- shiny::isolate(input$profile_by)
+      shiny::updateSelectizeInput(
+        session, "profile_by", choices = c(None = "", stats::setNames(by, by)),
+        selected = if (length(current_by) && current_by %in% by) current_by else ""
+      )
     })
 
     profiled <- shiny::reactiveVal(NULL)
@@ -2461,29 +2658,46 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       ch <- chosen()
       cols <- columns()$data
       i <- match(input$profile_column, cols$col)
-      if (is.na(i)) {
-        shiny::showNotification("Choose a column to profile.", duration = 6,
-                                type = "warning")
+      j <- if (nzchar(or(input$profile_by, ""))) match(input$profile_by, cols$col)
+      problem <- if (is.na(i)) {
+        "Choose a column to profile."
+      } else if (length(j) && (is.na(j) || j == i)) {
+        "Choose a By column other than the column profiled, or None."
+      }
+      if (!is.null(problem)) {
+        shiny::showNotification(problem, duration = 6, type = "warning")
         return(invisible(NULL))
       }
       col <- as.character(cols$col[i])
       dtype <- cols$dtype[i]
+      by <- if (length(j)) as.character(cols$col[j])
       shown <- .lbl_table(labels()$rows, all_values()$rows)
       r <- tryCatch(
         shiny::withProgress(message = "Profiling", value = 0.2, {
           summary <- query(.browse_sql_profile(ch$db, ch$schema, ch$table,
                                                col, dtype))
-          shiny::incProgress(0.4)
+          shiny::incProgress(0.3)
           counts <- if (!tolower(dtype) %in% .browse_uncomparable) {
             query(.browse_sql_profile_counts(ch$db, ch$schema, ch$table,
                                              col, dtype))
           }
-          .browse_profile(summary, counts, shown$values[[tolower(col)]])
+          shiny::incProgress(0.3)
+          pairs <- if (!is.null(by) && !is.null(counts)) {
+            query(.browse_sql_crosstab(ch$db, ch$schema, ch$table, col, dtype,
+                                       by, cols$dtype[j]))
+          }
+          c(.browse_profile(summary, counts, shown$values[[tolower(col)]]),
+            list(pairs = pairs))
         }),
         error = function(e) list(error = conditionMessage(e))
       )
-      profiled(c(r, list(table = ch, column = col, dtype = dtype,
-                         label = unname(shown$label[tolower(col)]))))
+      profiled(c(r, list(
+        table = ch, column = col, dtype = dtype, by = by,
+        label = unname(shown$label[tolower(col)]),
+        by_label = if (!is.null(by)) unname(shown$label[tolower(by)]),
+        vals = shown$values[[tolower(col)]],
+        by_vals = if (!is.null(by)) shown$values[[tolower(by)]]
+      )))
     })
     # The profile of a column of the table chosen, or NULL
     profile <- shiny::reactive({
@@ -2491,24 +2705,52 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       ch <- tryCatch(chosen(), error = function(e) NULL)
       if (is.null(p) || !identical(p$table, ch)) NULL else p
     })
+    # Its cross tab, shown as Show asks, or NULL; NA when it has too many
+    # pairs of values to show
+    crosstab <- shiny::reactive({
+      p <- profile()
+      if (is.null(p) || is.null(p$pairs)) return(NULL)
+      if (nrow(p$pairs) > 50000) return(NA)
+      .browse_crosstab(p$pairs, p$vals, p$by_vals,
+                       show = or(input$profile_show, "rows"))
+    })
 
     output$profile_note <- shiny::renderText({
       p <- profile()
       if (is.null(p)) {
-        return(paste("Choose a column and click Profile. A profile reads every",
-                     "row of the table, so a large table can take a while."))
+        return(paste("Choose a column, and a By column for a cross tab, then",
+                     "click Profile. A profile reads every row of the table,",
+                     "so a large table can take a while."))
       }
       name <- paste(p$table$db, p$table$schema, p$table$table, p$column,
                     sep = ".")
       if (!is.null(p$error)) {
         return(paste0("The profile of ", name, " could not be read: ", p$error))
       }
+      named <- function(x, label) {
+        paste0(x, if (length(label) && !is.na(label)) paste0(" (", label, ")"))
+      }
+      x <- crosstab()
       paste0(
-        "Profile of ", name,
-        if (length(p$label) && !is.na(p$label)) paste0(" (", p$label, ")"),
+        "Profile of ", named(name, p$label),
+        if (!is.null(p$by)) paste0(" by ", named(p$by, p$by_label)),
         ".",
         if (is.null(p$counts)) {
           paste0(" Values of type ", p$dtype, " cannot be counted.")
+        } else if (identical(x, NA)) {
+          paste(" The two columns have more than 50,000 pairs of values, too",
+                "many for a cross tab; choose a By column with fewer values.")
+        } else if (!is.null(x)) {
+          paste0(
+            if (x$rows_capped) {
+              paste(" The 1,000 most common values are listed; the rest are",
+                    "in Other values.")
+            },
+            if (x$cols_capped) {
+              paste0(" The 20 most common values of ", p$by, " are ",
+                     "columns; the rest are in Other.")
+            }
+          )
         } else if (!p$complete) {
           " The 1,000 most common values are listed."
         }
@@ -2530,25 +2772,37 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     output$profile_table <- DT::renderDataTable({
       p <- profile()
       shiny::req(p, is.null(p$error), p$counts)
+      x <- crosstab()
+      shiny::req(!identical(x, NA))
+      options <- list(paging = FALSE, dom = "ft", autoWidth = FALSE,
+                      scrollY = "var(--browse-table-height, 50vh)",
+                      scrollCollapse = TRUE)
+      if (is.null(x)) {
+        table <- DT::datatable(p$counts, options = options, rownames = FALSE,
+                               selection = "none",
+                               class = "compact stripe hover",
+                               style = "bootstrap5")
+        return(DT::formatRound(DT::formatRound(table, "Rows", digits = 0),
+                               "Per cent", digits = 1))
+      }
+      # A cross tab: each heading's code and label in its title; counts
+      # whole, per cents to one decimal place
+      heads <- htmltools::tags$table(htmltools::tags$thead(htmltools::tags$tr(
+        lapply(seq_along(x$table), function(k) {
+          n <- names(x$table)[k]
+          title <- c(rep("", ncol(x$table) - length(x$titles)), x$titles)[k]
+          htmltools::tags$th(n, title = if (nzchar(title)) title)
+        })
+      )))
+      numbers <- names(x$table)[vapply(x$table, is.numeric, logical(1))]
       DT::formatRound(
-        DT::formatRound(
-          DT::datatable(
-            p$counts,
-            options   = list(
-              paging         = FALSE,
-              dom            = "ft",
-              scrollY        = "var(--browse-table-height, 50vh)",
-              scrollCollapse = TRUE,
-              autoWidth      = FALSE
-            ),
-            rownames  = FALSE,
-            selection = "none",
-            class     = "compact stripe hover",
-            style     = "bootstrap5"
-          ),
-          "Rows", digits = 0
-        ),
-        "Per cent", digits = 1
+        DT::datatable(x$table, container = heads,
+                      options = c(options, list(scrollX = TRUE,
+                                                ordering = FALSE)),
+                      rownames = FALSE, selection = "none",
+                      class = "compact stripe hover", style = "bootstrap5"),
+        numbers, digits = if (identical(input$profile_show, "rows") ||
+                              is.null(input$profile_show)) 0 else 1
       )
     })
 
@@ -2673,7 +2927,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
       ids <- c("view", "db", "schema", "table", "labels_source",
                "show_values", "insert_mode", "declare_pkgs", "use_labels",
-               "col_table_rows_selected", "preview_codes", "profile_column")
+               "col_table_rows_selected", "profile_column", "profile_by",
+               "profile_show")
       .epi_problem_report(
         "Dataset Browser", "Browser", what,
         state = c(
