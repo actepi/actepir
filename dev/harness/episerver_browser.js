@@ -497,6 +497,53 @@ const fs = require('fs');
     '| counts', JSON.stringify((await cells('#profile_table')).map(r => [r[0].length, r[1]])));
   await select('table', 'APC');
 
+  // The whole table: a row for each column kept, read a column at a time;
+  // the headings' titles; sorted by codes without labels; the table fits
+  // the window; a click on a column profiles it alone
+  const shown = sel => page.$eval(sel, e => e.checkVisibility());
+  await page.check('#profile_mode input[value=table]');
+  await settle();
+  console.log('PROFILER whole table, before:', await text('#profile_note'), '| Column shown',
+    await shown('#profile_column + .selectize-control'), '| summary shown', await shown('#profile_summary'),
+    '| Stop shown', await shown('#profile_stop'));
+  await page.click('#profile_go');
+  await page.waitForFunction(() => document.querySelector('#profile_note').textContent.startsWith('Profile of'),
+    null, { timeout: 60000 });
+  await settle();
+  const whole = await cells('#profile_table');
+  console.log('PROFILER whole table:', await text('#profile_note'), '| rows', whole.length,
+    '| Stop shown', await shown('#profile_stop'));
+  console.log('PROFILER whole table headings:', JSON.stringify(await page.$$eval(
+    '#profile_table .dataTables_scrollHead th', ths => ths.map(th => [th.textContent.trim(), !!th.title]))));
+  console.log('PROFILER whole table rows:', JSON.stringify(whole.slice(0, 3)));
+  console.log('PROFILER whole table fit:', JSON.stringify(await page.evaluate(() => ({
+    tableBottom: Math.round(document.querySelector('#profile_table .dataTables_scrollBody').getBoundingClientRect().bottom),
+    window: window.innerHeight }))), '| page scrolls', await pageScrolls(), '| panel scrolls', await panelScrolls());
+  await shot('12e_profiler_whole_table');
+  const sortBy = async name => page.click(`#profile_table .dataTables_scrollHead th:text-is("${name}")`);
+  await sortBy('Codes without labels');
+  await sortBy('Codes without labels');
+  await settle(300);
+  console.log('PROFILER whole table by codes without labels:', JSON.stringify((await cells('#profile_table'))[0]));
+  await page.click('#profile_table tbody tr:has(td:text-is("AgeYrs")) td:first-child');
+  await settle();
+  console.log('PROFILER click AgeYrs:', await page.evaluate(() => $('#profile_mode input:checked').val()), '|',
+    await text('#profile_note'), '| Column', await page.evaluate(() => $('#profile_column').val()));
+  // Back to the whole table: shown again, not read again
+  await page.check('#profile_mode input[value=table]');
+  await settle();
+  console.log('PROFILER whole table again:', await text('#profile_note'), '| rows', (await cells('#profile_table')).length);
+  // The same column clicked again profiles it again
+  await select('profile_column', 'Sex');
+  await page.check('#profile_mode input[value=table]');
+  await settle();
+  await page.click('#profile_table tbody tr:has(td:text-is("AgeYrs")) td:first-child');
+  await settle();
+  console.log('PROFILER click AgeYrs again:', await page.evaluate(() => $('#profile_mode input:checked').val()), '|',
+    await page.evaluate(() => $('#profile_column').val()));
+  await page.check('#profile_mode input[value=column]');
+  await settle();
+
   // Help: the shared Help style, without the info bar
   await page.click('a[data-value=help]');
   await page.waitForTimeout(600);

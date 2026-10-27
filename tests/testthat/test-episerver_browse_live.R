@@ -275,8 +275,9 @@ test_that("the Profiler reads every type of column in Analysis.dbo, and its keys
   x <- .browse_crosstab(pairs, vals)
   expect_equal(x$table$Total[nrow(x$table)], summary$TotalRows)
 
-  # One column of each type among a sample of tables, profiled, and each
-  # table's keys read
+  # One column of each type among a sample of tables, profiled, as a row
+  # of the whole table's profile too, and each table's keys read
+  none <- .lbl_table(.lbl_normalise(NULL))
   seen <- character()
   for (t in live_sample(tables)) {
     cols <- db$query(.browse_sql_columns("Analysis", "dbo", t))
@@ -290,6 +291,7 @@ test_that("the Profiler reads every type of column in Analysis.dbo, and its keys
                                               cols$dtype[i]))
       expect_named(summary, c("TotalRows", "Present", "DistinctValues",
                               "MinValue", "MaxValue", "Blank"))
+      counts <- NULL
       if (!tolower(cols$dtype[i]) %in% .browse_uncomparable) {
         counts <- db$query(.browse_sql_profile_counts("Analysis", "dbo", t,
                                                       cols$col[i], cols$dtype[i]))
@@ -297,6 +299,13 @@ test_that("the Profiler reads every type of column in Analysis.dbo, and its keys
           expect_equal(sum(counts$ProfileCount), summary$TotalRows, label = label)
         }
       }
+      row <- .browse_table_profile(cols[i, ], list(list(summary = summary,
+                                                        counts = counts)),
+                                   none)$table
+      expect_equal(nrow(row), 1, label = label)
+      expect_true(is.na(row$`Missing %`) ||
+                    (row$`Missing %` >= 0 && row$`Missing %` <= 100),
+                  label = label)
     }
   }
 
@@ -386,6 +395,17 @@ test_that("the app lists and describes a table against EpiServer", {
                       profile_go = 2)
     expect_null(profile()$error)
     expect_false(identical(crosstab(), NA))
+
+    # The whole table, stopped after ten columns
+    session$setInputs(profile_mode = "table", profile_go = 3)
+    for (i in 1:9) session$elapse(1)
+    session$setInputs(profile_stop = 1)
+    w <- whole_profile()
+    expect_equal(w$done, min(10, sum(is.na(profiler_columns()$why))))
+    expect_equal(nrow(w$profile$table), w$done)
+    expect_false("Note" %in% names(w$profile$table))
+    expect_gt(w$profile$rows, 0)
+    session$setInputs(profile_mode = "column")
 
     # A view, when dbo has one
     views <- tables()$data$TABLE_NAME[tables()$data$TABLE_TYPE == "VIEW"]
