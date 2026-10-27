@@ -249,6 +249,59 @@ test_that("the search finds columns by name, variable label and value label", {
 
 })
 
+test_that("the Profiler reads every type of column in Analysis.dbo, and its keys", {
+
+  skip_if_no_episerver()
+  db <- live_db()
+  tables <- db$query(.browse_sql_tables("Analysis", "dbo"))
+
+  # ACTGHSMYX's RSEX_Y20: every row counted, with the labels of its codes;
+  # by SVYYEAR, a cross tab whose total is every row
+  l <- .lbl_read(db$query, "Analysis", "dbo", "ACTGHSMYX")
+  cols <- db$query(.browse_sql_columns("Analysis", "dbo", "ACTGHSMYX"))
+  sex <- cols[toupper(cols$col) == "RSEX_Y20", ]
+  year <- cols[toupper(cols$col) == "SVYYEAR", ]
+  summary <- db$query(.browse_sql_profile("Analysis", "dbo", "ACTGHSMYX",
+                                          sex$col, sex$dtype))
+  counts <- db$query(.browse_sql_profile_counts("Analysis", "dbo", "ACTGHSMYX",
+                                                sex$col, sex$dtype))
+  expect_equal(sum(counts$ProfileCount), summary$TotalRows)
+  vals <- .lbl_table(l$rows)$values$rsex_y20
+  p <- .browse_profile(summary, counts, vals)
+  expect_true(all(c("Male", "Female") %in% p$counts$Label))
+  pairs <- db$query(.browse_sql_crosstab("Analysis", "dbo", "ACTGHSMYX", sex$col,
+                                         sex$dtype, year$col, year$dtype))
+  expect_lt(nrow(pairs), 50001)
+  x <- .browse_crosstab(pairs, vals)
+  expect_equal(x$table$Total[nrow(x$table)], summary$TotalRows)
+
+  # One column of each type among a sample of tables, profiled, and each
+  # table's keys read
+  seen <- character()
+  for (t in live_sample(tables)) {
+    cols <- db$query(.browse_sql_columns("Analysis", "dbo", t))
+    keys <- db$query(.browse_sql_keys("Analysis", "dbo", t))
+    expect_named(keys, "ColumnName")
+    expect_true(all(tolower(keys$ColumnName) %in% tolower(cols$col)), label = t)
+    for (i in which(!tolower(cols$dtype) %in% seen)) {
+      seen <- c(seen, tolower(cols$dtype[i]))
+      label <- paste(t, cols$col[i], cols$dtype[i])
+      summary <- db$query(.browse_sql_profile("Analysis", "dbo", t, cols$col[i],
+                                              cols$dtype[i]))
+      expect_named(summary, c("TotalRows", "Present", "DistinctValues",
+                              "MinValue", "MaxValue", "Blank"))
+      if (!tolower(cols$dtype[i]) %in% .browse_uncomparable) {
+        counts <- db$query(.browse_sql_profile_counts("Analysis", "dbo", t,
+                                                      cols$col[i], cols$dtype[i]))
+        if (.browse_profile(summary, counts)$complete) {
+          expect_equal(sum(counts$ProfileCount), summary$TotalRows, label = label)
+        }
+      }
+    }
+  }
+
+})
+
 test_that("the code the browser copies reads the table in every form", {
 
   skip_if_no_episerver()
@@ -322,6 +375,17 @@ test_that("the app lists and describes a table against EpiServer", {
                       search_run = "RSEX_Y20")
     expect_null(found()$error)
     expect_true("ACTGHSMYX" %in% found()$results$Table)
+
+    # The Profiler: a column, then a cross tab
+    session$setInputs(view = "profile", profile_column = "RSEX_Y20",
+                      profile_by = "", profile_go = 1)
+    expect_null(keys()$error)
+    expect_null(profile()$error)
+    expect_true("Male" %in% profile()$counts$Label)
+    session$setInputs(profile_by = "SVYYEAR", profile_show = "rows",
+                      profile_go = 2)
+    expect_null(profile()$error)
+    expect_false(identical(crosstab(), NA))
 
     # A view, when dbo has one
     views <- tables()$data$TABLE_NAME[tables()$data$TABLE_TYPE == "VIEW"]

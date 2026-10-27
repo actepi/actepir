@@ -708,6 +708,12 @@
     .bslib-sidebar-layout > .sidebar > .sidebar-content > .accordion:not(:last-child) {
       margin-bottom: var(--epi-gap);
     }
+    /* bslib also takes the margin off the settings placed straight in a
+       sidebar, as in a tab's own settings panel, so they are given it back */
+    .bslib-sidebar-layout > .sidebar > .sidebar-content > .form-group:not(:last-child),
+    .bslib-sidebar-layout > .sidebar > .sidebar-content > .shiny-panel-conditional > .form-group {
+      margin-bottom: var(--epi-gap);
+    }
     /* Actions held at the foot of a sidebar, across its full width and
        flush with the sections above and the sidebar's bottom edge. The foot
        stays above what scrolls under it, such as a focused section heading

@@ -62,9 +62,11 @@ writeLines(c(
 ), file.path(wd, ".Rprofile"))
 setwd(wd)
 
-# Boundaries and the compiled theme are cached; a temporary cache leaves the
-# user's untouched. No browser opens: Playwright brings its own.
-Sys.setenv(R_USER_CACHE_DIR = file.path(wd, "cache"))
+# Boundaries and the compiled theme are cached, and the Profiler keeps its
+# list of columns left out in the settings folder; temporary folders leave
+# the user's untouched. No browser opens: Playwright brings its own.
+Sys.setenv(R_USER_CACHE_DIR = file.path(wd, "cache"),
+           R_USER_CONFIG_DIR = file.path(wd, "config"))
 options(browser = function(url) invisible(NULL))
 
 suppressPackageStartupMessages(library(actepir))

@@ -412,6 +412,91 @@ const fs = require('fs');
     await page.evaluate(() => $('#table').val()), '|', await info());
   await select('schema', 'dbo');
 
+  // The Profiler: its lists draw over the page, so the panel does not
+  // scroll; the summary is in the panel; the table fits the window; PatientID,
+  // the primary key, is left out; By gives a cross tab
+  const summaryRows = () => page.$$eval('#profile_summary tr',
+    trs => trs.map(tr => [tr.querySelector('th').textContent, tr.querySelector('td').textContent]));
+  // The panel and its sections, but not the box of the list, which scrolls
+  // by design
+  const panelScrolls = () => page.evaluate(() => {
+    const aside = document.querySelector('#profile_settings');
+    return [aside, ...aside.querySelectorAll('div')].some(e =>
+      /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1);
+  });
+  // Any area that scrolls, but the tables' own bodies, the sidebar and the
+  // lists' options
+  const pageScrolls = () => page.evaluate(() => [...document.querySelectorAll('div, main, body')].some(e =>
+    !e.closest('.dataTables_scrollBody') && !e.closest('aside#settings') && !e.closest('.selectize-dropdown') &&
+    /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1) ||
+    document.documentElement.scrollHeight > window.innerHeight);
+  await select('table', 'APC');
+  await page.click('a[data-value=profile]');
+  await settle();
+  console.log('PROFILER panel:', JSON.stringify(await page.evaluate(() => ({
+    width: Math.round(document.querySelector('#profile_settings').getBoundingClientRect().width),
+    column: $('#profile_column').val(),
+    options: Object.keys($('#profile_column')[0].selectize.options).slice(0, 3),
+    by: Object.keys($('#profile_by')[0].selectize.options).slice(0, 3) }))),
+    '| left out', await text('#profile_left_out'), '| note', await text('#profile_note'));
+  await page.click('#profile_column + .selectize-control .selectize-input');
+  await page.waitForTimeout(500);
+  console.log('PROFILER list open: drawn on', await page.evaluate(() =>
+    document.querySelector('#profile_column + .selectize-control .selectize-dropdown, body > .selectize-dropdown').parentElement.tagName),
+    '| panel scrolls', await panelScrolls(), '| options shown',
+    await page.$$eval('body > .selectize-dropdown .option', os => os.filter(o => o.offsetParent).length));
+  await shot('11_profiler_list');
+  await page.keyboard.press('Escape');
+  await select('profile_column', 'Sex');
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILER Sex:', await text('#profile_note'), '|', JSON.stringify(await summaryRows()));
+  console.log('PROFILER counts:', JSON.stringify(await cells('#profile_table')));
+  await shot('12_profiler');
+  // At 1536 by 730 the counts table fits below its top, and the page does
+  // not scroll
+  await page.setViewportSize({ width: 1536, height: 730 });
+  await select('profile_column', 'AgeYrs');
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILER at 1536 x 730:', JSON.stringify(await page.evaluate(() => {
+    const body = document.querySelector('#profile_table .dataTables_scrollBody');
+    return { tableTop: Math.round(body.getBoundingClientRect().top),
+             tableBottom: Math.round(body.getBoundingClientRect().bottom) };
+  })), '| page scrolls', await pageScrolls(), '| panel scrolls', await panelScrolls());
+  await shot('12b_profiler_1536x730');
+  await page.setViewportSize({ width: 1920, height: 950 });
+  await settle(400);
+  // By: a cross tab, then per cents of rows, with no new query
+  await select('profile_column', 'Sex');
+  await select('profile_by', 'Diagnosis1');
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILER Sex by Diagnosis1:', await text('#profile_note'), '| headings', JSON.stringify(await page.$$eval(
+    '#profile_table .dataTables_scrollHead th', ths => ths.map(th => [th.textContent.trim(), th.title]))));
+  console.log('PROFILER cross tab rows:', JSON.stringify(await cells('#profile_table')));
+  await page.check('#profile_show input[value=row]');
+  await settle();
+  console.log('PROFILER per cent of row:', JSON.stringify((await cells('#profile_table')).slice(0, 2)));
+  await shot('12c_profiler_crosstab');
+  await page.check('#profile_show input[value=rows]');
+  await select('profile_by', '');
+  // Columns left out: the list and why each is left out
+  await page.click('#profile_settings details.browse-exclude > summary');
+  await settle(300);
+  console.log('PROFILER left out:', JSON.stringify(await page.inputValue('#profile_exclude')), '|',
+    await text('#profile_exclude_note'));
+  await shot('12d_profiler_left_out');
+  await page.click('#profile_settings details.browse-exclude > summary');
+  // Text: blank values, and the longest value cut at 200 characters
+  await select('table', 'Deaths');
+  await select('profile_column', 'Cause');
+  await page.click('#profile_go');
+  await settle();
+  console.log('PROFILER Deaths.Cause:', JSON.stringify(await summaryRows()),
+    '| counts', JSON.stringify((await cells('#profile_table')).map(r => [r[0].length, r[1]])));
+  await select('table', 'APC');
+
   // Help: the shared Help style, without the info bar
   await page.click('a[data-value=help]');
   await page.waitForTimeout(600);
