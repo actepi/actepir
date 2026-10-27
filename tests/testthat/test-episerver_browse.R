@@ -318,7 +318,9 @@ test_that("columns are left out by key or by a pattern kept between sessions", {
   expect_equal(.browse_excluded("Valid", "(?i)id$"), "(?i)id$")
 
   # Typed lines: blanks dropped, patterns that are not regular expressions
-  typed <- .browse_exclude_parse("ID$\n\n  ^MRN  \n[unclosed\n")
+  expect_no_warning(
+    typed <- .browse_exclude_parse("ID$\n\n  ^MRN  \n[unclosed\n")
+  )
   expect_equal(typed$patterns, c("ID$", "^MRN", "[unclosed"))
   expect_equal(typed$invalid, "[unclosed")
   expect_equal(.browse_exclude_parse(NULL)$patterns, character())

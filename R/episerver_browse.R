@@ -959,8 +959,10 @@ episerver_browse_stop <- function() {
 .browse_exclude_parse <- function(text) {
   x <- trimws(strsplit(if (is.null(text)) "" else text, "\n")[[1]])
   x <- x[nzchar(x)]
+  # grepl() warns before it stops on a pattern that does not compile
   valid <- vapply(x, function(p) {
-    !inherits(tryCatch(grepl(p, "", perl = TRUE), error = function(e) e),
+    !inherits(tryCatch(suppressWarnings(grepl(p, "", perl = TRUE)),
+                       error = function(e) e),
               "error")
   }, logical(1), USE.NAMES = FALSE)
   list(patterns = x, invalid = x[!valid])
