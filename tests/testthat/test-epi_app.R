@@ -394,3 +394,23 @@ test_that("selected table rows are Lavender with Nightshade text and an Iris bar
                "inset 4px 0 0 var\\(--epi-accent\\)")
 
 })
+
+test_that("the clipboard takes text alone, or text with HTML for programs such as Excel", {
+
+  sent <- list()
+  session <- list(sendCustomMessage = function(type, message) {
+    sent[[length(sent) + 1]] <<- list(type = type, message = message)
+  })
+  local_mocked_bindings(showNotification = function(...) NULL, .package = "shiny")
+  .epi_copy_text(session, "code")
+  .epi_copy_text(session, "a\tb", "Copied", html = "<table></table>")
+  expect_equal(sent[[1]], list(type = "actepir_copy", message = "code"))
+  expect_equal(sent[[2]]$message, list(text = "a\tb", html = "<table></table>"))
+  # The handler writes both, and copies the HTML as a selection when the
+  # clipboard API cannot
+  script <- as.character(.epi_copy_script())
+  expect_match(script, "'text/html': new Blob([html]", fixed = TRUE)
+  expect_match(script, "'text/plain': new Blob([text]", fixed = TRUE)
+  expect_match(script, "range.selectNodeContents(el)", fixed = TRUE)
+
+})

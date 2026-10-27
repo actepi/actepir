@@ -151,6 +151,15 @@ Plan pull request 7 (`dev/notes/dataset-browser.md`) moved Copy Code, the code's
 | `episerver_browser.js`, sidebar and Columns tab | The sidebar holds Dataset and Labels, and its foot `bug_report` alone. The Columns tab's panel is 240px wide, with Connection, Declare packages and Import with labels, then `insert_code` and `dict_download`; its information button works. The table's header is 114px below the info bar, and the table ends at y = 894 in a 950-pixel window and 674 in a 730-pixel one, as on the Profiler and Var Finder tabs; it is 1276px wide at 1920 and 892px at 1536, where its columns are #, 42, Column, 156, Description, 311, Type, 90, Value labels, 190 and Notes, 87. AgeYrs's notes read "3 notes" and open without choosing the row. Copy Code copies the same code as before. |
 | `episerver_browser.js`, Download | The menu opens downwards with a fixed position, ending at y = 584 below the panel's foot at 467, and the panel does not scroll. Its items and downloads are unchanged. |
 
+Plan pull request 8 (`dev/notes/dataset-browser.md`) added Copy dictionary for Excel and Dictionary logo to the Download menu. `episerver_browser.js` copies APC's dictionary and reads the clipboard, then opens the logo dialog, sets a white logo it makes as a screenshot with a transparent background, and goes back to the lockup. The logo is kept under the harness's `R_USER_CONFIG_DIR`, so the folder list of Dictionaries of all tables also lists `config`. The browser's other results and the calculator's were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, Download | The menu holds "Dictionary as PDF (needs Quarto)", disabled, "Dictionary as HTML", "Copy dictionary for Excel", "Dictionaries of all tables…" and "Dictionary logo…". It ends at y = 648, and the panel does not scroll. |
+| `episerver_browser.js`, Excel | The clipboard holds `text/plain` and `text/html`: 47 lines of text, the headings and APC's 46 rows (Sex's code 9 reads "Analysis.dbo.APC, 2, Sex, Sex of the patient, int, 9, Not stated"), and an HTML table of 47 rows whose 322 cells but the positions (46 rows of 7) carry `mso-number-format`, with AgeYrs's notes in one cell. |
+| `episerver_browser.js`, logo | The dialog shows the lockup (`data:image/svg+xml`) 48px tall on Nightshade, rgb(50, 5, 87), and "The dictionaries show the actepir lockup."; a 640 by 200 PNG chosen gives `data:image/png` and "The dictionaries show your logo, 640 by 200 pixels.", with no warning; Use the actepir lockup goes back. |
+| `dryrun_live.R` | 28 tests, 576 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 571 expectations, 0 failed, 4 skipped. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.

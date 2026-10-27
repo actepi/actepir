@@ -788,7 +788,8 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
   expect_length(columns, 1)
   expect_match(columns, "epi-tab-layout", fixed = TRUE)
   for (id in c("columns_settings", "insert_mode", "declare_pkgs", "use_labels",
-               "insert_code", "dict_download", "dict_html", "dict_bulk",
+               "insert_code", "dict_download", "dict_html", "dict_excel",
+               "dict_bulk", "dict_logo",
                "values_open", "values_close", "clear_rows", "chosen_note")) {
     expect_true(has_id(columns, id), label = id)
   }
@@ -798,7 +799,9 @@ test_that("the page follows the app style: top bar, sidebar sections and tabs", 
                                "\"\\{&quot;strategy&quot;:&quot;fixed&quot;\\}\".*",
                                "Download.*Dictionary as PDF.*",
                                "id=\"dict_html\".*Dictionary as HTML.*",
-                               "Dictionaries of all tables"), perl = TRUE)
+                               "id=\"dict_excel\".*Copy dictionary for Excel.*",
+                               "Dictionaries of all tables.*",
+                               "id=\"dict_logo\".*Dictionary logo"), perl = TRUE)
   expect_match(columns, "<button id=\"clear_rows\" type=\"button\" disabled",
                fixed = TRUE)
   # The dataset's description and notes are on the Collection tab

@@ -445,6 +445,40 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
              stringsAsFactors = FALSE)
 }
 
+# The dictionary as data (.dict_flat()) to paste into Excel, with headings:
+# as an HTML table whose cells, but the position, are marked as text
+# (mso-number-format), so that Excel keeps codes and labels such as 01 or
+# 1-4 as written rather than as numbers or dates, with a note's lines kept
+# in one cell; and as tab-separated text for other programs, with tabs and
+# line breaks made spaces
+#' @noRd
+.dict_excel <- function(flat) {
+  heads <- c("Table", "Position", "Column", "Description", "Type", "Code",
+             "Value label", "Notes")
+  cells <- lapply(flat, function(x) ifelse(is.na(x), "", as.character(x)))
+  plain <- lapply(cells, function(x) gsub("[\t\r\n]+", " ", x))
+  text <- paste(c(paste(heads, collapse = "\t"),
+                  do.call(paste, c(unname(plain), sep = "\t"))),
+                collapse = "\n")
+  as_text <- "<td style='mso-number-format:\"\\@\"'>"
+  tds <- Map(function(x, name) {
+    x <- htmltools::htmlEscape(x)
+    if (name == "notes") {
+      x <- gsub("\r?\n", "<br style='mso-data-placement:same-cell'>", x)
+    }
+    paste0(if (name == "position") "<td>" else as_text, x, "</td>")
+  }, cells, names(cells))
+  rows <- if (nrow(flat)) {
+    paste0("<tr>", do.call(paste0, unname(tds)), "</tr>", collapse = "")
+  } else ""
+  html <- paste0(
+    "<meta charset=\"utf-8\"><table><thead><tr>",
+    paste0("<th>", heads, "</th>", collapse = ""), "</tr></thead><tbody>",
+    rows, "</tbody></table>"
+  )
+  list(text = text, html = html)
+}
+
 # The tables and views of database db, or of one schema, with whether a label
 # table holds labels for each: the first that holds rows for it, as
 # .lbl_read() looks, or the one label table named by `label`. Label tables
@@ -666,13 +700,7 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
     tags$header(
       class = "band",
       tags$div(tags$p(class = "title", title), tags$p(class = "subtitle", subtitle)),
-      if (!is.null(logo)) {
-        tags$img(src = paste0("data:", logo$mime, ";base64,",
-                              gsub("[\r\n]", "", jsonlite::base64_enc(
-                                readBin(logo$path, "raw", file.info(logo$path)$size)
-                              ))),
-                 alt = logo$alt)
-      }
+      if (!is.null(logo)) tags$img(src = .dict_logo_src(logo), alt = logo$alt)
     ),
     tags$main(
       tags$h1(p$heading),
@@ -757,6 +785,15 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
   lockup <- .dict_lockup()
   if (!nzchar(lockup)) return(NULL)
   list(path = lockup, ext = "svg", mime = "image/svg+xml", alt = "actepir")
+}
+
+# The logo (.dict_logo()) as a data URI, for an <img>
+#' @noRd
+.dict_logo_src <- function(logo) {
+  paste0("data:", logo$mime, ";base64,",
+         gsub("[\r\n]", "", jsonlite::base64_enc(
+           readBin(logo$path, "raw", file.info(logo$path)$size)
+         )))
 }
 
 # The width, height, transparency and size of a PNG, from its header and

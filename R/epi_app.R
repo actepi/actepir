@@ -263,29 +263,57 @@
 
 
 # Copies text to the clipboard through .epi_copy_script(), from the browser
-# showing the app
+# showing the app. With `html`, the clipboard also holds that HTML, which
+# programs such as Excel paste in place of the text.
 #' @noRd
-.epi_copy_text <- function(session, text, message = "Copied to clipboard") {
-  session$sendCustomMessage("actepir_copy", text)
+.epi_copy_text <- function(session, text, message = "Copied to clipboard",
+                           html = NULL) {
+  session$sendCustomMessage("actepir_copy", if (is.null(html)) text else {
+    list(text = text, html = html)
+  })
   shiny::showNotification(message, duration = 2, type = "message")
 }
 
 
-# Clipboard handler for .epi_copy_text()
+# Clipboard handler for .epi_copy_text(): text alone, or text and HTML. The
+# fallback copies the HTML as the page's selection, or the text from a
+# text box.
 #' @noRd
 .epi_copy_script <- function() {
   shiny::tags$script(shiny::HTML("
-    Shiny.addCustomMessageHandler('actepir_copy', function(text) {
+    Shiny.addCustomMessageHandler('actepir_copy', function(msg) {
+      var text = typeof msg === 'string' ? msg : msg.text;
+      var html = typeof msg === 'string' ? null : msg.html;
       function fallback() {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
+        var el = document.createElement(html ? 'div' : 'textarea');
+        if (html) {
+          el.innerHTML = html;
+          el.style.position = 'fixed';
+          el.style.left = '-10000px';
+        } else {
+          el.value = text;
+        }
+        document.body.appendChild(el);
+        if (html) {
+          var range = document.createRange();
+          range.selectNodeContents(el);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        } else {
+          el.select();
+        }
         try { document.execCommand('copy'); } catch(e) {}
-        document.body.removeChild(ta);
+        if (html) window.getSelection().removeAllRanges();
+        document.body.removeChild(el);
       }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() {}, fallback);
+      var cb = navigator.clipboard;
+      if (html && cb && cb.write && window.ClipboardItem) {
+        cb.write([new ClipboardItem({
+          'text/html': new Blob([html], {type: 'text/html'}),
+          'text/plain': new Blob([text], {type: 'text/plain'})
+        })]).then(function() {}, fallback);
+      } else if (!html && cb && cb.writeText) {
+        cb.writeText(text).then(function() {}, fallback);
       } else {
         fallback();
       }

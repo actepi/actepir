@@ -144,7 +144,10 @@
 #' comes with RStudio; without it, its item is disabled. *Dictionaries of all
 #' tables*, in the same menu, writes the dictionaries of every table and view
 #' with labels in the schema, or in the whole database, to a folder typed or
-#' found in the dialog's list of folders, as HTML, PDF or both.
+#' found in the dialog's list of folders, as HTML, PDF or both. *Copy
+#' dictionary for Excel* copies the dictionary as a table, its cells marked
+#' as text so that Excel keeps codes such as `01` as written. *Dictionary
+#' logo* sets or removes the dictionaries' logo, as [dictionary_logo()] does.
 #'
 #' **Background process**
 #'
@@ -1426,6 +1429,34 @@ episerver_browse_stop <- function() {
     addClass("modal-dialog-scrollable")$allTags()
 }
 
+# The dialog that sets the dictionaries' logo through dictionary_logo(): the
+# logo shown on the band's Nightshade (logo_shown), a PNG to choose, and the
+# actepir lockup again
+#' @noRd
+.browse_logo_dialog <- function() {
+  shiny::modalDialog(
+    title = "Dictionary logo", easyClose = TRUE,
+    shiny::p(
+      "The dictionaries show this logo at the right of their band. A logo ",
+      "chosen here is kept for later sessions, as ",
+      shiny::tags$code("dictionary_logo()"), " keeps it."
+    ),
+    shiny::uiOutput("logo_shown"),
+    shiny::fileInput("logo_file", "Choose a PNG",
+                     accept = c(".png", "image/png"), width = "100%"),
+    shiny::p(class = "epi-note",
+             "A white logo on a transparent background, at least 600 pixels ",
+             "wide and under 500 KB, suits the band."),
+    footer = shiny::tagList(
+      shiny::actionButton("logo_reset", "Use the actepir lockup",
+                          icon = shiny::icon("rotate-left"),
+                          class = "btn-sm btn-primary"),
+      shiny::tags$button(type = "button", class = "btn btn-sm btn-primary",
+                         `data-bs-dismiss` = "modal", "Close")
+    )
+  )
+}
+
 # The dialog once the dictionaries are written: how many, as which files and
 # where; the tables and views left out (.dict_summary()); those that failed;
 # and a button that opens the folder, on Windows
@@ -1631,6 +1662,12 @@ episerver_browse_stop <- function() {
       " gives the same files in a script."
     ),
     shiny::p(
+      "Copy dictionary for Excel copies the dictionary as a table, a row for ",
+      "each value label of each column and one for a column without value ",
+      "labels, to paste into a worksheet. Its cells are marked as text, so ",
+      "Excel keeps codes such as 01 and labels such as 1-4 as they are."
+    ),
+    shiny::p(
       "Dictionaries of all tables, in the same menu, writes the dictionaries ",
       "of every table and view with labels in the schema, or in the whole ",
       "database, to a folder on this computer, as HTML, PDF or both. Tables ",
@@ -1641,6 +1678,12 @@ episerver_browse_stop <- function() {
       "Type or paste the folder, or find it in the list below the box: click ",
       "a folder to open it, or Up, Home or Working directory. A folder that ",
       "does not exist is made, so a new folder's name can be typed at the end."
+    ),
+    shiny::p(
+      "Dictionary logo sets the logo at the right of the dictionaries' band: ",
+      "choose a PNG, or go back to the actepir lockup. It is kept for later ",
+      "sessions, and ", code("dictionary_logo()"), " sets the same logo in ",
+      "the console."
     ),
 
     shiny::h5("Problems"),
@@ -1736,7 +1779,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       # the chosen table's Nightshade, the Collection tab, the line on the
       # columns chosen, the value labels and notes in the columns' table,
       # whose lists scroll once open, the folder list of Dictionaries of all
-      # tables, and the profile's summary
+      # tables, the profile's summary, and the logo on the band's Nightshade
+      # in the Dictionary logo dialog
       shiny::tags$style(shiny::HTML("
         .browse-label { color: #777; }
         .selectize-dropdown .option.selected .browse-label { color: inherit;
@@ -1761,6 +1805,10 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         .browse-profile th { font-weight: 600; padding-right: 12px; }
         .browse-exclude > summary { cursor: pointer; color: var(--epi-accent);
                                     margin-bottom: var(--epi-gap-small); }
+        .browse-logo { background: var(--epi-primary); border-radius: 4px;
+                       padding: 12px 16px; text-align: right;
+                       margin-bottom: var(--epi-gap-small); }
+        .browse-logo img { height: 48px; max-width: 100%; }
       ")),
 
       # A click on a folder in the list of Dictionaries of all tables
@@ -1998,9 +2046,17 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                 shiny::tags$li(shiny::downloadLink(
                   "dict_html", "Dictionary as HTML", class = "dropdown-item"
                 )),
+                shiny::tags$li(shiny::actionLink(
+                  "dict_excel", "Copy dictionary for Excel",
+                  class = "dropdown-item"
+                )),
                 shiny::tags$li(shiny::tags$hr(class = "dropdown-divider")),
                 shiny::tags$li(shiny::actionLink(
                   "dict_bulk", "Dictionaries of all tables\u2026",
+                  class = "dropdown-item"
+                )),
+                shiny::tags$li(shiny::actionLink(
+                  "dict_logo", "Dictionary logo\u2026",
                   class = "dropdown-item"
                 ))
               )
@@ -3171,6 +3227,83 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
     for (id in c("dict_pdf", "dict_html")) {
       shiny::outputOptions(output, id, suspendWhenHidden = FALSE)
     }
+
+    # Copy dictionary for Excel: the dictionary as data, as an HTML table
+    # that Excel pastes with its codes as written, and as text
+    shiny::observeEvent(input$dict_excel, {
+      shiny::req(chosen())
+      x <- tryCatch(.dict_excel(.dict_flat(dictionary())),
+                    error = function(e) e)
+      if (inherits(x, "error")) {
+        shiny::showNotification(
+          paste("The dictionary could not be made:", conditionMessage(x)),
+          duration = 10, type = "error"
+        )
+        return(invisible(NULL))
+      }
+      .epi_copy_text(session, x$text, "Dictionary copied to the clipboard",
+                     html = x$html)
+    })
+
+    # Dictionary logo: sets or removes the logo through dictionary_logo(),
+    # the one stored setting, and says what it warned of. The file name the
+    # analyst chose stands for the upload's temporary path in its messages.
+    logo_changed <- shiny::reactiveVal(0)
+    logo_said <- shiny::reactiveVal(NULL)
+    shiny::observeEvent(input$dict_logo, {
+      logo_said(NULL)
+      shiny::showModal(.browse_logo_dialog())
+    })
+    shiny::observeEvent(input$logo_file, {
+      f <- input$logo_file
+      warned <- character()
+      r <- tryCatch(
+        withCallingHandlers(
+          suppressMessages(dictionary_logo(f$datapath)),
+          warning = function(w) {
+            warned <<- c(warned, conditionMessage(w))
+            invokeRestart("muffleWarning")
+          }
+        ),
+        error = function(e) e
+      )
+      logo_said(if (inherits(r, "error")) {
+        list(error = gsub(f$datapath, f$name, conditionMessage(r),
+                          fixed = TRUE))
+      } else {
+        list(set = f$name, warnings = warned)
+      })
+      logo_changed(logo_changed() + 1)
+    })
+    shiny::observeEvent(input$logo_reset, {
+      suppressMessages(dictionary_logo(remove = TRUE))
+      logo_said(NULL)
+      logo_changed(logo_changed() + 1)
+    })
+    output$logo_shown <- shiny::renderUI({
+      logo_changed()
+      logo <- .dict_logo()
+      info <- if (identical(logo$ext, "png")) .png_info(logo$path)
+      said <- logo_said()
+      shiny::tagList(
+        shiny::div(class = "browse-logo",
+                   if (!is.null(logo)) {
+                     shiny::tags$img(src = .dict_logo_src(logo), alt = logo$alt)
+                   }),
+        shiny::p(class = "epi-note", if (is.null(info)) {
+          "The dictionaries show the actepir lockup."
+        } else {
+          sprintf("The dictionaries show your logo, %s by %s pixels.",
+                  info$width, info$height)
+        }),
+        if (!is.null(said$error)) {
+          shiny::p(class = "epi-note epi-error", said$error)
+        },
+        lapply(said$warnings, function(w) {
+          shiny::p(class = "epi-note epi-warn", w)
+        })
+      )
+    })
 
     # The dictionaries of every table and view with labels in the schema
     # or the database, written to a folder on this computer, from the label
