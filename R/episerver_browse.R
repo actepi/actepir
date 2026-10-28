@@ -784,7 +784,9 @@ episerver_browse_stop <- function() {
 # that holds rows for it, so that the search finds the labels the browser
 # shows; otherwise `sources` is the one label table chosen. Labels in a
 # DataLabels table are filed by table name alone, so they count for the
-# tables of that name in every schema. Returns the columns found (results:
+# tables of that name in every schema. A label counts only for a column its
+# table has, as a label table can keep the labels of a column since dropped
+# or renamed. Returns the columns found (results:
 # Schema, Table, Column, the variable label and the value labels that
 # matched, at most three of them shown) and whether a query stopped at its
 # limit of 1,000 rows (capped).
@@ -848,6 +850,17 @@ episerver_browse_stop <- function() {
       m <- data.frame(schema = tables$schema[t], table = tables$table[t],
                       labs[j, c("column", "kind", "code", "text", "source")],
                       stringsAsFactors = FALSE)
+      if (nrow(m)) {
+        # The columns the tables have, from the Tables tab's query
+        col_key <- function(schema, table, column) {
+          paste(tolower(schema), tolower(table), tolower(column), sep = "\r")
+        }
+        has <- unlist(lapply(unique(m$schema), function(s) {
+          r <- query(.browse_sql_schema_columns(db, s))
+          col_key(rep(s, nrow(r)), r$TABLE_NAME, r$COLUMN_NAME)
+        }))
+        m <- m[col_key(m$schema, m$table, m$column) %in% has, , drop = FALSE]
+      }
       if (auto && nrow(sources) > 1 && nrow(m)) {
         # The first label table that holds rows for each table, from the
         # query that gives the Table list its dataset labels
@@ -1698,7 +1711,8 @@ episerver_browse_stop <- function() {
       "type, ignoring case. Look in sets where to search. Labels are ",
       "searched as the browser reads them: with Labels table set to ",
       "Automatic, only the label table each table takes its labels from is ",
-      "searched. Each kind of search returns at most 1,000 matches. Click a ",
+      "searched. Labels kept for a column that its table no longer has are ",
+      "left out. Each kind of search returns at most 1,000 matches. Click a ",
       "result to open its table on the Columns tab."
     ),
 

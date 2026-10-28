@@ -233,6 +233,13 @@ test_that("the search finds columns by name and by the labels the browser reads"
                "1 = Male; 2 = Female; 9 = Not stated; and 1 more")
   expect_equal(search("female", "values")$results$Table, c("ACTGHSMYX", "APC"))
 
+  # A label counts only for a column its table has: Births keeps the labels
+  # of BabySex, a column since dropped
+  expect_equal(nrow(search("since dropped")$results), 0)
+  r <- search("since dropped", src = sources[1, ], auto = FALSE)
+  expect_equal(nrow(r$results), 0)
+  expect_false("Births" %in% search("female")$results$Table)
+
   # A label counts only in the label table the table's labels come from:
   # APC's come from ref.DataProperties, so ref.DataLabels' are not found
   expect_equal(nrow(search("Old sex label")$results), 0)

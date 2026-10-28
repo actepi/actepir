@@ -501,6 +501,10 @@ const fs = require('fs');
   console.log('SEARCH female (Enter):', await text('#search_note'), '|', JSON.stringify(await cells('#search_table')),
     '| filter box', !!(await page.$('#search_table .dataTables_filter')));
   await shot('10_search');
+  await page.fill('#search_text', 'since dropped');
+  await page.press('#search_text', 'Enter');
+  await settle();
+  console.log('SEARCH since dropped (a label of a column Births no longer has):', await text('#search_note'));
   await page.fill('#search_text', 'staged');
   await page.click('#search_go');
   await settle();

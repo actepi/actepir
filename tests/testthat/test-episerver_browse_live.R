@@ -253,6 +253,17 @@ test_that("the search finds columns by name, variable label and value label", {
                 label = paste(x$Schema, x$Table, x$Column, sep = "."))
   }
 
+  # Each column found by its labels is a column its table has
+  r <- .browse_search(db$query, "Analysis", "sex", c("labels", "values"), s)
+  expect_gt(nrow(r$results), 0)
+  for (sch in unique(r$results$Schema)) {
+    cols <- db$query(.browse_sql_schema_columns("Analysis", sch))
+    x <- r$results[r$results$Schema == sch, ]
+    found <- paste(sch, x$Table, x$Column, sep = ".")
+    has <- tolower(paste(sch, cols$TABLE_NAME, cols$COLUMN_NAME, sep = "."))
+    expect_equal(found[!tolower(found) %in% has], character())
+  }
+
 })
 
 test_that("the Profiler reads every type of column in Analysis.dbo, and its keys", {

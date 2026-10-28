@@ -10,7 +10,8 @@
 # Analysis has three label tables, in the order the browser looks in them:
 # - ref.DataProperties: rows for dbo.APC, dbo.Births, dbo.ACTGHSMYX and
 #   stage.APC, with the theme columns; dbo.APC has a description of two
-#   paragraphs and notes under two themes;
+#   paragraphs and notes under two themes; dbo.Births has the labels of
+#   BabySex, a column it no longer has;
 # - ref.DataLabels: rows for APC, Births, ED, ACTGHSMYX and the view vw_ED;
 # - dbo.DataLabels: rows for Deaths.
 # So dbo.APC takes its labels from ref.DataProperties, ED and vw_ED from
@@ -62,6 +63,9 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
       p("dbo", "APC", "AgeYrs", "VariableFormat", NA, "%9.0f"),
       p("dbo", "APC", "PatientID", "Link", NA, "APC_Extra"),
       p("dbo", "Births", "Weight", "VariableLabel", NA, "Birth weight in grams"),
+      p("dbo", "Births", "BabySex", "VariableLabel", NA,
+        "Sex of the baby, a column since dropped"),
+      p("dbo", "Births", "BabySex", "ValueLabel", "2", "Female"),
       p("dbo", "ACTGHSMYX", NA, "DatasetLabel", NA, "General health survey"),
       p("dbo", "ACTGHSMYX", "RSEX_Y20", "VariableLabel", NA, "Sex of respondent"),
       p("dbo", "ACTGHSMYX", "RSEX_Y20", "ValueLabel", c("1", "2"),
