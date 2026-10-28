@@ -110,11 +110,17 @@ Each table gives \verb{<table>_dictionary.pdf} and \verb{<table>_dictionary.html
 Nightshade band at the top holding \code{title}, \code{subtitle} and the logo. The
 heading is the table's dataset label, with its full name beneath; a table
 without a dataset label is headed by its name. The footer gives the table,
-the label table and the date.
+the label table and the date. The dataset information gives the dataset
+description, a point for each paragraph, and the dataset notes, under the
+headings of their themes where they have them, as the Dataset Browser's
+Collection tab does.
 
-The PDF shows the first \code{max_values} value labels of a column and counts
-the rest. The HTML file shows them all, folded, with a search box, and
-needs nothing beyond itself, so it can be sent on. The PDF is made with
+The PDF gives the dataset information, then the columns from a new page,
+with the first \code{max_values} value labels of a column and a count of the
+rest. The HTML file has a Columns tab, shown first, and a Dataset
+information tab. It shows every value label, folded, with a search box
+that stays in view above the table's headings, and needs nothing beyond
+itself, so it can be sent on. The PDF is made with
 Typst, through the copy of Quarto that comes with RStudio; without it, use
 \code{formats = "html"}.
 

@@ -1,10 +1,12 @@
 // inst/dictionary/dictionary.js
-// The HTML data dictionary's search and its buttons for the value labels,
-// written into the file. The search reads the dictionary from its JSON
-// (#dictionary-data), whose columns are the table's rows in order: a column
-// is shown when its name, label, type or notes hold the text, or a value
-// label does, in which case its value labels are opened. Printing opens
-// every list of value labels.
+// The HTML data dictionary's tabs, its search and its buttons for the value
+// labels, written into the file. The Columns tab shows first; the search
+// bar and buttons stay in view above the table's headings, whose place
+// below them (--tools-height) follows the bar's height. The search reads
+// the dictionary from its JSON (#dictionary-data), whose columns are the
+// table's rows in order: a column is shown when its name, label, type or
+// notes hold the text, or a value label does, in which case its value
+// labels are opened. Printing opens every list of value labels.
 (function () {
   var data = JSON.parse(document.getElementById("dictionary-data").textContent);
   var rows = Array.prototype.slice.call(
@@ -17,6 +19,30 @@
   });
   var search = document.getElementById("search");
   var count = document.getElementById("count");
+  var tools = document.querySelector(".tools");
+  var tabs = Array.prototype.slice.call(
+    document.querySelectorAll('.tabs [role="tab"]'));
+
+  function fit() {
+    document.documentElement.style.setProperty(
+      "--tools-height", tools.offsetHeight + "px");
+  }
+  function show(id) {
+    tabs.forEach(function (tab) {
+      var panel = tab.getAttribute("aria-controls");
+      tab.setAttribute("aria-selected", panel === id ? "true" : "false");
+      document.getElementById(panel).hidden = panel !== id;
+    });
+    fit();
+  }
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      show(tab.getAttribute("aria-controls"));
+    });
+  });
+  document.body.classList.add("tabbed");
+  show("columns");
+  window.addEventListener("resize", fit);
 
   function setOpen(open) {
     rows.forEach(function (row) {

@@ -28,17 +28,40 @@ body {
 .band .subtitle { color: var(--lavender); font-size: 15px; }
 .band img { height: 56px; width: auto; }
 main { padding: 20px 32px 8px; }
-h1, h2 { font-family: var(--heading-font); color: var(--nightshade); }
+h1, h2, h3 { font-family: var(--heading-font); color: var(--nightshade); }
 h1 { font-size: 26px; margin: 0 0 4px; }
 h2 { font-size: 19px; margin: 28px 0 10px; }
+h3 { font-size: 16px; margin: 18px 0 6px; }
+h4 { font-size: 15px; color: var(--iris); margin: 12px 0 4px; }
 .subheading { margin: 0; font-size: 16px; }
 .source { margin: 2px 0 0; color: var(--muted); }
-.contents { margin-top: 14px; }
 #information p { margin: 0 0 8px; }
+#information ul { margin: 0 0 8px; padding-left: 22px; }
+#information li { margin-bottom: 4px; }
+/* The tabs show once the script runs (.tabbed); each section's heading is
+   then the tab's own name, so it is hidden on screen */
+.tabs { display: none; }
+.tabbed .tabs {
+  display: flex; gap: 4px; margin: 16px 0 4px;
+  border-bottom: 1px solid var(--rule);
+}
+.tabs button {
+  font: inherit; font-size: 15px; padding: 8px 14px; cursor: pointer;
+  border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  background: none; color: var(--muted);
+}
+.tabs button[aria-selected="true"] {
+  color: var(--nightshade); font-weight: 600; border-bottom-color: var(--iris);
+}
+.tabs button:hover { color: var(--iris); }
+.tabbed main > section > h2 { display: none; }
 a { color: var(--iris); }
+/* The search and buttons stay in view as the columns scroll, with the
+   table's headings below them (--tools-height, set by the script) */
 .tools {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-bottom: 10px;
+  position: sticky; top: 0; z-index: 2; background: #fff;
+  padding: 10px 0;
 }
 .tools input {
   font: inherit; font-size: 14px; padding: 4px 8px; min-width: 18em;
@@ -60,7 +83,8 @@ table.columns {
   width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed;
 }
 table.columns > thead > tr > th {
-  position: sticky; top: 0; background: var(--nightshade); color: #fff;
+  position: sticky; top: var(--tools-height, 0px); z-index: 1;
+  background: var(--nightshade); color: #fff;
   text-align: left; padding: 6px 8px;
 }
 table.columns > tbody > tr > td {
@@ -84,7 +108,9 @@ footer {
   table.columns > tbody > tr:nth-child(even) {
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  .tools, .contents { display: none; }
+  .tools, .tabbed .tabs { display: none; }
+  main > section[hidden] { display: block; }
+  .tabbed main > section > h2 { display: block; }
   table.columns { font-size: 9pt; }
   table.columns > thead > tr > th { position: static; }
   table.columns > tbody > tr { break-inside: avoid; }

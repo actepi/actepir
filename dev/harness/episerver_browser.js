@@ -315,6 +315,24 @@ const fs = require('fs');
       JSON.stringify(await html.evaluate(() => performance.getEntriesByType('resource').length)));
     await html.fill('#search', '');
     await html.screenshot({ path: `${out}/08b_dictionary_html.png` });
+    // Its tabs: Columns first; Dataset information with the description
+    // and the notes under their themes
+    const tabState = () => html.evaluate(() => [...document.querySelectorAll('.tabs [role=tab]')].map(t =>
+      [t.textContent, t.getAttribute('aria-selected'), !document.getElementById(t.getAttribute('aria-controls')).hidden]));
+    console.log('DICTIONARY HTML tabs:', JSON.stringify(await tabState()));
+    await html.click('#tab-information');
+    console.log('DICTIONARY HTML information:', JSON.stringify(await tabState()), '|',
+      JSON.stringify(await html.$$eval('#information h3, #information h4', hs => hs.map(h => h.tagName + ' ' + h.textContent))));
+    await html.screenshot({ path: `${out}/08c_dictionary_information.png` });
+    // The search and buttons stick above the table's headings
+    await html.click('#tab-columns');
+    await html.mouse.wheel(0, 1200);
+    await html.waitForTimeout(300);
+    console.log('DICTIONARY HTML scrolled:', JSON.stringify(await html.evaluate(() => ({
+      scrolled: window.scrollY > 0,
+      toolsTop: Math.round(document.querySelector('.tools').getBoundingClientRect().top),
+      headingsTop: Math.round(document.querySelector('table.columns th').getBoundingClientRect().top),
+      toolsBottom: Math.round(document.querySelector('.tools').getBoundingClientRect().bottom) }))));
     await html.close();
   }
 

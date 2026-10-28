@@ -341,6 +341,26 @@
   )
 }
 
+# The dataset notes of a table (`dataset`, with notes and note_themes from
+# .lbl_table(), in order) in groups, each to show under its heading: a group
+# for each theme, and one headed Other for the notes without a theme; or one
+# group without a heading (theme NA) when no note has a theme. The Dataset
+# Browser's Collection tab and the dictionaries show them so.
+#' @noRd
+.lbl_note_groups <- function(dataset) {
+  notes <- dataset$notes
+  themes <- dataset$note_themes
+  if (is.null(themes)) themes <- rep("", length(notes))
+  if (!length(notes)) return(list())
+  if (!any(nzchar(themes))) {
+    return(list(list(theme = NA_character_, notes = notes)))
+  }
+  lapply(unique(themes), function(theme) {
+    list(theme = if (nzchar(theme)) theme else "Other",
+         notes = notes[themes == theme])
+  })
+}
+
 
 # ── Labels for scripts ──────────────────────────────────────────────────────
 

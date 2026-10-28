@@ -27,6 +27,10 @@ test_that("a dictionary holds the labels that scripts read, for the table's colu
     described <- stats::setNames(d$columns$description, tolower(d$columns$column))
     expect_equal(unname(described[tolower(vars$VarName)]), vars$LabelName,
                  label = t)
+    # The dataset notes, each with its theme, in groups under them
+    expect_length(d$note_themes, length(d$notes))
+    expect_equal(as.character(unlist(lapply(.lbl_note_groups(d), `[[`, "notes"))),
+                 d$notes, label = t)
     flat <- .dict_flat(d)
     # The dictionary for Excel: the headings and a line for each row, as
     # text and as the HTML table's rows

@@ -632,16 +632,13 @@ episerver_browse_stop <- function() {
 # .lbl_table(), in order): its dataset label as the heading, or its full
 # name `name` when it has none; its dataset description, a point for each
 # paragraph; its dataset notes, under a heading for each theme when any has
-# one, those without a theme under Other; a line where it has no description
-# or no notes; and its linked tables, when it has any
+# one (.lbl_note_groups()); a line where it has no description or no notes;
+# and its linked tables, when it has any
 #' @noRd
 .browse_about <- function(dataset, name) {
   label <- dataset$label
   links <- dataset$links
-  notes <- dataset$notes
-  themes <- if (is.null(dataset$note_themes)) rep("", length(notes)) else {
-    dataset$note_themes
-  }
+  groups <- .lbl_note_groups(dataset)
   points <- function(x) shiny::tags$ul(lapply(x, shiny::tags$li))
   none <- function(what) {
     shiny::p(paste("No dataset", what, "available for this collection."))
@@ -654,16 +651,11 @@ episerver_browse_stop <- function() {
       none("description")
     },
     shiny::h5("Dataset notes"),
-    if (!length(notes)) {
-      none("notes")
-    } else if (!any(nzchar(themes))) {
-      points(notes)
-    } else {
-      lapply(unique(themes), function(theme) shiny::tagList(
-        shiny::h6(if (nzchar(theme)) theme else "Other"),
-        points(notes[themes == theme])
-      ))
-    },
+    if (!length(groups)) none("notes"),
+    lapply(groups, function(g) shiny::tagList(
+      if (!is.na(g$theme)) shiny::h6(g$theme),
+      points(g$notes)
+    )),
     if (nrow(links)) {
       shiny::tagList(
         shiny::h5("Linked tables"),
@@ -1609,17 +1601,21 @@ episerver_browse_stop <- function() {
     shiny::h5("Dictionaries"),
     shiny::p(
       "The Download menu, under Copy Code, gives the table's data ",
-      "dictionary: its description, notes and linked tables, and every ",
-      "column with its labels, including value labels that are not shown."
+      "dictionary: the dataset information, as on the Collection tab, and ",
+      "every column with its labels, including value labels that are not ",
+      "shown."
     ),
     shiny::tags$ul(
       shiny::tags$li(
-        "Dictionary as PDF shows up to 50 value labels for each column. It ",
+        "Dictionary as PDF gives the dataset information, then the columns ",
+        "from a new page, with up to 50 value labels for each column. It ",
         "needs the Quarto that comes with RStudio."
       ),
       shiny::tags$li(
-        "Dictionary as HTML is a single file with every value label and a ",
-        "search box, which you can send to others as it is."
+        "Dictionary as HTML is a single file, which you can send to others ",
+        "as it is, with a Columns tab and a Dataset information tab. It has ",
+        "every value label, and a search box that stays in view as you ",
+        "scroll."
       ),
       shiny::tags$li(
         "Copy dictionary for Excel copies the dictionary as a table, with a ",

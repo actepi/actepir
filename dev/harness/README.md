@@ -176,6 +176,14 @@ Plan pull request 10 (`dev/notes/dataset-browser.md`) reads the dataset descript
 | `episerver_browser.js`, Collection | APC: "Admitted patient care", then "Dataset description" with "First paragraph." and "Second paragraph.", then "Dataset notes" with "General" ("Coded first.", "Coded second.") and "Data quality" ("Not coded."), then "Linked tables" with "APC_Extra (on PatientID)". Plain: "Analysis.dbo.Plain", then "No dataset description available for this collection." and "No dataset notes available for this collection." |
 | `dryrun_live.R` | 28 tests, 582 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 576 expectations, 0 failed, 4 skipped. |
 
+Plan pull request 11 (`dev/notes/dictionaries.md`) changed the dictionaries' dataset information, the PDF's pages and the HTML file's layout. `episerver_browser.js` checks the downloaded HTML file's tabs and its search bar while scrolled; the browser's other results and the calculator's were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, dictionary HTML | Columns is chosen and shown, and Dataset information hidden; its tab shows Dataset description, Dataset notes, General, Data quality and Linked tables. Scrolled down, the search bar is at y = 0 and the table's headings at y = 50, its foot. The rest is unchanged: 43 rows, "1 of 43 columns" for "female", no requests. |
+| The PDF of APC, compiled with pip's `typst` 0.13.7 and looked at as PNG | Page 1: the heading, then Dataset information with the description's two points and the notes under General and Data quality. Page 2 starts with Columns. |
+| `dryrun_live.R` | 28 tests, 596 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 590 expectations, 0 failed, 4 skipped. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.
