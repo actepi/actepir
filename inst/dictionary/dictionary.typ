@@ -11,6 +11,7 @@
 #let d = json("dictionary.json")
 
 #let nightshade = rgb("#320557")
+#let iris = rgb("#562C8C")
 #let lavender = rgb("#DCC8FA")
 #let tint = rgb("#EAE6F1")
 #let rule = rgb("#C7C7C7")
@@ -21,6 +22,8 @@
 
 // Lines of text, one under another
 #let lines(items) = items.map(l => [#l]).join(linebreak())
+// A point for each item, each a list of lines
+#let points(items) = list(..items.map(lines))
 
 #set document(title: d.heading + " - " + d.title)
 #set text(font: body-font, size: 9pt, lang: "en", region: "AU")
@@ -54,20 +57,40 @@
 #let section(title) = block(above: 12pt, below: 6pt, text(
   font: heading-font, size: 12pt, weight: "bold", fill: nightshade, title,
 ))
+#let subsection(title) = block(above: 10pt, below: 5pt, text(
+  font: heading-font, size: 10.5pt, weight: "bold", fill: nightshade, title,
+))
+#let theme(title) = block(above: 8pt, below: 4pt, text(
+  size: 9.5pt, weight: "bold", fill: iris, title,
+))
 
 #block(below: 8pt, text(font: heading-font, size: 17pt, weight: "bold",
                          fill: nightshade, d.heading))
 #block(below: 3pt, text(size: 10pt, d.subheading))
 #block(text(size: 9pt, fill: luma(60), d.source))
 
+// The description and the notes, the notes under their themes' headings,
+// then the columns on a page of their own
 #section("Dataset information")
-#if d.notes.len() == 0 and d.links.len() == 0 [
-  This table has no notes or linked tables.
+#subsection("Dataset description")
+#if d.description.len() == 0 [
+  No dataset description available for this collection.
+] else { points(d.description) }
+#subsection("Dataset notes")
+#if d.note_groups.len() == 0 [
+  No dataset notes available for this collection.
 ] else {
-  for note in d.notes { par(lines(note)) }
-  if d.links.len() > 0 { par("Linked tables: " + d.links.join(", ") + ".") }
+  for g in d.note_groups {
+    if g.theme != none { theme(g.theme) }
+    points(g.notes)
+  }
+}
+#if d.links.len() > 0 {
+  subsection("Linked tables")
+  list(..d.links.map(l => [#l]))
 }
 
+#pagebreak(weak: true)
 #section("Columns")
 #let heads = ("#", "Column", "Description", "Type", "Value labels")
 #let widths = (auto, auto, 1.3fr, auto, 1.5fr)

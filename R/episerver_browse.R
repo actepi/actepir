@@ -14,8 +14,8 @@
 #' browser and can be opened from the RStudio Addins menu (*Open Dataset
 #' Browser*). The settings are in a sidebar on the left, in sections that
 #' open and close, and the tables of the schema, the columns, a profiler of
-#' columns, the dataset notes, a finder of columns in the database and the
-#' help in tabs on the top bar. The
+#' columns, the dataset's description and notes, a finder of columns in the
+#' database and the help in tabs on the top bar. The
 #' information button beside a setting shows notes on it, and the bug button
 #' at the foot of the sidebar prepares a report of a problem to send to
 #' \email{healthinfo@act.gov.au}.
@@ -54,12 +54,14 @@
 #' **Labels**
 #'
 #' A table's labels are the variable labels, value labels and notes of its
-#' columns, and its dataset label, dataset notes and linked tables. They are
-#' read from the label tables of the table's database, which may be tables
-#' or views:
+#' columns, and its dataset label, dataset description, dataset notes and
+#' linked tables. They are read from the label tables of the table's
+#' database, which may be tables or views:
 #' * `ref.DataProperties`, in the layout that sqldta reads (`TableSchema`,
 #'   `TableName`, `ColumnName`, `PropertyType`, `PropertyCode`,
-#'   `PropertyText`), with rows filed by the table's schema and name;
+#'   `PropertyText`), with rows filed by the table's schema and name, and,
+#'   where it has them, `PropertyTheme` and `PropertyThemeOrder`, the
+#'   headings of dataset notes and their order;
 #' * tables named `DataLabels`, then `DataLabelsNew`, then others whose name
 #'   holds DataLabels, each in the `ref` schema before others, in the layout
 #'   `Dataset`, `VarName`, `LabelType`, `DataCode`, `LabelName` and
@@ -85,9 +87,11 @@
 #' them. The buttons above the table expand and collapse every list of value
 #' labels, while value labels are shown, and clear the rows chosen.
 #'
-#' The *Collection* tab holds the table's description (its dataset label),
-#' its notes and its linked tables, apart from the columns, as some tables
-#' have many notes.
+#' The *Collection* tab is headed by the table's dataset label, or its full
+#' name when it has none. Below it are the dataset description, a point for
+#' each paragraph, the dataset notes, under the headings of their themes
+#' where they have them, and any linked tables. Paragraphs and notes are in
+#' the order of their codes, and themes in their own order.
 #'
 #' **Tables and Var Finder**
 #'
@@ -625,26 +629,37 @@ episerver_browse_stop <- function() {
 }
 
 # The Collection tab, from the table's dataset labels (dataset, from
-# .lbl_table()): its dataset label as the heading, or its full name `name`
-# when it has none; its dataset notes, in the order of their codes, or a line
-# saying it has none; and its linked tables, when it has any
+# .lbl_table(), in order): its dataset label as the heading, or its full
+# name `name` when it has none; its dataset description, a point for each
+# paragraph; its dataset notes, under a heading for each theme when any has
+# one (.lbl_note_groups()); a line where it has no description or no notes;
+# and its linked tables, when it has any
 #' @noRd
 .browse_about <- function(dataset, name) {
   label <- dataset$label
   links <- dataset$links
+  groups <- .lbl_note_groups(dataset)
+  points <- function(x) shiny::tags$ul(lapply(x, shiny::tags$li))
+  none <- function(what) {
+    shiny::p(paste("No dataset", what, "available for this collection."))
+  }
   shiny::div(
     class = "browse-about",
-    shiny::h5(if (length(label) && !is.na(label)) label else name),
-    shiny::h6("Dataset notes"),
-    if (length(dataset$notes)) {
-      lapply(dataset$notes, shiny::p)
-    } else {
-      shiny::p("No dataset notes available for this collection.")
+    shiny::h4(if (length(label) && !is.na(label)) label else name),
+    shiny::h5("Dataset description"),
+    if (length(dataset$description)) points(dataset$description) else {
+      none("description")
     },
+    shiny::h5("Dataset notes"),
+    if (!length(groups)) none("notes"),
+    lapply(groups, function(g) shiny::tagList(
+      if (!is.na(g$theme)) shiny::h6(g$theme),
+      points(g$notes)
+    )),
     if (nrow(links)) {
       shiny::tagList(
-        shiny::h6("Linked tables"),
-        shiny::p(paste0(links$Table, " (on ", links$Key, ")", collapse = ", "))
+        shiny::h5("Linked tables"),
+        points(paste0(links$Table, " (on ", links$Key, ")"))
       )
     }
   )
@@ -1586,17 +1601,21 @@ episerver_browse_stop <- function() {
     shiny::h5("Dictionaries"),
     shiny::p(
       "The Download menu, under Copy Code, gives the table's data ",
-      "dictionary: its description, notes and linked tables, and every ",
-      "column with its labels, including value labels that are not shown."
+      "dictionary: the dataset information, as on the Collection tab, and ",
+      "every column with its labels, including value labels that are not ",
+      "shown."
     ),
     shiny::tags$ul(
       shiny::tags$li(
-        "Dictionary as PDF shows up to 50 value labels for each column. It ",
+        "Dictionary as PDF gives the dataset information, then the columns ",
+        "from a new page, with up to 50 value labels for each column. It ",
         "needs the Quarto that comes with RStudio."
       ),
       shiny::tags$li(
-        "Dictionary as HTML is a single file with every value label and a ",
-        "search box, which you can send to others as it is."
+        "Dictionary as HTML is a single file, which you can send to others ",
+        "as it is, with a Columns tab and a Dataset information tab. It has ",
+        "every value label, and a search box that stays in view as you ",
+        "scroll."
       ),
       shiny::tags$li(
         "Copy dictionary for Excel copies the dictionary as a table, with a ",
@@ -1664,9 +1683,12 @@ episerver_browse_stop <- function() {
 
     shiny::h5("Collection"),
     shiny::p(
-      "The Collection tab shows the table's description (its dataset label), ",
-      "or its full name when it has none. Below it are the table's dataset ",
-      "notes, numbered notes first, in order, and any linked tables."
+      "The Collection tab is headed by the table's dataset label, or its ",
+      "full name when it has none. Below it are the dataset description, a ",
+      "point for each paragraph, and the dataset notes, grouped under their ",
+      "themes, such as General or Data quality, when they have them. ",
+      "Paragraphs and notes are in the order of their codes, and themes in ",
+      "their set order. Any linked tables are listed last."
     ),
 
     shiny::h5("Var Finder"),
@@ -1805,10 +1827,14 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         .selectize-dropdown .option.selected .browse-label { color: inherit;
                                                              opacity: 0.8; }
         .browse-about { max-width: 900px; }
+        .browse-about h4 { color: var(--epi-primary); font-weight: 600;
+                           font-size: 1.25rem; margin: 4px 0 6px 0; }
         .browse-about h5 { color: var(--epi-primary); font-weight: 600;
-                           margin: 4px 0 6px 0; }
-        .browse-about h6 { color: var(--epi-primary); font-weight: 600;
-                           margin: 14px 0 4px 0; }
+                           font-size: 1rem; margin: 16px 0 6px 0; }
+        .browse-about h6 { color: var(--epi-accent); font-weight: 600;
+                           font-size: 0.95rem; margin: 10px 0 4px 0; }
+        .browse-about ul { margin-bottom: 6px; padding-left: 20px; }
+        .browse-about li { margin-bottom: 4px; }
         .browse-about p { margin-bottom: 6px; }
         .browse-chosen { color: #555; }
         td.browse-values details summary,

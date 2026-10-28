@@ -177,8 +177,68 @@ test_that("the files' text falls back to the table's name, and limits the PDF's 
   json <- jsonlite::toJSON(data, auto_unbox = TRUE, null = "null", na = "null")
   back <- jsonlite::fromJSON(json, simplifyVector = FALSE)
   expect_equal(back$columns[[1]]$values, list())
-  expect_equal(back$notes[[1]], list("Coded first."))
   expect_equal(back$logo, "logo.svg")
+  # The description's paragraphs in order; the notes in groups under their
+  # themes; a group without a heading (theme null) when no note has a theme
+  expect_equal(back$description, list(list("First paragraph."),
+                                      list("Second paragraph.")))
+  expect_equal(back$note_groups, list(
+    list(theme = "General", notes = list(list("Coded first."),
+                                         list("Coded second."))),
+    list(theme = "Data quality", notes = list(list("Not coded.")))
+  ))
+  ed <- .dict_data(.dict_build(fake$query, "Analysis", "dbo", "ED"),
+                   "Data dictionary", subtitle)
+  ed <- jsonlite::fromJSON(jsonlite::toJSON(ed, auto_unbox = TRUE, null = "null",
+                                            na = "null"),
+                           simplifyVector = FALSE)
+  expect_null(ed$note_groups[[1]]$theme)
+  expect_equal(ed$note_groups[[1]]$notes, list(list("Presentations to public hospitals.")))
+  plain_data <- .dict_data(plain, "Data dictionary", subtitle)
+  expect_length(plain_data$description, 0)
+  expect_length(plain_data$note_groups, 0)
+
+})
+
+test_that("the HTML file has a Columns tab, shown first, and a Dataset information tab", {
+
+  withr::local_envvar(R_USER_CONFIG_DIR = withr::local_tempdir())
+  fake <- fake_browse_episerver()
+  file <- withr::local_tempfile(fileext = ".html")
+  .dict_write(.dict_build(fake$query, "Analysis", "dbo", "APC"), "html", file)
+  html <- paste(readLines(file, encoding = "UTF-8"), collapse = "\n")
+  # The tabs, the Columns tab chosen
+  expect_match(html, paste0(
+    "(?s)<div class=\"tabs\" role=\"tablist\">\\s*<button[^>]*id=\"tab-columns\"",
+    "[^>]*aria-selected=\"true\"[^>]*>Columns</button>\\s*",
+    "<button[^>]*id=\"tab-information\"[^>]*aria-selected=\"false\"[^>]*>",
+    "Dataset information</button>"), perl = TRUE)
+  expect_no_match(html, "Contents:", fixed = TRUE)
+  # The dataset information: the description and the notes under their
+  # themes, as points
+  info <- regmatches(html, regexpr("(?s)<section id=\"information\".*?</section>",
+                                   html, perl = TRUE))
+  expect_match(info, paste0(
+    "(?s)<h3>Dataset description</h3>\\s*<ul>\\s*<li>First paragraph.</li>\\s*",
+    "<li>Second paragraph.</li>\\s*</ul>\\s*<h3>Dataset notes</h3>\\s*",
+    "<h4>General</h4>\\s*<ul>\\s*<li>Coded first.</li>\\s*<li>Coded second.</li>",
+    "\\s*</ul>\\s*<h4>Data quality</h4>\\s*<ul>\\s*<li>Not coded.</li>\\s*</ul>",
+    "\\s*<h3>Linked tables</h3>\\s*<ul>\\s*<li>APC_Extra \\(on PatientID\\)</li>"),
+    perl = TRUE)
+  # The script shows the tabs; the search and buttons stick above the
+  # table's headings; in print both sections show, without the tabs
+  expect_match(html, 'show("columns");', fixed = TRUE)
+  expect_match(html, "(?s)\\.tools \\{[^}]*position: sticky; top: 0;", perl = TRUE)
+  expect_match(html, "top: var(--tools-height, 0px);", fixed = TRUE)
+  expect_match(html, "main > section[hidden] { display: block; }", fixed = TRUE)
+
+  # Without a description or notes, a line for each
+  .dict_write(.dict_build(fake$query, "Analysis", "dbo", "Plain"), "html", file)
+  html <- paste(readLines(file, encoding = "UTF-8"), collapse = "\n")
+  expect_match(html, "<p>No dataset description available for this collection.</p>",
+               fixed = TRUE)
+  expect_match(html, "<p>No dataset notes available for this collection.</p>",
+               fixed = TRUE)
 
 })
 
@@ -229,6 +289,19 @@ test_that("the HTML file stands alone, escapes the labels and holds every value 
   .dict_html(d, file, "Data dictionary", subtitle)
   expect_match(paste(readLines(file), collapse = ""),
                "<img src=\"data:image/png;base64,[^\"]+\" alt=\"Logo\"")
+
+})
+
+test_that("the PDF's template gives the dataset information, then the columns on a new page", {
+
+  typ <- paste(readLines(system.file("dictionary", "dictionary.typ",
+                                     package = "actepir")), collapse = "\n")
+  expect_match(typ, paste0(
+    "(?s)#section\\(\"Dataset information\"\\)\\s*",
+    "#subsection\\(\"Dataset description\"\\).*",
+    "#subsection\\(\"Dataset notes\"\\).*",
+    "if g.theme != none \\{ theme\\(g.theme\\) \\}.*",
+    "#pagebreak\\(weak: true\\)\\s*#section\\(\"Columns\"\\)"), perl = TRUE)
 
 })
 

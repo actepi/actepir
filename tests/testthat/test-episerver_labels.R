@@ -49,6 +49,12 @@ test_that("label tables are DataProperties in ref and DataLabels tables, in orde
   expect_match(sql, paste0("IN ('Dataset', 'VarName', 'LabelType', ",
                            "'LabelName', 'DataCode', 'DataType')) = 6"),
                fixed = TRUE)
+  # Themes: whether ref.DataProperties also has the theme columns, which a
+  # label table need not have to be offered
+  expect_match(sql, paste0("(?s)CASE WHEN t.TABLE_NAME = 'DataProperties' AND ",
+                           "\\(SELECT COUNT.*?IN \\('PropertyTheme', ",
+                           "'PropertyThemeOrder'\\)\\) = 2 THEN 1\\s+",
+                           "ELSE 0 END AS Themes"), perl = TRUE)
   # DataProperties, DataLabels, DataLabelsNew, then others; ref first in each
   expect_match(sql, paste0(
     "(?s)ORDER BY\\s+CASE WHEN t.TABLE_NAME = 'DataProperties' THEN 0\\s+",
@@ -95,6 +101,14 @@ test_that("rows are read in the shape of DataProperties, value labels apart", {
   expect_match(props, "AND PropertyType NOT IN (N'ValueLabel')", fixed = TRUE)
   expect_match(.lbl_sql_rows("Analysis", sources[1, ], "dbo", "APC", TRUE),
                "AND PropertyType IN (N'ValueLabel')", fixed = TRUE)
+  # The theme columns, where the label table has them
+  themed <- cbind(sources[1, ], Themes = 1L)
+  expect_match(.lbl_sql_rows("Analysis", themed, "dbo", "APC"),
+               paste("SELECT ColumnName, PropertyType, PropertyCode,",
+                     "PropertyText, PropertyTheme, PropertyThemeOrder"),
+               fixed = TRUE)
+  expect_no_match(.lbl_sql_rows("Analysis", cbind(sources[1, ], Themes = 0L),
+                                "dbo", "APC"), "PropertyTheme", fixed = TRUE)
 
   labels <- .lbl_sql_rows("Analysis", sources[3, ], "dbo", "APC")
   expect_match(labels, paste("SELECT VarName AS ColumnName, LabelType AS",
@@ -171,7 +185,11 @@ test_that("both layouts normalise to one shape, with types in any case", {
                "APC_Extra", "%9.0f", "%9.0f", "x", "y", "Second label of 1")
   )
   n <- .lbl_normalise(found)
-  expect_named(n, c("Column", "Key", "Type", "Code", "Text"))
+  expect_named(n, c("Column", "Key", "Type", "Code", "Text", "Theme",
+                    "ThemeOrder"))
+  # Without the theme columns, no theme
+  expect_equal(unique(n$Theme), "")
+  expect_true(all(is.na(n$ThemeOrder)))
   # Formats and unknown types are not read; the first label of a column, a
   # code or a dataset is kept; text and codes are trimmed
   expect_equal(n$Type, c("VariableLabel", "ValueLabel", "DatasetLabel",
@@ -183,7 +201,14 @@ test_that("both layouts normalise to one shape, with types in any case", {
 
   # Rows without text are dropped, and nothing gives an empty frame
   expect_equal(nrow(.lbl_normalise(rows("Sex", "Var", NA, c("", NA)))), 0)
-  expect_named(.lbl_normalise(NULL), c("Column", "Key", "Type", "Code", "Text"))
+  expect_named(.lbl_normalise(NULL), c("Column", "Key", "Type", "Code", "Text",
+                                       "Theme", "ThemeOrder"))
+  # The theme columns, trimmed, where they are read
+  themed <- .lbl_normalise(cbind(rows("", "DatasetNote", "1", "A note"),
+                                 PropertyTheme = " General ",
+                                 PropertyThemeOrder = 1L))
+  expect_equal(themed$Theme, "General")
+  expect_equal(themed$ThemeOrder, 1)
 
   # The type names of DataProperties, sqldta 1.0.0 and the DataLabels layout
   for (type in names(.lbl_types)) {
@@ -228,6 +253,8 @@ test_that("a table's labels are gathered by column, with notes in sqldta's order
   expect_equal(lbl$values$sex$Text[1], "Male")
   expect_equal(lbl$dataset$label, "Admissions")
   expect_equal(lbl$dataset$notes, c("Note 1", "Note B", "Plain note"))
+  expect_equal(lbl$dataset$note_themes, c("", "", ""))
+  expect_length(lbl$dataset$description, 0)
   expect_equal(lbl$dataset$links, data.frame(Key = "id", Table = "APC_Extra"))
 
   # Without value labels read, a table has none; without rows, nothing
@@ -236,7 +263,36 @@ test_that("a table's labels are gathered by column, with notes in sqldta's order
   expect_length(empty$label, 0)
   expect_true(is.na(empty$dataset$label))
   expect_length(empty$dataset$notes, 0)
+  expect_length(empty$dataset$description, 0)
   expect_equal(nrow(empty$dataset$links), 0)
+
+})
+
+test_that("a description is in the order of its codes, and notes in that of their themes", {
+
+  found <- .lbl_normalise(cbind(
+    rows(column = "",
+         type = c("DatasetDescription", "DatasetDescription", "DatasetNote",
+                  "DatasetNote", "DatasetNote", "DatasetNote", "DatasetNote",
+                  "DatasetNote", "DatasetNote"),
+         code = c("2", "1", "10", "2", "1", NA, "1", "3", "4"),
+         text = c("Second paragraph", "First paragraph", "General tenth",
+                  "General second", "Quality first", "No theme", "Access first",
+                  "Unordered theme", "General fourth")),
+    PropertyTheme = c(NA, NA, "General", "General", "Data quality", NA,
+                      "Access and use", "Unordered", "General"),
+    PropertyThemeOrder = c(NA, NA, 1L, 1L, 7L, NA, 2L, NA, NA)
+  ))
+  d <- .lbl_table(found)$dataset
+  expect_equal(d$description, c("First paragraph", "Second paragraph"))
+  # Themes by their least order, then those without an order, then notes
+  # without a theme; in each, the notes by their codes, numerically
+  expect_equal(d$notes, c("General second", "General fourth", "General tenth",
+                          "Access first", "Quality first", "Unordered theme",
+                          "No theme"))
+  expect_equal(d$note_themes, c("General", "General", "General",
+                                "Access and use", "Data quality", "Unordered",
+                                ""))
 
 })
 

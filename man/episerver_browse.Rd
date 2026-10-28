@@ -64,8 +64,8 @@ console stays free while the browser is open. It opens in the system web
 browser and can be opened from the RStudio Addins menu (\emph{Open Dataset
 Browser}). The settings are in a sidebar on the left, in sections that
 open and close, and the tables of the schema, the columns, a profiler of
-columns, the dataset notes, a finder of columns in the database and the
-help in tabs on the top bar. The
+columns, the dataset's description and notes, a finder of columns in the
+database and the help in tabs on the top bar. The
 information button beside a setting shows notes on it, and the bug button
 at the foot of the sidebar prepares a report of a problem to send to
 \email{healthinfo@act.gov.au}.
@@ -88,13 +88,15 @@ not listed.
 \strong{Labels}
 
 A table's labels are the variable labels, value labels and notes of its
-columns, and its dataset label, dataset notes and linked tables. They are
-read from the label tables of the table's database, which may be tables
-or views:
+columns, and its dataset label, dataset description, dataset notes and
+linked tables. They are read from the label tables of the table's
+database, which may be tables or views:
 \itemize{
 \item \code{ref.DataProperties}, in the layout that sqldta reads (\code{TableSchema},
 \code{TableName}, \code{ColumnName}, \code{PropertyType}, \code{PropertyCode},
-\code{PropertyText}), with rows filed by the table's schema and name;
+\code{PropertyText}), with rows filed by the table's schema and name, and,
+where it has them, \code{PropertyTheme} and \code{PropertyThemeOrder}, the
+headings of dataset notes and their order;
 \item tables named \code{DataLabels}, then \code{DataLabelsNew}, then others whose name
 holds DataLabels, each in the \code{ref} schema before others, in the layout
 \code{Dataset}, \code{VarName}, \code{LabelType}, \code{DataCode}, \code{LabelName} and
@@ -121,9 +123,11 @@ rows to choose columns for the code; the line above the table counts
 them. The buttons above the table expand and collapse every list of value
 labels, while value labels are shown, and clear the rows chosen.
 
-The \emph{Collection} tab holds the table's description (its dataset label),
-its notes and its linked tables, apart from the columns, as some tables
-have many notes.
+The \emph{Collection} tab is headed by the table's dataset label, or its full
+name when it has none. Below it are the dataset description, a point for
+each paragraph, the dataset notes, under the headings of their themes
+where they have them, and any linked tables. Paragraphs and notes are in
+the order of their codes, and themes in their own order.
 
 \strong{Tables and Var Finder}
 

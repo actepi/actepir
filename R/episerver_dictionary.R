@@ -24,11 +24,17 @@
 #' Nightshade band at the top holding `title`, `subtitle` and the logo. The
 #' heading is the table's dataset label, with its full name beneath; a table
 #' without a dataset label is headed by its name. The footer gives the table,
-#' the label table and the date.
+#' the label table and the date. The dataset information gives the dataset
+#' description, a point for each paragraph, and the dataset notes, under the
+#' headings of their themes where they have them, as the Dataset Browser's
+#' Collection tab does.
 #'
-#' The PDF shows the first `max_values` value labels of a column and counts
-#' the rest. The HTML file shows them all, folded, with a search box, and
-#' needs nothing beyond itself, so it can be sent on. The PDF is made with
+#' The PDF gives the dataset information, then the columns from a new page,
+#' with the first `max_values` value labels of a column and a count of the
+#' rest. The HTML file has a Columns tab, shown first, and a Dataset
+#' information tab. It shows every value label, folded, with a search box
+#' that stays in view above the table's headings, and needs nothing beyond
+#' itself, so it can be sent on. The PDF is made with
 #' Typst, through the copy of Quarto that comes with RStudio; without it, use
 #' `formats = "html"`.
 #'
@@ -341,7 +347,9 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
               source$TABLE_SCHEMA, source$TABLE_NAME), collapse = ".")
     },
     label   = if (length(dataset_label) && !is.na(dataset_label)) dataset_label else NA_character_,
+    description = lbl$dataset$description,
     notes   = lbl$dataset$notes,
+    note_themes = lbl$dataset$note_themes,
     links   = lbl$dataset$links,
     columns = columns
   )
@@ -517,7 +525,10 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
 }
 
 # The dictionary as the PDF's template and the HTML file's script read it:
-# its text, the dataset's notes as lists of lines, its linked tables, and
+# its text, the dataset's description, a list of lines for each paragraph,
+# its notes in groups under their themes (.lbl_note_groups(); theme null
+# for notes shown without a heading), each note a list of lines, its linked
+# tables, and
 # for each column its value labels as "code = label", the first max_values
 # of them, with a line counting the rest (NA when none are left out), and
 # its notes as lines. `logo` is the logo's file name beside the template.
@@ -537,7 +548,11 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
     date       = p$date,
     name       = p$name,
     logo       = logo,
-    notes      = lapply(d$notes, lines),
+    description = lapply(d$description, lines),
+    note_groups = lapply(.lbl_note_groups(d), function(g) {
+      list(theme = if (is.na(g$theme)) NULL else g$theme,
+           notes = lapply(g$notes, lines))
+    }),
     links      = as.list(if (nrow(links)) {
       sprintf("%s (on %s)", links$Table, links$Key)
     } else character()),
@@ -687,6 +702,14 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
   # The columns' widths in percent, which the CSS keeps whatever their text
   widths <- if (has_notes) c(4, 15, 24, 9, 28, 20) else c(4, 17, 33, 10, 36)
   links <- d$links
+  groups <- .lbl_note_groups(d)
+  # A point for each item, its lines kept
+  points <- function(x) {
+    tags$ul(lapply(x, function(item) {
+      tags$li(htmltools::HTML(paste(htmltools::htmlEscape(
+        strsplit(item, "\n", fixed = TRUE)[[1]]), collapse = "<br>")))
+    }))
+  }
 
   # htmltools moves the content of tags$head() out for Shiny to place, so the
   # head and the html element are written here
@@ -706,26 +729,42 @@ dictionary_logo <- function(path = NULL, remove = FALSE) {
       tags$h1(p$heading),
       tags$p(class = "subheading", p$subheading),
       tags$p(class = "source", p$source),
-      tags$nav(class = "contents", "Contents: ",
-               tags$a(href = "#information", "Dataset information"), " | ",
-               tags$a(href = "#columns", "Columns")),
+      # Tabs, which the script shows: the columns first, then the dataset
+      # information. Without the script, and in print, both sections show.
+      tags$div(
+        class = "tabs", role = "tablist",
+        tags$button(type = "button", role = "tab", id = "tab-columns",
+                    `aria-controls` = "columns", `aria-selected` = "true",
+                    "Columns"),
+        tags$button(type = "button", role = "tab", id = "tab-information",
+                    `aria-controls` = "information", `aria-selected` = "false",
+                    "Dataset information")
+      ),
       tags$section(
-        id = "information",
+        id = "information", role = "tabpanel",
+        `aria-labelledby` = "tab-information",
         tags$h2("Dataset information"),
-        if (!length(d$notes) && !nrow(links)) {
-          tags$p("This table has no notes or linked tables.")
+        tags$h3("Dataset description"),
+        if (length(d$description)) points(d$description) else {
+          tags$p("No dataset description available for this collection.")
         },
-        lapply(d$notes, function(n) {
-          tags$p(htmltools::HTML(paste(htmltools::htmlEscape(
-            strsplit(n, "\n", fixed = TRUE)[[1]]), collapse = "<br>")))
-        }),
+        tags$h3("Dataset notes"),
+        if (!length(groups)) {
+          tags$p("No dataset notes available for this collection.")
+        },
+        lapply(groups, function(g) htmltools::tagList(
+          if (!is.na(g$theme)) tags$h4(g$theme),
+          points(g$notes)
+        )),
         if (nrow(links)) {
-          tags$p(paste0("Linked tables: ", paste0(links$Table, " (on ", links$Key,
-                                                  ")", collapse = ", "), "."))
+          htmltools::tagList(
+            tags$h3("Linked tables"),
+            points(paste0(links$Table, " (on ", links$Key, ")"))
+          )
         }
       ),
       tags$section(
-        id = "columns",
+        id = "columns", role = "tabpanel", `aria-labelledby` = "tab-columns",
         tags$h2("Columns"),
         tags$div(
           class = "tools",

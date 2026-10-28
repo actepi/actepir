@@ -70,7 +70,7 @@ test_that("the label tables of Analysis are found in order, each in its layout",
   db <- live_db()
 
   s <- db$query(.lbl_sql_sources("Analysis"))
-  expect_named(s, c("TABLE_SCHEMA", "TABLE_NAME", "Layout"))
+  expect_named(s, c("TABLE_SCHEMA", "TABLE_NAME", "Layout", "Themes"))
   name <- paste0(s$TABLE_SCHEMA, ".", s$TABLE_NAME)
   expect_true("ref.DataLabels" %in% name)
 
@@ -88,12 +88,18 @@ test_that("the label tables of Analysis are found in order, each in its layout",
     expect_false(is.unsorted(schemas != "ref"), label = paste("rank", r))
   }
 
-  # Each has every column of its layout
+  # Each has every column of its layout; Themes says whether
+  # ref.DataProperties has the theme columns, which DataLabels tables have
+  # no use for
   for (i in seq_len(nrow(s))) {
     cols <- db$query(.browse_sql_columns("Analysis", s$TABLE_SCHEMA[i],
                                          s$TABLE_NAME[i]))
     expect_true(all(tolower(.lbl_layouts[[s$Layout[i]]]) %in% tolower(cols$col)),
                 label = name[i])
+    expect_equal(s$Themes[i] == 1,
+                 s$Layout[i] == "properties" &&
+                   all(tolower(.lbl_themes) %in% tolower(cols$col)),
+                 label = name[i])
   }
 
 })
@@ -132,7 +138,7 @@ test_that("a table's rows normalise to the labels shown", {
   values <- db$query(.lbl_sql_rows("Analysis", s[i, ], "dbo", "ACTGHSMYX",
                                    values = TRUE))
   expect_named(rows, c("ColumnName", "PropertyType", "PropertyCode",
-                       "PropertyText"))
+                       "PropertyText", if (isTRUE(s$Themes[i] == 1)) .lbl_themes))
   expect_named(values, names(rows))
   n <- .lbl_normalise(rows)
   v <- .lbl_normalise(values)
@@ -380,9 +386,17 @@ test_that("the app lists and describes a table against EpiServer", {
     label <- lbl()$dataset$label
     heading <- if (!is.na(label)) label else "Analysis.dbo.ACTGHSMYX"
     expect_match(output$about$html,
-                 paste0("<h5>", htmltools::htmlEscape(heading), "</h5>"),
+                 paste0("<h4>", htmltools::htmlEscape(heading), "</h4>"),
                  fixed = TRUE)
-    expect_match(output$about$html, "<h6>Dataset notes</h6>", fixed = TRUE)
+    expect_match(output$about$html, "<h5>Dataset description</h5>", fixed = TRUE)
+    expect_match(output$about$html, "<h5>Dataset notes</h5>", fixed = TRUE)
+    # Notes with themes come under them, in the themes' order
+    themes <- unique(lbl()$dataset$note_themes)
+    for (theme in themes[nzchar(themes)]) {
+      expect_match(output$about$html,
+                   paste0("<h6>", htmltools::htmlEscape(theme), "</h6>"),
+                   fixed = TRUE)
+    }
 
     # The Tables tab and the Var Finder tab
     session$setInputs(view = "tables")
