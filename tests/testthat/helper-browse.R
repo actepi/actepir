@@ -9,7 +9,8 @@
 #
 # Analysis has three label tables, in the order the browser looks in them:
 # - ref.DataProperties: rows for dbo.APC, dbo.Births, dbo.ACTGHSMYX and
-#   stage.APC;
+#   stage.APC, with the theme columns; dbo.APC has a description of two
+#   paragraphs and notes under two themes;
 # - ref.DataLabels: rows for APC, Births, ED, ACTGHSMYX and the view vw_ED;
 # - dbo.DataLabels: rows for Deaths.
 # So dbo.APC takes its labels from ref.DataProperties, ED and vw_ED from
@@ -26,9 +27,11 @@
 
 fake_browse_episerver <- function(properties = TRUE, fail = character()) {
 
-  p <- function(schema, table, column, type, code, text) {
+  p <- function(schema, table, column, type, code, text, theme = NA,
+                order = NA) {
     data.frame(TableSchema = schema, TableName = table, ColumnName = column,
                PropertyType = type, PropertyCode = code, PropertyText = text,
+               PropertyTheme = theme, PropertyThemeOrder = as.integer(order),
                stringsAsFactors = FALSE)
   }
   l <- function(dataset, var, type, code, text) {
@@ -40,9 +43,11 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
   store <- list(
     "ref.DataProperties" = rbind(
       p("dbo", "APC", NA, "DatasetLabel", NA, "Admitted patient care"),
-      p("dbo", "APC", NA, "DatasetNote", "2", "Coded second."),
-      p("dbo", "APC", NA, "DatasetNote", NA, "Not coded."),
-      p("dbo", "APC", NA, "DatasetNote", "1", "Coded first."),
+      p("dbo", "APC", NA, "DatasetDescription", "2", "Second paragraph."),
+      p("dbo", "APC", NA, "DatasetDescription", "1", "First paragraph."),
+      p("dbo", "APC", NA, "DatasetNote", "2", "Coded second.", "General", 1),
+      p("dbo", "APC", NA, "DatasetNote", NA, "Not coded.", "Data quality", 7),
+      p("dbo", "APC", NA, "DatasetNote", "1", "Coded first.", "General", 1),
       p("dbo", "APC", "Sex", "VariableLabel", NA, "Sex of the patient"),
       p("dbo", "APC", "sex", "VariableLabel", NA, "A second label, not read"),
       p("dbo", "APC", "Sex", "ValueLabel", "2", "Female"),
@@ -129,7 +134,9 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
     "HospitalAPC.dbo.APC" = cols("Sex", "int", NA, 10L, 0L),
     "Analysis.ref.DataProperties" = layout(c("TableSchema", "TableName",
                                              "ColumnName", "PropertyType",
-                                             "PropertyCode", "PropertyText")),
+                                             "PropertyCode", "PropertyText",
+                                             "PropertyTheme",
+                                             "PropertyThemeOrder")),
     "Analysis.ref.DataLabels" = layout(c("Dataset", "VarName", "LabelType",
                                          "DataCode", "LabelName", "DataType")),
     "Analysis.dbo.DataLabels" = layout(c("Dataset", "VarName", "LabelType",
@@ -262,6 +269,7 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
         TABLE_SCHEMA = sub("\\..*", "", found),
         TABLE_NAME   = sub(".*\\.", "", found),
         Layout = ifelse(grepl("DataProperties", found), "properties", "labels"),
+        Themes = as.integer(grepl("DataProperties", found)),
         stringsAsFactors = FALSE
       ))
     }
@@ -445,7 +453,10 @@ fake_browse_episerver <- function(properties = TRUE, fail = character()) {
       types <- tolower(d$PropertyType) %in% tolower(quoted(m[5]))
       d <- d[if (nzchar(m[4])) !types else types, , drop = FALSE]
       rownames(d) <- NULL
-      return(d[c("ColumnName", "PropertyType", "PropertyCode", "PropertyText")])
+      return(d[c("ColumnName", "PropertyType", "PropertyCode", "PropertyText",
+                 if (grepl("PropertyTheme", sql, fixed = TRUE)) {
+                   c("PropertyTheme", "PropertyThemeOrder")
+                 })])
     }
 
     stop("fake_browse_episerver: unexpected SQL\n", sql, call. = FALSE)

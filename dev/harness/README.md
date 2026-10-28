@@ -169,6 +169,13 @@ Plan pull request 9 (`dev/notes/dataset-browser.md`) changed the browser's wordi
 | `episerver_browser.js`, Help | 10 sections: Finding a table, Tables, Columns, Copying code, Dictionaries, Profiler, Collection, Var Finder, Where labels come from and Reporting a problem. |
 | `dryrun_live.R` | 28 tests, 578 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 573 expectations, 0 failed, 4 skipped. |
 
+Plan pull request 10 (`dev/notes/dataset-browser.md`) reads the dataset description and the themes of dataset notes. `fake_browse_episerver()` gives `ref.DataProperties` the theme columns, says so in the label tables' query (Themes), returns them in the rows query when asked, and gives dbo.APC a description of two paragraphs and notes under the themes General and Data quality. The browser's other results and the calculator's were unchanged.
+
+| Run | Results |
+|---|---|
+| `episerver_browser.js`, Collection | APC: "Admitted patient care", then "Dataset description" with "First paragraph." and "Second paragraph.", then "Dataset notes" with "General" ("Coded first.", "Coded second.") and "Data quality" ("Not coded."), then "Linked tables" with "APC_Extra (on PatientID)". Plain: "Analysis.dbo.Plain", then "No dataset description available for this collection." and "No dataset notes available for this collection." |
+| `dryrun_live.R` | 28 tests, 582 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 576 expectations, 0 failed, 4 skipped. |
+
 ## How it works
 
 - **Swapping in the fakes.** The apps reach EpiServer only through `.epi_connection()`, and the ABS service only through `.dsr_fetch_json()`.

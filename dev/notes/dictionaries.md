@@ -40,7 +40,7 @@ The linkage dictionary and variable list stay in the maintainer's local process,
 ## Decisions
 
 - **Content.** A dictionary is built from what the label tables already hold, so it needs no other tables and no upkeep beyond the labels:
-  - the table's dataset label, dataset notes and linked tables;
+  - the table's dataset label, dataset notes and linked tables (the notes in the order of their themes since the Dataset Browser's plan pull request 10, through `.lbl_table()`, but without the themes' headings; the dataset description, a type added then, is not yet in the dictionaries);
   - its columns, in the table's order, with their variable labels, types, value labels and notes.
   - `.dict_build()` reads them with the browser's functions: `.browse_sql_tables()` (the table's type, and its name in its own case), `.browse_sql_columns()` and `.lbl_read()`. `.dict_assemble()` puts them together, matching columns to labels in lower case, with `.browse_type()`'s types, so a file matches the Columns tab.
   - The browser's Download calls `.dict_assemble()` with what it has read for the table chosen and the label table chosen, and reads the value labels for it when they are not shown.

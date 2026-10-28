@@ -2,7 +2,8 @@
 # table. Two layouts are read:
 # - DataProperties (ref.DataProperties, the label table sqldta reads): rows
 #   filed by TableSchema and TableName, with ColumnName, PropertyType,
-#   PropertyCode and PropertyText;
+#   PropertyCode and PropertyText, and, where the table has them,
+#   PropertyTheme and PropertyThemeOrder, which group dataset notes;
 # - DataLabels (ref.DataLabels, dbo.DataLabels and other tables whose name
 #   holds DataLabels): rows filed by Dataset, the table's name alone, with
 #   VarName, LabelType, DataCode, LabelName and DataType.
@@ -22,6 +23,13 @@
                  "DataType")
 )
 
+# Columns a DataProperties table may also have: the theme of a row, as a
+# heading for dataset notes, and the order of the themes. They are read
+# where a label table has both, and a label table without them is offered
+# as before.
+#' @noRd
+.lbl_themes <- c("PropertyTheme", "PropertyThemeOrder")
+
 # Row types, by their name in either layout in lower case, as read: the names
 # of DataProperties, the 1.0.0 names of sqldta (DataLabel) and the names of
 # the DataLabels layout (Opt, Var, NoteVar, NoteDta, DtaLabel). Other types,
@@ -32,6 +40,7 @@
   variablelabel = "VariableLabel", var = "VariableLabel",
   variablenote = "VariableNote",  notevar = "VariableNote",
   datasetnote = "DatasetNote",    notedta = "DatasetNote",
+  datasetdescription = "DatasetDescription",
   datasetlabel = "DatasetLabel",  datalabel = "DatasetLabel",
   dtalabel = "DatasetLabel",
   link = "Link"
@@ -63,7 +72,9 @@
 # tables or views, in the order a table's labels are looked for:
 # ref.DataProperties, then tables named DataLabels, then DataLabelsNew, then
 # others whose name holds DataLabels, each in ref before other schemas.
-# Returns TABLE_SCHEMA, TABLE_NAME and Layout ("properties" or "labels").
+# Returns TABLE_SCHEMA, TABLE_NAME, Layout ("properties" or "labels") and
+# Themes, 1 for a DataProperties table with the theme columns (.lbl_themes),
+# otherwise 0.
 #' @noRd
 .lbl_sql_sources <- function(db) {
   has_all <- function(cols) {
@@ -79,7 +90,9 @@
   sprintf(
     "SELECT t.TABLE_SCHEMA, t.TABLE_NAME,
        CASE WHEN t.TABLE_NAME = 'DataProperties' THEN 'properties'
-            ELSE 'labels' END AS Layout
+            ELSE 'labels' END AS Layout,
+       CASE WHEN t.TABLE_NAME = 'DataProperties' AND %s THEN 1
+            ELSE 0 END AS Themes
      FROM %s.INFORMATION_SCHEMA.TABLES t
      WHERE (t.TABLE_SCHEMA = 'ref' AND t.TABLE_NAME = 'DataProperties'
             AND %s)
@@ -92,7 +105,7 @@
             ELSE 3 END,
        CASE WHEN t.TABLE_SCHEMA = 'ref' THEN 0 ELSE 1 END,
        t.TABLE_SCHEMA, t.TABLE_NAME",
-    .sql_ident(db), has_all(.lbl_layouts$properties),
+    has_all(.lbl_themes), .sql_ident(db), has_all(.lbl_layouts$properties),
     has_all(.lbl_layouts$labels)
   )
 }
@@ -126,14 +139,18 @@
 }
 
 # The rows of table schema.table in one label table (a row of `sources`),
-# with the columns named as in DataProperties. values chooses value labels
-# (TRUE) or every other type (FALSE), as a table can have many thousands of
-# value labels.
+# with the columns named as in DataProperties, and the theme columns where
+# the label table has them (Themes). values chooses value labels (TRUE) or
+# every other type (FALSE), as a table can have many thousands of value
+# labels.
 #' @noRd
 .lbl_sql_rows <- function(db, source, schema, table, values = FALSE) {
   properties <- source$Layout == "properties"
   columns <- if (properties) {
-    "ColumnName, PropertyType, PropertyCode, PropertyText"
+    paste0("ColumnName, PropertyType, PropertyCode, PropertyText",
+           if (isTRUE(source$Themes == 1)) {
+             ", PropertyTheme, PropertyThemeOrder"
+           })
   } else {
     paste("VarName AS ColumnName, LabelType AS PropertyType,",
           "DataCode AS PropertyCode, LabelName AS PropertyText")
@@ -203,14 +220,16 @@
 
 # Label rows in one shape: Column (as stored), Key (the column in lower case,
 # for matching, as SQL Server matches names), Type (a name of .lbl_types),
-# Code and Text, trimmed, with rows of other types and rows without text
-# dropped. Value labels keep the first row for each column and code, and
-# variable and dataset labels the first for each column.
+# Code, Text, Theme ("" without one) and ThemeOrder (NA without one),
+# trimmed, with rows of other types and rows without text dropped. Value
+# labels keep the first row for each column and code, and variable and
+# dataset labels the first for each column.
 #' @noRd
 .lbl_normalise <- function(rows) {
   empty <- data.frame(Column = character(), Key = character(),
                       Type = character(), Code = character(),
-                      Text = character(), stringsAsFactors = FALSE)
+                      Text = character(), Theme = character(),
+                      ThemeOrder = numeric(), stringsAsFactors = FALSE)
   if (is.null(rows) || !nrow(rows)) return(empty)
   text <- function(x) {
     x <- trimws(as.character(x))
@@ -222,6 +241,10 @@
     Type   = unname(.lbl_types[tolower(text(rows$PropertyType))]),
     Code   = text(rows$PropertyCode),
     Text   = text(rows$PropertyText),
+    Theme  = if (is.null(rows$PropertyTheme)) "" else text(rows$PropertyTheme),
+    ThemeOrder = if (is.null(rows$PropertyThemeOrder)) NA_real_ else {
+      suppressWarnings(as.numeric(rows$PropertyThemeOrder))
+    },
     stringsAsFactors = FALSE
   )
   out$Key <- tolower(out$Column)
@@ -231,7 +254,8 @@
                ifelse(out$Type == "ValueLabel", out$Code, ""),
                ifelse(single | out$Type == "ValueLabel", "", out$Text),
                sep = "\r")
-  out <- out[!duplicated(key), c("Column", "Key", "Type", "Code", "Text")]
+  out <- out[!duplicated(key), c("Column", "Key", "Type", "Code", "Text",
+                                 "Theme", "ThemeOrder")]
   rownames(out) <- NULL
   out
 }
@@ -263,19 +287,36 @@
 
 # The labels of a table from normalised rows, with its value labels in
 # `values` when they were read separately: per column (Key) its label, notes
-# and value labels, and for the table its label, notes and linked tables.
-# Notes with a code come first, in the order of their codes (numerically
-# when every code of the column's notes is a number), then the others in the
-# order of the rows, as sqldta applies them.
+# and value labels, and for the table its label, description, notes with
+# their themes (note_themes, "" without one) and linked tables. Notes and
+# description paragraphs with a code come first, in the order of their codes
+# (numerically when every code of the set is a number), then the others in
+# the order of the rows, as sqldta applies them. Dataset notes are first put
+# in the order of their themes: by each theme's least ThemeOrder, then its
+# name, with notes without a theme last.
 #' @noRd
 .lbl_table <- function(rows, values = NULL) {
   by_type <- function(df, type) df[df$Type == type, , drop = FALSE]
-  in_order <- function(df) {
+  by_code <- function(df) {
     num <- suppressWarnings(as.numeric(df$Code))
     coded <- nzchar(df$Code)
-    numeric <- all(!is.na(num[coded]))
-    df$Text[order(!coded, if (numeric) num else df$Code, seq_len(nrow(df)),
-                  method = "radix")]
+    list(!coded, if (all(!is.na(num[coded]))) num else df$Code)
+  }
+  in_order <- function(df) {
+    df$Text[do.call(order, c(by_code(df), list(seq_len(nrow(df)),
+                                                method = "radix")))]
+  }
+  in_themes <- function(df) {
+    theme <- if (is.null(df$Theme)) rep("", nrow(df)) else df$Theme
+    first <- rep(NA_real_, nrow(df))
+    if (!is.null(df$ThemeOrder) && nrow(df)) {
+      first <- stats::ave(df$ThemeOrder, theme, FUN = function(x) {
+        if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
+      })
+    }
+    i <- do.call(order, c(list(!nzchar(theme), first, theme), by_code(df),
+                          list(seq_len(nrow(df)), method = "radix")))
+    list(text = df$Text[i], themes = theme[i])
   }
 
   labels <- by_type(rows, "VariableLabel")
@@ -283,6 +324,7 @@
   vals   <- by_type(if (is.null(values)) rows else values, "ValueLabel")
   vals   <- vals[.lbl_code_order(vals$Code), , drop = FALSE]
   links  <- by_type(rows, "Link")
+  dataset_notes <- in_themes(by_type(rows, "DatasetNote"))
 
   list(
     label  = stats::setNames(labels$Text, labels$Key),
@@ -290,7 +332,9 @@
     values = split(vals[c("Code", "Text")], vals$Key),
     dataset = list(
       label = by_type(rows, "DatasetLabel")$Text[1],
-      notes = in_order(by_type(rows, "DatasetNote")),
+      description = in_order(by_type(rows, "DatasetDescription")),
+      notes = dataset_notes$text,
+      note_themes = dataset_notes$themes,
       links = data.frame(Key = links$Column, Table = links$Text,
                          stringsAsFactors = FALSE)
     )
