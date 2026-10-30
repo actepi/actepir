@@ -184,11 +184,12 @@ Plan pull request 11 (`dev/notes/dictionaries.md`) changed the dictionaries' dat
 | The PDF of APC, compiled with pip's `typst` 0.13.7 and looked at as PNG | Page 1: the heading, then Dataset information with the description's two points and the notes under General and Data quality. Page 2 starts with Columns. |
 | `dryrun_live.R` | 28 tests, 596 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 590 expectations, 0 failed, 4 skipped. |
 
-Plan pull request 12 (`dev/notes/dataset-browser.md`) leaves out of the Var Finder the labels of a column that its table no longer has. `fake_browse_episerver()` gives `ref.DataProperties` a variable label and a value label, Female, for `BabySex`, a column `dbo.Births` does not have. `episerver_browser.js` searches for that variable label's text; the browser's other results were unchanged.
+Plan pull request 12 (`dev/notes/dataset-browser.md`) leaves out of the Var Finder the labels of a column that its table no longer has, and starts the Profiler's Column at None. `fake_browse_episerver()` gives `ref.DataProperties` a variable label and a value label, Female, for `BabySex`, a column `dbo.Births` does not have. `episerver_browser.js` searches for that variable label's text, and types in the Profiler's Column; the browser's other results were unchanged.
 
 | Run | Results |
 |---|---|
 | `episerver_browser.js`, Var Finder | "since dropped" gives "No column of Analysis matches "since dropped"."; "female" still gives the 2 columns dbo.ACTGHSMYX.RSEX_Y20 and dbo.APC.Sex. |
+| `episerver_browser.js`, Profiler | Column is empty, with the placeholder None, as By is. Typing "diag" in it, with nothing to delete first, leaves the 40 Diagnosis columns in the list. The profiles that follow are unchanged. |
 | `dryrun_live.R` | 28 tests, 599 expectations, 0 failed, 4 skipped (those that need an ODBC driver). With `--without-dataproperties`, 28 tests, 593 expectations, 0 failed, 4 skipped. |
 
 ## How it works

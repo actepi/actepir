@@ -1666,8 +1666,9 @@ episerver_browse_stop <- function() {
       "One column: the panel shows the number of rows, missing (NULL) ",
       "values, blank text, distinct values, the minimum and maximum, and any ",
       "codes that have no value label. The table lists the 1,000 most common ",
-      "values with their labels, counts and per cents. The first column you ",
-      "chose on the Columns tab is offered first."
+      "values with their labels, counts and per cents. Column starts at the ",
+      "first column you chose on the Columns tab, or at None, so you can ",
+      "type in it straight away to search the table's columns."
     ),
     shiny::p(
       "By: choose a second column for a cross tab. Each value of the first ",
@@ -2164,8 +2165,8 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
                                           "The whole table" = "table")),
           shiny::conditionalPanel(
             "input.profile_mode !== 'table'",
-            shiny::selectizeInput("profile_column", "Column", choices = NULL,
-                                  width = "100%",
+            shiny::selectizeInput("profile_column", "Column",
+                                  choices = c(None = ""), width = "100%",
                                   options = list(dropdownParent = "body")),
             shiny::selectizeInput("profile_by", "By", choices = c(None = ""),
                                   width = "100%",
@@ -2872,8 +2873,9 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
       )
     })
 
-    # The columns offered: those kept, the first chosen in the Columns tab
-    # first; By offers those that can be grouped
+    # The columns offered: those kept. Column shows the first chosen in the
+    # Columns tab, or None, so that typing searches the list at once; By
+    # offers those that can be grouped
     shiny::observe({
       cols <- profiler_columns()
       kept <- cols[is.na(cols$why), , drop = FALSE]
@@ -2884,10 +2886,11 @@ episerver_browse_app <- function(driver = NULL, max_attempts = NULL, ...,
         pick[1]
       } else if (length(current) && current %in% names) {
         current
-      } else names[1]
+      } else ""
       shiny::updateSelectizeInput(
-        session, "profile_column", choices = names,
-        selected = if (length(names)) selected else character()
+        session, "profile_column",
+        choices = c(None = "", stats::setNames(names, names)),
+        selected = selected
       )
       by <- names[!tolower(kept$dtype) %in% .browse_uncomparable]
       current_by <- shiny::isolate(input$profile_by)

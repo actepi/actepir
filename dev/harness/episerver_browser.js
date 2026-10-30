@@ -539,6 +539,7 @@ const fs = require('fs');
   console.log('PROFILER panel:', JSON.stringify(await page.evaluate(() => ({
     width: Math.round(document.querySelector('#profile_settings').getBoundingClientRect().width),
     column: $('#profile_column').val(),
+    placeholder: $('#profile_column + .selectize-control input').attr('placeholder'),
     options: Object.keys($('#profile_column')[0].selectize.options).slice(0, 3),
     by: Object.keys($('#profile_by')[0].selectize.options).slice(0, 3) }))),
     '| left out', await text('#profile_left_out'), '| note', await text('#profile_note'));
@@ -549,6 +550,11 @@ const fs = require('fs');
     '| panel scrolls', await panelScrolls(), '| options shown',
     await page.$$eval('body > .selectize-dropdown .option', os => os.filter(o => o.offsetParent).length));
   await shot('11_profiler_list');
+  // With no column chosen, typing searches the list at once
+  await page.keyboard.type('diag');
+  await page.waitForTimeout(300);
+  console.log('PROFILER typed "diag":', JSON.stringify(await page.$$eval('body > .selectize-dropdown .option',
+    os => os.filter(o => o.offsetParent).map(o => o.textContent))));
   await page.keyboard.press('Escape');
   await select('profile_column', 'Sex');
   await page.click('#profile_go');

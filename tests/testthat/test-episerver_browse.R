@@ -1283,19 +1283,25 @@ test_that("the Profiler profiles the column chosen, only when asked, and leaves 
     expect_equal(reads("sys.indexes"), 0)
     session$setInputs(view = "profile")
     expect_equal(reads("sys.indexes"), 1)
-    # PatientID, the primary key, is left out
-    expect_equal(sent$profile_column$choices[1:2], c("Sex", "AgeYrs"))
-    expect_equal(sent$profile_column$selected, "Sex")
+    # PatientID, the primary key, is left out; with no column chosen in the
+    # Columns tab, Column and By both start at None
+    expect_equal(sent$profile_column$choices[1:3], c(None = "", Sex = "Sex", AgeYrs = "AgeYrs"))
+    expect_equal(sent$profile_column$selected, "")
     expect_equal(sent$profile_by$choices[1:3], c(None = "", Sex = "Sex", AgeYrs = "AgeYrs"))
+    expect_equal(sent$profile_by$selected, "")
     expect_equal(output$profile_left_out, "Columns left out (1)")
     expect_match(output$profile_exclude_note$html, "Left out: PatientID (key).", fixed = TRUE)
     expect_match(output$profile_note, "Choose a column", fixed = TRUE)
+    expect_equal(reads("AS TotalRows"), 0)
+    # Profile with no column asks for one, and reads nothing
+    session$setInputs(profile_column = "", profile_go = 1)
+    expect_equal(warned, "Choose a column to profile.")
     expect_equal(reads("AS TotalRows"), 0)
 
     # The first column chosen in the Columns tab is offered
     session$setInputs(col_table_rows_selected = 3L)
     expect_equal(sent$profile_column$selected, "AgeYrs")
-    session$setInputs(profile_column = "Sex", profile_by = "", profile_go = 1)
+    session$setInputs(profile_column = "Sex", profile_by = "", profile_go = 2)
     expect_equal(reads("AS TotalRows"), 1)
     expect_equal(output$profile_note,
                  "Profile of Analysis.dbo.APC.Sex (Sex of the patient).")
@@ -1304,7 +1310,7 @@ test_that("the Profiler profiles the column chosen, only when asked, and leaves 
     expect_match(output$profile_table, "Per cent", fixed = TRUE)
 
     # By: a cross tab, shown as rows or per cents with no new query
-    session$setInputs(profile_by = "AgeYrs", profile_show = "rows", profile_go = 2)
+    session$setInputs(profile_by = "AgeYrs", profile_show = "rows", profile_go = 3)
     expect_equal(reads("AS ProfileBy"), 1)
     expect_match(output$profile_note, "by AgeYrs (Age in years (<1 is 0)).", fixed = TRUE)
     expect_match(output$profile_note, "The 20 most common values of AgeYrs are columns",
@@ -1314,7 +1320,7 @@ test_that("the Profiler profiles the column chosen, only when asked, and leaves 
     expect_equal(unique(crosstab()$table$Total), 100)
     expect_equal(reads("AS ProfileBy"), 1)
     # By cannot be the column profiled
-    session$setInputs(profile_by = "Sex", profile_go = 3)
+    session$setInputs(profile_by = "Sex", profile_go = 4)
     expect_match(warned, "Choose a By column other than", fixed = TRUE)
 
     # The list: a pattern that is not a regular expression is not saved; a
@@ -1335,7 +1341,7 @@ test_that("the Profiler profiles the column chosen, only when asked, and leaves 
     # Text: blank values; a profile of another table's column is not shown
     session$setInputs(table = "Deaths", profile_by = "")
     expect_null(profile())
-    session$setInputs(profile_column = "Cause", profile_go = 4)
+    session$setInputs(profile_column = "Cause", profile_go = 5)
     expect_match(output$profile_summary$html, "Blank text", fixed = TRUE)
     expect_true(profile()$complete)
     expect_equal(profile()$counts$Rows, c(8, 8, 7, 7))
